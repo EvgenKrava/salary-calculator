@@ -77,6 +77,7 @@ describe('calculateSalaries', () => {
     const result = calculateSalaries(input, PERIOD);
     expect(result.blocked).toBe(true);
     expect(result.lines[0].revenueShare).toBe(0);
+    expect(result.gaps).toEqual([{ employeeId: 'e1', locationId: 'locA', date: '2026-08-02' }]);
   });
 
   it('skips inactive employees', () => {
@@ -120,5 +121,36 @@ describe('calculateSalaries', () => {
     const line = result.lines[0];
     expect(line.revenueShare).toBe(33.3);
     expect(line.total).toBe(Math.round((line.hourlyPay + line.revenueShare + line.bonus) * 100) / 100);
+  });
+
+  it('counts revenue share once per location-day despite multiple same-day shifts', () => {
+    const input = baseInput();
+    input.shifts.push({
+      id: 's1b', employeeId: 'e1', locationId: 'locA', workDate: '2026-08-02', status: 'approved', source: 'native',
+    });
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.lines[0].revenueShare).toBe(50); // full % of the day's revenue, not doubled
+  });
+
+  it('records a single gap for a missing-revenue day even with multiple same-day shifts', () => {
+    const input = baseInput();
+    input.dailyRevenue = [];
+    input.shifts.push({
+      id: 's1b', employeeId: 'e1', locationId: 'locA', workDate: '2026-08-02', status: 'approved', source: 'native',
+    });
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.gaps).toEqual([{ employeeId: 'e1', locationId: 'locA', date: '2026-08-02' }]);
+  });
+
+  it('throws when a shift references an unknown location', () => {
+    const input = baseInput();
+    input.shifts[0].locationId = 'missing';
+    expect(() => calculateSalaries(input, PERIOD)).toThrow(/unknown location/);
+  });
+
+  it('throws when an employee references an unknown level', () => {
+    const input = baseInput();
+    input.employees[0].levelId = 'missing';
+    expect(() => calculateSalaries(input, PERIOD)).toThrow(/unknown level/);
   });
 });

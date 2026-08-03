@@ -55,6 +55,13 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
     const empShifts = shiftsByEmployee.get(employee.id) ?? [];
     let hourlyPay = 0;
     let revenueShare = 0;
+    // Revenue share is a per-employee-per-location-day quantity: an employee
+    // earns their percent of a given day's revenue at most once, even if the
+    // input contains multiple shifts for that location/day. Hourly pay, by
+    // contrast, accrues per shift (each shift is worked hours). The schema's
+    // UNIQUE (employee_id, work_date) makes duplicates unreachable with valid
+    // data; this guard keeps the engine correct regardless of its input.
+    const countedDays = new Set<string>();
 
     for (const shift of empShifts) {
       const location = locationById.get(shift.locationId);
@@ -63,7 +70,11 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
       }
       hourlyPay += level.ratePerHour * location.standardShiftHours;
 
-      const revenue = revenueByKey.get(revenueKey(shift.locationId, shift.workDate));
+      const dayKey = revenueKey(shift.locationId, shift.workDate);
+      if (countedDays.has(dayKey)) continue;
+      countedDays.add(dayKey);
+
+      const revenue = revenueByKey.get(dayKey);
       if (revenue === undefined) {
         gaps.push({ employeeId: employee.id, locationId: shift.locationId, date: shift.workDate });
       } else {
