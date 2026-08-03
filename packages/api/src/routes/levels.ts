@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { eq } from 'drizzle-orm';
+import { eq, count } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
 import { readJson, getOr404 } from '../http/validation';
-import { levels } from '../schema';
+import { levels, employees } from '../schema';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -62,7 +62,13 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
   });
 
   routes.delete('/:id', async (c) => {
-    const [row] = await db.delete(levels).where(eq(levels.id, c.req.param('id'))).returning();
+    const id = c.req.param('id');
+    const [{ value: refs }] = await db
+      .select({ value: count() })
+      .from(employees)
+      .where(eq(employees.levelId, id));
+    if (refs > 0) throw new HTTPException(409, { message: 'level is referenced by employees' });
+    const [row] = await db.delete(levels).where(eq(levels.id, id)).returning();
     if (!row) throw new HTTPException(404, { message: 'level not found' });
     return c.json({ deleted: row.id });
   });
