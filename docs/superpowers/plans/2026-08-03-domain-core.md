@@ -381,6 +381,11 @@ export interface EmployeeBreakdown {
   total: number;
 }
 
+/**
+ * A worked (location, date) that has no approved revenue. One entry is
+ * produced per affected employee; a consumer wanting unique (location, date)
+ * must dedupe on those two fields.
+ */
 export interface RevenueGap {
   employeeId: string;
   locationId: string;
@@ -498,6 +503,7 @@ describe('calculateSalaries', () => {
     });
     const result = calculateSalaries(input, PERIOD);
     expect(result.lines[0].revenueShare).toBe(50); // full % of the day's revenue, not doubled
+    expect(result.lines[0].hourlyPay).toBe(320); // hourly still accrues per shift (2 x 160)
   });
 
   it('records a single gap for a missing-revenue day even with multiple same-day shifts', () => {
@@ -827,9 +833,13 @@ describe('schema 0001_init', () => {
   });
 
   it('enforces one shift per employee per day', async () => {
+    // Self-contained: seed and duplicate on a date no other test touches.
+    await db.exec(
+      `INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${EMP}', '${LOC}', '2026-09-01');`,
+    );
     await expect(
       db.exec(
-        `INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${EMP}', '${LOC}', '2026-08-03');`,
+        `INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${EMP}', '${LOC}', '2026-09-01');`,
       ),
     ).rejects.toThrow();
   });
