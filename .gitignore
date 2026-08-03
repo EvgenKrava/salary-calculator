@@ -1,0 +1,21 @@
+# JetBrains IDE
+.idea/
+*.iml
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
