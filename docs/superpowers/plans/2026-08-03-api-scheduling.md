@@ -518,3 +518,14 @@ git commit -m "Add manager shift assign, approve, reject, delete, and listing"
 **Placeholder scan:** No TBD/TODO. Approve/reject set the status unconditionally on an existing shift (idempotent, no state-machine guard) — this is intentional and sufficient for the manager workflow; not a gap.
 
 **Type consistency:** `Db`, `AppEnv`, `requireRole`, `readJson` reused; `currentEmployee` returns the shared `EmployeeRow`; DTO fields match `shifts.$inferSelect`; the `status` query filter narrows to the literal union before `eq` (no `any` cast); `createShiftRoutes` mounted once at `/api/shifts`.
+---
+
+## Post-Review Fixes (applied after the whole-branch review)
+
+The opus whole-branch review approved the security surface but flagged error-contract edges. Applied:
+
+1. **UUID `:id` validation** on approve/reject/delete — a malformed id returns `404` (shift not found), not a `500` from the Postgres `uuid` cast.
+2. **Date-filter validation** on `GET /` — `from`/`to` that aren't `YYYY-MM-DD` return `400`, not a `500` from the `date` cast.
+3. **Unique-violation → 409** — replaced the `assertNoShiftThatDay` read-then-insert pre-check with a `try/insert/catch` that maps a Postgres unique violation (`isUniqueViolation` in `src/http/dbErrors.ts`) to `409`. Fixes the TOCTOU race (concurrent duplicate → 409 not 500) and is exercised by the existing duplicate-day tests. Reusable by later plans (revenue/salary).
+4. **`currentEmployee` requires `active = true`** — a deactivated employee whose `cognito_sub` still resolves gets `403`, not self-service access.
+5. Added regression tests: malformed id → 404, malformed date filter → 400, body-injected `employeeId` ignored (identity from token), deactivated employee → 403.
