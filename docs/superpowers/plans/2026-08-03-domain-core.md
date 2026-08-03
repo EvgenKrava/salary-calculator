@@ -488,6 +488,38 @@ describe('calculateSalaries', () => {
     const result = calculateSalaries(input, PERIOD);
     expect(result.blocked).toBe(true);
     expect(result.lines[0].revenueShare).toBe(0);
+    expect(result.gaps).toEqual([{ employeeId: 'e1', locationId: 'locA', date: '2026-08-02' }]);
+  });
+
+  it('counts revenue share once per location-day despite multiple same-day shifts', () => {
+    const input = baseInput();
+    input.shifts.push({
+      id: 's1b', employeeId: 'e1', locationId: 'locA', workDate: '2026-08-02', status: 'approved', source: 'native',
+    });
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.lines[0].revenueShare).toBe(50); // full % of the day's revenue, not doubled
+  });
+
+  it('records a single gap for a missing-revenue day even with multiple same-day shifts', () => {
+    const input = baseInput();
+    input.dailyRevenue = [];
+    input.shifts.push({
+      id: 's1b', employeeId: 'e1', locationId: 'locA', workDate: '2026-08-02', status: 'approved', source: 'native',
+    });
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.gaps).toEqual([{ employeeId: 'e1', locationId: 'locA', date: '2026-08-02' }]);
+  });
+
+  it('throws when a shift references an unknown location', () => {
+    const input = baseInput();
+    input.shifts[0].locationId = 'missing';
+    expect(() => calculateSalaries(input, PERIOD)).toThrow(/unknown location/);
+  });
+
+  it('throws when an employee references an unknown level', () => {
+    const input = baseInput();
+    input.employees[0].levelId = 'missing';
+    expect(() => calculateSalaries(input, PERIOD)).toThrow(/unknown level/);
   });
 
   it('skips inactive employees', () => {
@@ -601,6 +633,13 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
     const empShifts = shiftsByEmployee.get(employee.id) ?? [];
     let hourlyPay = 0;
     let revenueShare = 0;
+    // Revenue share is a per-employee-per-location-day quantity: an employee
+    // earns their percent of a given day's revenue at most once, even if the
+    // input contains multiple shifts for that location/day. Hourly pay, by
+    // contrast, accrues per shift (each shift is worked hours). The schema's
+    // UNIQUE (employee_id, work_date) makes duplicates unreachable with valid
+    // data; this guard keeps the engine correct regardless of its input.
+    const countedDays = new Set<string>();
 
     for (const shift of empShifts) {
       const location = locationById.get(shift.locationId);
@@ -609,7 +648,11 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
       }
       hourlyPay += level.ratePerHour * location.standardShiftHours;
 
-      const revenue = revenueByKey.get(revenueKey(shift.locationId, shift.workDate));
+      const dayKey = revenueKey(shift.locationId, shift.workDate);
+      if (countedDays.has(dayKey)) continue;
+      countedDays.add(dayKey);
+
+      const revenue = revenueByKey.get(dayKey);
       if (revenue === undefined) {
         gaps.push({ employeeId: employee.id, locationId: shift.locationId, date: shift.workDate });
       } else {
