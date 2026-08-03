@@ -6,6 +6,7 @@ import { authMiddleware } from './auth/middleware';
 import { createLevelRoutes } from './routes/levels';
 import { createLocationRoutes } from './routes/locations';
 import { createEmployeeRoutes } from './routes/employees';
+import { createShiftRoutes } from './routes/shifts';
 
 export interface AppDeps {
   db: Db;
@@ -27,6 +28,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/levels', createLevelRoutes(deps.db));
   app.route('/api/locations', createLocationRoutes(deps.db));
   app.route('/api/employees', createEmployeeRoutes(deps.db));
+  app.route('/api/shifts', createShiftRoutes(deps.db));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {
