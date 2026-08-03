@@ -55,6 +55,11 @@ export interface EmployeeBreakdown {
   total: number;
 }
 
+/**
+ * A worked (location, date) that has no approved revenue. One entry is
+ * produced per affected employee; a consumer wanting unique (location, date)
+ * must dedupe on those two fields.
+ */
 export interface RevenueGap {
   employeeId: string;
   locationId: string;

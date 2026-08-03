@@ -130,6 +130,7 @@ describe('calculateSalaries', () => {
     });
     const result = calculateSalaries(input, PERIOD);
     expect(result.lines[0].revenueShare).toBe(50); // full % of the day's revenue, not doubled
+    expect(result.lines[0].hourlyPay).toBe(320); // hourly still accrues per shift (2 x 160)
   });
 
   it('records a single gap for a missing-revenue day even with multiple same-day shifts', () => {

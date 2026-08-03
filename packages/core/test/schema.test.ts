@@ -34,9 +34,13 @@ describe('schema 0001_init', () => {
   });
 
   it('enforces one shift per employee per day', async () => {
+    // Self-contained: seed and duplicate on a date no other test touches.
+    await db.exec(
+      `INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${EMP}', '${LOC}', '2026-09-01');`,
+    );
     await expect(
       db.exec(
-        `INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${EMP}', '${LOC}', '2026-08-03');`,
+        `INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${EMP}', '${LOC}', '2026-09-01');`,
       ),
     ).rejects.toThrow();
   });
