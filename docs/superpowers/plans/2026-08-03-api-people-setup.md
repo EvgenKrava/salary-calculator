@@ -768,6 +768,47 @@ describe('employees routes', () => {
     const del = await app.request(`/api/levels/${levelId}`, { method: 'DELETE', headers: ADMIN });
     expect(del.status).toBe(409);
   });
+
+  it('409s a PATCH that sets a cognitoSub already used by another employee', async () => {
+    const app = await makeApp();
+    const levelId = await makeLevel(app);
+    const a = (await (
+      await app.request('/api/employees', {
+        method: 'POST',
+        headers: { ...MGR, ...JSONH },
+        body: JSON.stringify({ name: 'A', levelId, cognitoSub: 'sub-a' }),
+      })
+    ).json()) as { id: string };
+    await app.request('/api/employees', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ name: 'B', levelId, cognitoSub: 'sub-b' }),
+    });
+    const res = await app.request(`/api/employees/${a.id}`, {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ cognitoSub: 'sub-b' }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it('allows a PATCH that re-sets an employee to its own current cognitoSub', async () => {
+    const app = await makeApp();
+    const levelId = await makeLevel(app);
+    const a = (await (
+      await app.request('/api/employees', {
+        method: 'POST',
+        headers: { ...MGR, ...JSONH },
+        body: JSON.stringify({ name: 'A', levelId, cognitoSub: 'sub-a' }),
+      })
+    ).json()) as { id: string };
+    const res = await app.request(`/api/employees/${a.id}`, {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ cognitoSub: 'sub-a', name: 'A2' }),
+    });
+    expect(res.status).toBe(200);
+  });
 });
 ```
 
@@ -782,7 +823,7 @@ Expected: FAIL — employee routes not mounted / file missing (and the level-FK 
 ```ts
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
@@ -854,18 +895,22 @@ export function createEmployeeRoutes(db: Db): Hono<AppEnv> {
   });
 
   routes.patch('/:id', async (c) => {
+    const id = c.req.param('id');
     const body = await readJson(c, updateSchema);
+    if (body.cognitoSub) {
+      const dupe = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.cognitoSub, body.cognitoSub), ne(employees.id, id)));
+      if (dupe.length > 0) throw new HTTPException(409, { message: 'cognitoSub already linked' });
+    }
     const patch: Partial<typeof employees.$inferInsert> = {};
     if (body.name !== undefined) patch.name = body.name;
     if (body.levelId !== undefined) patch.levelId = body.levelId;
     if (body.revenuePercent !== undefined) patch.revenuePercent = String(body.revenuePercent);
     if (body.cognitoSub !== undefined) patch.cognitoSub = body.cognitoSub;
     if (body.active !== undefined) patch.active = body.active;
-    const [row] = await db
-      .update(employees)
-      .set(patch)
-      .where(eq(employees.id, c.req.param('id')))
-      .returning();
+    const [row] = await db.update(employees).set(patch).where(eq(employees.id, id)).returning();
     if (!row) throw new HTTPException(404, { message: 'employee not found' });
     return c.json(toDto(row));
   });
