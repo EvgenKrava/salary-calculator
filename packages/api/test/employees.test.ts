@@ -174,4 +174,32 @@ describe('employees routes', () => {
     });
     expect(res.status).toBe(200);
   });
+
+  it('rejects create with a well-formed but unknown levelId (400)', async () => {
+    const app = await makeApp();
+    const res = await app.request('/api/employees', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ name: 'X', levelId: '00000000-0000-0000-0000-000000000000' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a PATCH to an unknown levelId (400)', async () => {
+    const app = await makeApp();
+    const levelId = await makeLevel(app);
+    const a = (await (
+      await app.request('/api/employees', {
+        method: 'POST',
+        headers: { ...MGR, ...JSONH },
+        body: JSON.stringify({ name: 'Y', levelId }),
+      })
+    ).json()) as { id: string };
+    const res = await app.request(`/api/employees/${a.id}`, {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ levelId: '00000000-0000-0000-0000-000000000000' }),
+    });
+    expect(res.status).toBe(400);
+  });
 });
