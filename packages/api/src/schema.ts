@@ -1,3 +1,6 @@
+// This Drizzle schema is for query building only. CHECK constraints
+// (rate_per_hour >= 0, standard_shift_hours > 0, revenue_percent in [0,1], amount >= 0)
+// are defined and enforced in packages/core/db/migrations/0001_init.sql, the source of truth.
 import {
   boolean,
   date,

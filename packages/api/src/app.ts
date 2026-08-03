@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import type { Db } from './db/testDb';
 import type { AppEnv, TokenVerifier } from './auth/types';
 import { authMiddleware } from './auth/middleware';
@@ -24,7 +25,13 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   //   app.route('/api/levels', createLevelRoutes(deps));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
-  app.onError((err, c) => c.json({ error: 'internal', message: err.message }, 500));
+  app.onError((err, c) => {
+    // Preserve intentional HTTP errors thrown by routes/validators.
+    if (err instanceof HTTPException) return err.getResponse();
+    // Never leak raw error detail (SQL, ARNs) to clients; log server-side.
+    console.error(err);
+    return c.json({ error: 'internal' }, 500);
+  });
 
   return app;
 }

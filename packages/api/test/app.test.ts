@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { HTTPException } from 'hono/http-exception';
 import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
 import type { TokenVerifier } from '../src/auth/types';
@@ -40,5 +41,26 @@ describe('createApp', () => {
     const app = await makeApp();
     const res = await app.request('/api/does-not-exist', { headers: { Authorization: 'Bearer mgr' } });
     expect(res.status).toBe(404);
+  });
+
+  it('preserves the status of an intentional HTTPException thrown by a route', async () => {
+    const app = await makeApp();
+    app.get('/boom-http', () => {
+      throw new HTTPException(409, { message: 'conflict' });
+    });
+    const res = await app.request('/boom-http');
+    expect(res.status).toBe(409);
+  });
+
+  it('maps an unexpected error to a 500 without leaking its message', async () => {
+    const app = await makeApp();
+    app.get('/boom-raw', () => {
+      throw new Error('secret db ARN leak');
+    });
+    const res = await app.request('/boom-raw');
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'internal' });
+    expect(JSON.stringify(body)).not.toContain('secret db ARN leak');
   });
 });
