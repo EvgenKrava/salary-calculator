@@ -1,0 +1,105 @@
+import { describe, it, expect } from 'vitest';
+import { createApp } from '../src/app';
+import { createTestDb } from '../src/db/testDb';
+import type { TokenVerifier } from '../src/auth/types';
+
+const verifier: TokenVerifier = {
+  async verify(token) {
+    if (token === 'admin') return { sub: 'u-admin', groups: ['admin'] };
+    if (token === 'mgr') return { sub: 'u-mgr', groups: ['manager'] };
+    throw new Error('bad');
+  },
+};
+const ADMIN = { Authorization: 'Bearer admin' };
+const MGR = { Authorization: 'Bearer mgr' };
+const JSONH = { 'content-type': 'application/json' };
+
+async function makeApp() {
+  const { db } = await createTestDb();
+  return createApp({ db, verifier });
+}
+
+describe('levels routes', () => {
+  it('forbids a non-admin', async () => {
+    const app = await makeApp();
+    const res = await app.request('/api/levels', { headers: MGR });
+    expect(res.status).toBe(403);
+  });
+
+  it('creates and lists a level', async () => {
+    const app = await makeApp();
+    const created = await app.request('/api/levels', {
+      method: 'POST',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ name: 'Junior', ratePerHour: 20 }),
+    });
+    expect(created.status).toBe(201);
+    const level = (await created.json()) as { id: string; name: string; ratePerHour: number };
+    expect(level).toMatchObject({ name: 'Junior', ratePerHour: 20 });
+    expect(typeof level.id).toBe('string');
+
+    const list = await app.request('/api/levels', { headers: ADMIN });
+    expect(list.status).toBe(200);
+    expect(await list.json()).toHaveLength(1);
+  });
+
+  it('rejects a bad payload with 400', async () => {
+    const app = await makeApp();
+    const res = await app.request('/api/levels', {
+      method: 'POST',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ name: '', ratePerHour: -5 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a duplicate name with 409', async () => {
+    const app = await makeApp();
+    const body = JSON.stringify({ name: 'Dup', ratePerHour: 10 });
+    await app.request('/api/levels', { method: 'POST', headers: { ...ADMIN, ...JSONH }, body });
+    const res = await app.request('/api/levels', { method: 'POST', headers: { ...ADMIN, ...JSONH }, body });
+    expect(res.status).toBe(409);
+  });
+
+  it('gets, updates, and 404s a level', async () => {
+    const app = await makeApp();
+    const created = (await (
+      await app.request('/api/levels', {
+        method: 'POST',
+        headers: { ...ADMIN, ...JSONH },
+        body: JSON.stringify({ name: 'Mid', ratePerHour: 30 }),
+      })
+    ).json()) as { id: string; name: string; ratePerHour: number };
+
+    const got = await app.request(`/api/levels/${created.id}`, { headers: ADMIN });
+    expect(got.status).toBe(200);
+
+    const patched = await app.request(`/api/levels/${created.id}`, {
+      method: 'PATCH',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ ratePerHour: 35 }),
+    });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { id: string; name: string; ratePerHour: number }).ratePerHour).toBe(35);
+
+    const missing = await app.request('/api/levels/00000000-0000-0000-0000-000000000000', { headers: ADMIN });
+    expect(missing.status).toBe(404);
+  });
+
+  it('deletes a level and 404s when already deleted', async () => {
+    const app = await makeApp();
+    const level = (await (
+      await app.request('/api/levels', {
+        method: 'POST',
+        headers: { ...ADMIN, ...JSONH },
+        body: JSON.stringify({ name: 'Del', ratePerHour: 15 }),
+      })
+    ).json()) as { id: string; name: string; ratePerHour: number };
+
+    const del = await app.request(`/api/levels/${level.id}`, { method: 'DELETE', headers: ADMIN });
+    expect(del.status).toBe(200);
+
+    const missing = await app.request(`/api/levels/${level.id}`, { method: 'DELETE', headers: ADMIN });
+    expect(missing.status).toBe(404);
+  });
+});

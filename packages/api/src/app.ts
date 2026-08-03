@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import type { Db } from './db/testDb';
 import type { AppEnv, TokenVerifier } from './auth/types';
 import { authMiddleware } from './auth/middleware';
+import { createLevelRoutes } from './routes/levels';
 
 export interface AppDeps {
   db: Db;
@@ -21,8 +22,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.use('/api/*', authMiddleware(deps.verifier));
   app.get('/api/me', (c) => c.json(c.get('principal')));
 
-  // Route groups from later plans mount here, e.g.:
-  //   app.route('/api/levels', createLevelRoutes(deps));
+  app.route('/api/levels', createLevelRoutes(deps.db));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {
