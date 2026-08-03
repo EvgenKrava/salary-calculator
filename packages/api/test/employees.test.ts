@@ -133,4 +133,45 @@ describe('employees routes', () => {
     const del = await app.request(`/api/levels/${levelId}`, { method: 'DELETE', headers: ADMIN });
     expect(del.status).toBe(409);
   });
+
+  it('409s a PATCH that sets a cognitoSub already used by another employee', async () => {
+    const app = await makeApp();
+    const levelId = await makeLevel(app);
+    const a = (await (
+      await app.request('/api/employees', {
+        method: 'POST',
+        headers: { ...MGR, ...JSONH },
+        body: JSON.stringify({ name: 'A', levelId, cognitoSub: 'sub-a' }),
+      })
+    ).json()) as { id: string };
+    await app.request('/api/employees', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ name: 'B', levelId, cognitoSub: 'sub-b' }),
+    });
+    const res = await app.request(`/api/employees/${a.id}`, {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ cognitoSub: 'sub-b' }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it('allows a PATCH that re-sets an employee to its own current cognitoSub', async () => {
+    const app = await makeApp();
+    const levelId = await makeLevel(app);
+    const a = (await (
+      await app.request('/api/employees', {
+        method: 'POST',
+        headers: { ...MGR, ...JSONH },
+        body: JSON.stringify({ name: 'A', levelId, cognitoSub: 'sub-a' }),
+      })
+    ).json()) as { id: string };
+    const res = await app.request(`/api/employees/${a.id}`, {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ cognitoSub: 'sub-a', name: 'A2' }),
+    });
+    expect(res.status).toBe(200);
+  });
 });
