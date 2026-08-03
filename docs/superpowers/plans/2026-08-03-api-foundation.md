@@ -184,7 +184,7 @@ export const shifts = pgTable(
     source: shiftSource('source').notNull().default('native'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ uniqEmployeeDay: unique().on(t.employeeId, t.workDate) }),
+  (t) => [unique().on(t.employeeId, t.workDate)],
 );
 
 export const dailyRevenue = pgTable(
@@ -198,7 +198,7 @@ export const dailyRevenue = pgTable(
     status: revenueStatus('status').notNull().default('approved'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ uniqLocationDay: unique().on(t.locationId, t.revenueDate) }),
+  (t) => [unique().on(t.locationId, t.revenueDate)],
 );
 
 export const extractionJobs = pgTable('extraction_jobs', {
@@ -222,7 +222,7 @@ export const salaryRuns = pgTable(
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ uniqPeriod: unique().on(t.periodStart, t.periodEnd) }),
+  (t) => [unique().on(t.periodStart, t.periodEnd)],
 );
 
 export const salaryRunLines = pgTable(
@@ -236,7 +236,7 @@ export const salaryRunLines = pgTable(
     bonus: numeric('bonus', { precision: 12, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 12, scale: 2 }).notNull(),
   },
-  (t) => ({ uniqRunEmployee: unique().on(t.runId, t.employeeId) }),
+  (t) => [unique().on(t.runId, t.employeeId)],
 );
 ```
 
