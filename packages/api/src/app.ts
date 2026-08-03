@@ -26,8 +26,8 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {
-    // Preserve intentional HTTP errors thrown by routes/validators.
-    if (err instanceof HTTPException) return err.getResponse();
+    // Intentional HTTP errors carry developer-authored messages (safe to show).
+    if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
     // Never leak raw error detail (SQL, ARNs) to clients; log server-side.
     console.error(err);
     return c.json({ error: 'internal' }, 500);

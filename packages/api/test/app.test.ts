@@ -43,13 +43,14 @@ describe('createApp', () => {
     expect(res.status).toBe(404);
   });
 
-  it('preserves the status of an intentional HTTPException thrown by a route', async () => {
+  it('preserves the status and message of an intentional HTTPException', async () => {
     const app = await makeApp();
     app.get('/boom-http', () => {
       throw new HTTPException(409, { message: 'conflict' });
     });
     const res = await app.request('/boom-http');
     expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'conflict' });
   });
 
   it('maps an unexpected error to a 500 without leaking its message', async () => {
