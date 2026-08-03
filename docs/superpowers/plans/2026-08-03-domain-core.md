@@ -14,7 +14,7 @@
 - **TypeScript** strict mode, ESM (`"type": "module"`), `moduleResolution: "bundler"` — write **extensionless** relative imports (`./money`, not `./money.js`).
 - The `@salary/core` package is consumed as **raw TypeScript** (its `exports` point at `src/index.ts`); consumers bundle it. No build step in this plan.
 - **`revenuePercent` is stored as a fraction in `[0, 1]`** (e.g. `0.05` = 5%), never as a whole-number percentage.
-- **Money is rounded to 2 decimals**; each breakdown component (`hourlyPay`, `revenueShare`, `bonus`) is rounded independently and `total` equals the sum of the three rounded components, so the displayed breakdown always adds up.
+- **Money is rounded to 2 decimals**, half away from zero, and **exact at the half-cent boundary** (`1.005` → `1.01`, `35.855` → `35.86`) — a naive `Math.round(x*100)/100` is wrong here and must not be used. Each breakdown component (`hourlyPay`, `revenueShare`, `bonus`) is rounded independently and `total` equals the sum of the three rounded components, so the displayed breakdown always adds up.
 - **Dates are `'YYYY-MM-DD'` strings** compared lexicographically; pay periods are the **1st–15th** and **16th–end of month**.
 - **The calculation reads only `status = 'approved'` shifts and `status = 'approved'` revenue.** If any worked `(location, date)` has no approved revenue, that day is recorded as a gap and the result is `blocked`.
 
@@ -144,6 +144,17 @@ describe('round2', () => {
   it('fixes binary floating-point drift', () => {
     expect(round2(0.1 + 0.2)).toBe(0.3);
   });
+
+  it('rounds half away from zero at the half-cent boundary', () => {
+    expect(round2(1.005)).toBe(1.01);
+    expect(round2(35.855)).toBe(35.86);
+    expect(round2(2.345)).toBe(2.35);
+    expect(round2(-1.005)).toBe(-1.01);
+  });
+
+  it('does not over-round values genuinely below the half cent', () => {
+    expect(round2(35.854)).toBe(35.85);
+  });
 });
 ```
 
@@ -156,9 +167,21 @@ Expected: FAIL — cannot resolve `../src/money` (module does not exist).
 
 `packages/core/src/money.ts`:
 ```ts
-/** Round a monetary amount to 2 decimal places (cents). */
+/**
+ * Round a monetary amount to 2 decimal places (cents), half away from zero.
+ *
+ * A naive `Math.round(value * 100) / 100` mis-rounds half-cent boundaries
+ * (e.g. 1.005 -> 1.00) because values like 1.005 are stored slightly below
+ * their decimal value in binary floating point. Correcting the scaled value
+ * proportionally to its magnitude (`* (1 + Number.EPSILON)`) absorbs that
+ * representation drift without over-rounding amounts genuinely below the
+ * boundary, since the correction is far smaller than any real fractional gap.
+ */
 export function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+  const sign = value < 0 ? -1 : 1;
+  const scaled = Math.abs(value) * 100;
+  const rounded = Math.round(scaled * (1 + Number.EPSILON));
+  return (sign * rounded) / 100;
 }
 ```
 
