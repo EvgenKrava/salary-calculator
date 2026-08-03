@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
 import { levels, locations, employees } from '../src/schema';
@@ -102,5 +103,23 @@ describe('employee scheduling', () => {
     const list = (await res.json()) as Array<{ workDate: string }>;
     expect(list).toHaveLength(1);
     expect(list[0].workDate).toBe('2026-08-12');
+  });
+
+  it('ignores a body-injected employeeId (identity comes from the token)', async () => {
+    const { app, loc, alice } = await seed();
+    const res = await app.request('/api/shifts/requests', {
+      method: 'POST',
+      headers: { ...ALICE, ...JSONH },
+      body: JSON.stringify({ locationId: loc.id, workDate: '2026-08-13', employeeId: '00000000-0000-0000-0000-000000000000' }),
+    });
+    expect(res.status).toBe(201);
+    expect((await res.json() as { employeeId: string }).employeeId).toBe(alice.id);
+  });
+
+  it('forbids a deactivated employee from self-service (403)', async () => {
+    const { app, db, loc, alice } = await seed();
+    await db.update(employees).set({ active: false }).where(eq(employees.id, alice.id));
+    const res = await app.request('/api/shifts/me', { headers: ALICE });
+    expect(res.status).toBe(403);
   });
 });

@@ -96,4 +96,16 @@ describe('manager scheduling', () => {
     expect(del.status).toBe(200);
     expect((await (await app.request('/api/shifts', { headers: MGR })).json() as unknown[])).toHaveLength(0);
   });
+
+  it('404s approve on a malformed (non-uuid) shift id', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/shifts/not-a-uuid/approve', { method: 'POST', headers: MGR });
+    expect(res.status).toBe(404);
+  });
+
+  it('400s the list when a date filter is malformed', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/shifts?from=garbage', { headers: MGR });
+    expect(res.status).toBe(400);
+  });
 });
