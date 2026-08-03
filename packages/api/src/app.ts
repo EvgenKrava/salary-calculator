@@ -4,6 +4,7 @@ import type { Db } from './db/testDb';
 import type { AppEnv, TokenVerifier } from './auth/types';
 import { authMiddleware } from './auth/middleware';
 import { createLevelRoutes } from './routes/levels';
+import { createLocationRoutes } from './routes/locations';
 
 export interface AppDeps {
   db: Db;
@@ -23,6 +24,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.get('/api/me', (c) => c.json(c.get('principal')));
 
   app.route('/api/levels', createLevelRoutes(deps.db));
+  app.route('/api/locations', createLocationRoutes(deps.db));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {
