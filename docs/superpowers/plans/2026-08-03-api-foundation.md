@@ -521,6 +521,7 @@ git commit -m "Add token verifier and Hono auth/role middleware"
 `packages/api/test/app.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest';
+import { HTTPException } from 'hono/http-exception';
 import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
 import type { TokenVerifier } from '../src/auth/types';
@@ -563,6 +564,27 @@ describe('createApp', () => {
     const res = await app.request('/api/does-not-exist', { headers: { Authorization: 'Bearer mgr' } });
     expect(res.status).toBe(404);
   });
+
+  it('preserves the status of an intentional HTTPException thrown by a route', async () => {
+    const app = await makeApp();
+    app.get('/boom-http', () => {
+      throw new HTTPException(409, { message: 'conflict' });
+    });
+    const res = await app.request('/boom-http');
+    expect(res.status).toBe(409);
+  });
+
+  it('maps an unexpected error to a 500 without leaking its message', async () => {
+    const app = await makeApp();
+    app.get('/boom-raw', () => {
+      throw new Error('secret db ARN leak');
+    });
+    const res = await app.request('/boom-raw');
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'internal' });
+    expect(JSON.stringify(body)).not.toContain('secret db ARN leak');
+  });
 });
 ```
 
@@ -576,6 +598,8 @@ Expected: FAIL — `../src/app` does not exist.
 `packages/api/src/app.ts`:
 ```ts
 import { Hono } from 'hono';
+
+import { HTTPException } from 'hono/http-exception';
 import type { Db } from './db/testDb';
 import type { AppEnv, TokenVerifier } from './auth/types';
 import { authMiddleware } from './auth/middleware';
@@ -601,7 +625,13 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   //   app.route('/api/levels', createLevelRoutes(deps));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
-  app.onError((err, c) => c.json({ error: 'internal', message: err.message }, 500));
+  app.onError((err, c) => {
+    // Preserve intentional HTTP errors thrown by routes/validators.
+    if (err instanceof HTTPException) return err.getResponse();
+    // Never leak raw error detail (SQL, ARNs) to clients; log server-side.
+    console.error(err);
+    return c.json({ error: 'internal' }, 500);
+  });
 
   return app;
 }
