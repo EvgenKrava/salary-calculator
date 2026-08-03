@@ -809,6 +809,34 @@ describe('employees routes', () => {
     });
     expect(res.status).toBe(200);
   });
+
+  it('rejects create with a well-formed but unknown levelId (400)', async () => {
+    const app = await makeApp();
+    const res = await app.request('/api/employees', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ name: 'X', levelId: '00000000-0000-0000-0000-000000000000' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a PATCH to an unknown levelId (400)', async () => {
+    const app = await makeApp();
+    const levelId = await makeLevel(app);
+    const a = (await (
+      await app.request('/api/employees', {
+        method: 'POST',
+        headers: { ...MGR, ...JSONH },
+        body: JSON.stringify({ name: 'Y', levelId }),
+      })
+    ).json()) as { id: string };
+    const res = await app.request(`/api/employees/${a.id}`, {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ levelId: '00000000-0000-0000-0000-000000000000' }),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 ```
 
@@ -829,7 +857,7 @@ import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
 import { readJson, getOr404 } from '../http/validation';
-import { employees } from '../schema';
+import { employees, levels } from '../schema';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -865,6 +893,12 @@ export function createEmployeeRoutes(db: Db): Hono<AppEnv> {
   const routes = new Hono<AppEnv>();
   routes.use('*', requireRole('manager', 'admin'));
 
+  // A well-formed but non-existent levelId would otherwise hit the FK and leak a 500.
+  async function requireLevel(levelId: string): Promise<void> {
+    const rows = await db.select().from(levels).where(eq(levels.id, levelId));
+    if (rows.length === 0) throw new HTTPException(400, { message: 'unknown levelId' });
+  }
+
   routes.get('/', async (c) => {
     const rows = await db.select().from(employees);
     return c.json(rows.map(toDto));
@@ -877,6 +911,7 @@ export function createEmployeeRoutes(db: Db): Hono<AppEnv> {
 
   routes.post('/', async (c) => {
     const body = await readJson(c, createSchema);
+    await requireLevel(body.levelId);
     if (body.cognitoSub) {
       const dupe = await db.select().from(employees).where(eq(employees.cognitoSub, body.cognitoSub));
       if (dupe.length > 0) throw new HTTPException(409, { message: 'cognitoSub already linked' });
@@ -904,6 +939,7 @@ export function createEmployeeRoutes(db: Db): Hono<AppEnv> {
         .where(and(eq(employees.cognitoSub, body.cognitoSub), ne(employees.id, id)));
       if (dupe.length > 0) throw new HTTPException(409, { message: 'cognitoSub already linked' });
     }
+    if (body.levelId !== undefined) await requireLevel(body.levelId);
     const patch: Partial<typeof employees.$inferInsert> = {};
     if (body.name !== undefined) patch.name = body.name;
     if (body.levelId !== undefined) patch.levelId = body.levelId;
