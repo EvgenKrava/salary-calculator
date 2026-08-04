@@ -732,3 +732,12 @@ git commit -m "Add employee salary self-view endpoint"
 **Placeholder scan:** No TBD/TODO. The `db.transaction` fallback and the `/me` route-ordering contingency are explicit, test-arbitrated instructions, not placeholders.
 
 **Type consistency:** `CalcInput` mapping converts every numeric DB string to a number and passes enum-typed `status`/`source` straight through (they match `@salary/core`'s unions); `result.lines` (EmployeeBreakdown, numbers) are returned directly on create and re-derived via `Number(...)` on read; `Db`, `AppEnv`, shared helpers reused; each route group mounted once.
+---
+
+## Post-Review Polish (applied after the whole-branch review — verdict was "ready to merge")
+
+All Minor, no correctness/security impact:
+1. `GET /api/revenue` — a present-but-malformed `locationId` query param now returns `400` (was silently ignored → unfiltered results), matching the `from`/`to` date-filter contract.
+2. Salary-run `bonuses` values constrained to `z.number().nonnegative()` (matches the `amount` validation; negative bonuses rejected with `400`).
+3. Salary-run revenue load scoped to `[period.start, period.end]` (efficiency; no behavior change — the engine only looks up in-period location-days).
+4. `GET /api/salary-runs/:id` test now asserts the exact read-back line values (String→numeric→Number round-trip), not just the line count.
