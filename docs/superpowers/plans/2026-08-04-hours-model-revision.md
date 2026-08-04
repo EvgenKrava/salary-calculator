@@ -703,6 +703,46 @@ const assignSchema = z.object({
 ```
 - In `POST /requests` and `POST /`, call `resolveWindow(...)` (it replaces the old `requireLocation` call) and include `startsAt`/`endsAt` in the insert values.
 - Extend `toDto` with `startsAt: row.startsAt.slice(0, 5)` and `endsAt: row.endsAt.slice(0, 5)`.
+- **Reject overlapping approved shifts.** Two approved shifts for the same employee at the
+  same location-day whose windows overlap would inflate the calculation's proration
+  denominator and silently underpay every other person working that day (the composite
+  UNIQUE only blocks an identical `starts_at`). Add this helper and call it before every
+  insert that lands an `approved` shift (manager assign with `status: 'approved'`) and
+  inside `POST /:id/approve` before flipping the status:
+```ts
+  async function assertNoOverlap(
+    employeeId: string,
+    locationId: string,
+    workDate: string,
+    startsAt: string,
+    endsAt: string,
+    excludeShiftId?: string,
+  ): Promise<void> {
+    const sameDay = await db
+      .select()
+      .from(shifts)
+      .where(
+        and(
+          eq(shifts.employeeId, employeeId),
+          eq(shifts.locationId, locationId),
+          eq(shifts.workDate, workDate),
+          eq(shifts.status, 'approved'),
+        ),
+      );
+    // Half-open comparison: touching windows (08:00-12:00 and 12:00-16:00) do NOT overlap.
+    const clash = sameDay.some(
+      (s) =>
+        s.id !== excludeShiftId &&
+        startsAt < s.endsAt.slice(0, 5) &&
+        s.startsAt.slice(0, 5) < endsAt,
+    );
+    if (clash) {
+      throw new HTTPException(409, { message: 'overlaps an existing approved shift' });
+    }
+  }
+```
+  In `POST /:id/approve`, load the shift first (404 if absent), then call
+  `assertNoOverlap(row.employeeId, row.locationId, row.workDate, row.startsAt.slice(0, 5), row.endsAt.slice(0, 5), row.id)` before the update.
 
 - [ ] **Step 5: Update the affected API tests**
 
@@ -755,6 +795,31 @@ And in the manager suite, replace the "409s an assign that duplicates an employe
     const body = { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-11', startsAt: '08:00', endsAt: '12:00' };
     await assign(app, body);
     expect((await assign(app, body)).status).toBe(409);
+  });
+
+  it('409s an assign whose window overlaps an approved shift', async () => {
+    const { app, loc, alice } = await seed();
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-12', startsAt: '08:00', endsAt: '12:00' });
+    // Different start (so the UNIQUE constraint does not catch it) but overlapping window.
+    const overlap = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-12', startsAt: '09:00', endsAt: '13:00' });
+    expect(overlap.status).toBe(409);
+  });
+
+  it('allows back-to-back approved shifts that only touch', async () => {
+    const { app, loc, alice } = await seed();
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-13', startsAt: '08:00', endsAt: '12:00' });
+    const adjacent = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-13', startsAt: '12:00', endsAt: '16:00' });
+    expect(adjacent.status).toBe(201);
+  });
+
+  it('409s approving a requested shift that overlaps an approved one', async () => {
+    const { app, loc, alice } = await seed();
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-16', startsAt: '08:00', endsAt: '12:00' });
+    const requested = await (
+      await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-16', startsAt: '10:00', endsAt: '14:00', status: 'requested' })
+    ).json();
+    const approve = await app.request(`/api/shifts/${requested.id}/approve`, { method: 'POST', headers: MGR });
+    expect(approve.status).toBe(409);
   });
 ```
 
