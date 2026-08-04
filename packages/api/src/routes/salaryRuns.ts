@@ -16,7 +16,7 @@ const createSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   month: z.number().int().min(1).max(12),
   half: z.union([z.literal(1), z.literal(2)]),
-  bonuses: z.record(z.string(), z.number()).optional(),
+  bonuses: z.record(z.string(), z.number().nonnegative()).optional(),
 });
 
 type RunRow = typeof salaryRuns.$inferSelect;
@@ -86,7 +86,16 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
         .select()
         .from(shifts)
         .where(and(eq(shifts.status, 'approved'), gte(shifts.workDate, period.start), lte(shifts.workDate, period.end))),
-      db.select().from(dailyRevenue).where(eq(dailyRevenue.status, 'approved')),
+      db
+        .select()
+        .from(dailyRevenue)
+        .where(
+          and(
+            eq(dailyRevenue.status, 'approved'),
+            gte(dailyRevenue.revenueDate, period.start),
+            lte(dailyRevenue.revenueDate, period.end),
+          ),
+        ),
     ]);
 
     const input: CalcInput = {

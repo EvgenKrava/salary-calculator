@@ -91,7 +91,9 @@ describe('salary runs', () => {
 
     const got = await app.request(`/api/salary-runs/${run.id}`, { headers: MGR });
     expect(got.status).toBe(200);
-    expect(((await got.json()) as RunDto).lines).toHaveLength(1);
+    const gotBody = (await got.json()) as RunDto;
+    expect(gotBody.lines).toHaveLength(1);
+    expect(gotBody.lines[0]).toEqual({ employeeId: alice.id, hourlyPay: 160, revenueShare: 50, bonus: 25, total: 235 });
   });
 
   it('409s a second run for the same period', async () => {
@@ -110,6 +112,16 @@ describe('salary runs', () => {
       method: 'POST',
       headers: { ...MGR, ...JSONH },
       body: JSON.stringify({ year: 2026, month: 13, half: 1 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a negative bonus (400)', async () => {
+    const { app, alice } = await seed();
+    const res = await app.request('/api/salary-runs', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ year: 2026, month: 8, half: 1, bonuses: { [alice.id]: -10 } }),
     });
     expect(res.status).toBe(400);
   });

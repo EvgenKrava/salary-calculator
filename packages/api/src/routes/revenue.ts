@@ -43,7 +43,10 @@ export function createRevenueRoutes(db: Db): Hono<AppEnv> {
   routes.get('/', async (c) => {
     const filters: SQL[] = [];
     const locationId = c.req.query('locationId');
-    if (locationId && z.string().uuid().safeParse(locationId).success) filters.push(eq(dailyRevenue.locationId, locationId));
+    if (locationId !== undefined) {
+      if (!z.string().uuid().safeParse(locationId).success) throw new HTTPException(400, { message: 'invalid locationId' });
+      filters.push(eq(dailyRevenue.locationId, locationId));
+    }
     const from = c.req.query('from');
     if (from !== undefined) {
       if (!dateString.safeParse(from).success) throw new HTTPException(400, { message: 'invalid "from" date' });

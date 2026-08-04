@@ -106,4 +106,10 @@ describe('daily revenue routes', () => {
     const del = await app.request(`/api/revenue/${created.id}`, { method: 'DELETE', headers: MGR });
     expect(del.status).toBe(200);
   });
+
+  it('400s the list on a malformed locationId filter', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/revenue?locationId=not-a-uuid', { headers: MGR });
+    expect(res.status).toBe(400);
+  });
 });
