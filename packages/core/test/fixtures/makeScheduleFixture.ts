@@ -41,7 +41,7 @@ export async function makeScheduleWorkbookBuffer(): Promise<Buffer> {
   ws.getCell(6, 3).value = 'Олег'; // numeric location values
   ws.getCell(6, 4).value = 1;
   ws.getCell(6, 6).value = 2;
-  ws.getCell(6, 40).value = 1; // June day 3
+  ws.getCell(6, 39).value = 1; // June day 3 (header cols for June are 36+d, so day 3 = col 39)
   ws.getCell(7, 3).value = 'Марта'; // string-typed location values
   ws.getCell(7, 4).value = '2.0';
   ws.getCell(7, 5).value = '1.0';
