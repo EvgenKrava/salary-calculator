@@ -130,4 +130,31 @@ describe('salary runs', () => {
     const { app } = await seed();
     expect((await app.request('/api/salary-runs/00000000-0000-0000-0000-000000000000', { headers: MGR })).status).toBe(404);
   });
+
+  it('prorates revenue share across a split day', async () => {
+    const { db, app, loc, alice } = await seed();
+    const [level] = await db.select().from(levels);
+    const [bob] = await db
+      .insert(employees)
+      .values({ name: 'Bob', levelId: level.id, revenuePercent: '0.0500', cognitoSub: 'sub-bob' })
+      .returning();
+    await db.insert(shifts).values([
+      { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', startsAt: '08:00', endsAt: '12:00', status: 'approved', source: 'native' },
+      { employeeId: bob.id, locationId: loc.id, workDate: '2026-08-03', startsAt: '12:00', endsAt: '16:00', status: 'approved', source: 'native' },
+    ]);
+    await db.insert(dailyRevenue).values({ locationId: loc.id, revenueDate: '2026-08-03', amount: '1000.00', source: 'manual', status: 'approved' });
+
+    const res = await app.request('/api/salary-runs', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ year: 2026, month: 8, half: 1 }),
+    });
+    expect(res.status).toBe(201);
+    const run = (await res.json()) as RunDto;
+    const aliceLine = run.lines.find((l) => l.employeeId === alice.id);
+    const bobLine = run.lines.find((l) => l.employeeId === bob.id);
+    // each worked 4 of the day's 8 hours => half of their own 5%
+    expect(aliceLine).toMatchObject({ hourlyPay: 80, revenueShare: 25 });
+    expect(bobLine).toMatchObject({ hourlyPay: 80, revenueShare: 25 });
+  });
 });
