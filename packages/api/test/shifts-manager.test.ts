@@ -7,11 +7,13 @@ import type { TokenVerifier } from '../src/auth/types';
 const verifier: TokenVerifier = {
   async verify(token) {
     if (token === 'mgr') return { sub: 'u-mgr', groups: ['manager'] };
+    if (token === 'admin') return { sub: 'u-admin', groups: ['admin'] };
     if (token === 'alice') return { sub: 'sub-alice', groups: ['employee'] };
     throw new Error('bad');
   },
 };
 const MGR = { Authorization: 'Bearer mgr' };
+const ADMIN = { Authorization: 'Bearer admin' };
 const ALICE = { Authorization: 'Bearer alice' };
 const JSONH = { 'content-type': 'application/json' };
 
@@ -139,5 +141,35 @@ describe('manager scheduling', () => {
     const { app } = await seed();
     const res = await app.request('/api/shifts?from=garbage', { headers: MGR });
     expect(res.status).toBe(400);
+  });
+
+  it('allows sequential shifts at two different locations in one day', async () => {
+    const { app, loc, alice } = await seed();
+    const locB = await (
+      await app.request('/api/locations', {
+        method: 'POST',
+        headers: { ...ADMIN, ...JSONH },
+        body: JSON.stringify({ name: 'B', opensAt: '08:00', closesAt: '20:00' }),
+      })
+    ).json() as { id: string };
+    const first = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-17', startsAt: '08:00', endsAt: '12:00' });
+    expect(first.status).toBe(201);
+    const second = await assign(app, { employeeId: alice.id, locationId: locB.id, workDate: '2026-08-17', startsAt: '13:00', endsAt: '17:00' });
+    expect(second.status).toBe(201);
+  });
+
+  it('409s an assign that overlaps an approved shift at another location', async () => {
+    const { app, loc, alice } = await seed();
+    const locB = await (
+      await app.request('/api/locations', {
+        method: 'POST',
+        headers: { ...ADMIN, ...JSONH },
+        body: JSON.stringify({ name: 'B', opensAt: '08:00', closesAt: '20:00' }),
+      })
+    ).json() as { id: string };
+    const first = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-18', startsAt: '08:00', endsAt: '16:00' });
+    expect(first.status).toBe(201);
+    const overlap = await assign(app, { employeeId: alice.id, locationId: locB.id, workDate: '2026-08-18', startsAt: '10:00', endsAt: '14:00' });
+    expect(overlap.status).toBe(409);
   });
 });

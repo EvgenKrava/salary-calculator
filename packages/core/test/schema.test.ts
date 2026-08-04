@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import { MIGRATIONS } from '../src/migrations';
+import { MIGRATIONS, INIT_SQL, HOURS_MODEL_SQL } from '../src/migrations';
 
 const LEVEL = '11111111-1111-1111-1111-111111111111';
 const LOC = '22222222-2222-2222-2222-222222222222';
@@ -93,5 +93,56 @@ describe('schema 0001_init + 0002_hours_model', () => {
         `INSERT INTO locations (name, opens_at, closes_at) VALUES ('Bad Loc', '20:00', '08:00');`,
       ),
     ).rejects.toThrow();
+  });
+
+  it('rejects a shift window with sub-minute seconds', async () => {
+    await expect(
+      db.exec(
+        `INSERT INTO shifts (employee_id, location_id, work_date, starts_at, ends_at)
+         VALUES ('${EMP}', '${LOC}', '2026-09-05', '08:00:30', '16:00');`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a location with a seconds-bearing window', async () => {
+    await expect(
+      db.exec(
+        `INSERT INTO locations (name, opens_at, closes_at) VALUES ('Seconds Loc', '08:00:30', '16:00');`,
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('0002_hours_model migration preserves real shift length', () => {
+  it('derives closes_at from standard_shift_hours instead of defaulting to a flat window', async () => {
+    // A fresh PGlite instance so 0001 and the pre-migration insert happen BEFORE 0002
+    // runs — the shared `db` above already has 0002 applied, so it cannot exercise the
+    // old-model round-trip this regression guards against.
+    const oldModelDb = new PGlite();
+    await oldModelDb.exec(INIT_SQL);
+
+    const level = '44444444-4444-4444-4444-444444444444';
+    const loc = '55555555-5555-5555-5555-555555555555';
+    const emp = '66666666-6666-6666-6666-666666666666';
+    await oldModelDb.exec(`
+      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${level}', 'Junior', 20.00);
+      INSERT INTO locations (id, name, standard_shift_hours) VALUES ('${loc}', 'Uptown', 6.00);
+      INSERT INTO employees (id, name, level_id, revenue_percent) VALUES ('${emp}', 'Bob', '${level}', 0.05);
+      INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${emp}', '${loc}', '2026-08-03');
+    `);
+
+    await oldModelDb.exec(HOURS_MODEL_SQL);
+
+    const locRes = await oldModelDb.query<{ opens_at: string; closes_at: string }>(
+      `SELECT opens_at, closes_at FROM locations WHERE id = '${loc}';`,
+    );
+    expect(locRes.rows[0].opens_at).toBe('08:00:00');
+    expect(locRes.rows[0].closes_at).toBe('14:00:00');
+
+    const shiftRes = await oldModelDb.query<{ starts_at: string; ends_at: string }>(
+      `SELECT starts_at, ends_at FROM shifts WHERE location_id = '${loc}';`,
+    );
+    expect(shiftRes.rows[0].starts_at).toBe('08:00:00');
+    expect(shiftRes.rows[0].ends_at).toBe('14:00:00');
   });
 });

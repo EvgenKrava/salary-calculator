@@ -198,4 +198,41 @@ describe('calculateSalaries', () => {
     input.employees[0].levelId = 'missing';
     expect(() => calculateSalaries(input, PERIOD)).toThrow(/unknown level/);
   });
+
+  it('prorates an uneven split by hours, not headcount', () => {
+    const input = baseInput();
+    input.shifts[0].endsAt = '14:00'; // Alice: 6h
+    input.employees.push({
+      id: 'e2', name: 'Bob', levelId: 'lvl1', revenuePercent: 0.1, cognitoSub: null, active: true,
+    });
+    input.shifts.push({
+      id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
+      startsAt: '14:00', endsAt: '16:00', status: 'approved', source: 'native',
+    });
+    const result = calculateSalaries(input, PERIOD);
+    const alice = result.lines.find((l) => l.employeeId === 'e1')!;
+    const bob = result.lines.find((l) => l.employeeId === 'e2')!;
+    // A headcount split would give 25/50; the hours split must give 37.5/25.
+    expect(alice.hourlyPay).toBe(120); // 20 x 6
+    expect(alice.revenueShare).toBe(37.5); // 0.05 x 1000 x 6/8
+    expect(bob.hourlyPay).toBe(40); // 20 x 2
+    expect(bob.revenueShare).toBe(25); // 0.10 x 1000 x 2/8
+  });
+
+  it('counts an inactive employee approved hours in the denominator', () => {
+    const input = baseInput();
+    input.shifts[0].endsAt = '12:00'; // Alice: 4h, active
+    input.employees.push({
+      id: 'e2', name: 'Bob', levelId: 'lvl1', revenuePercent: 0.1, cognitoSub: null, active: false,
+    });
+    input.shifts.push({
+      id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
+      startsAt: '12:00', endsAt: '16:00', status: 'approved', source: 'native',
+    });
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.lines).toHaveLength(1);
+    const alice = result.lines.find((l) => l.employeeId === 'e1')!;
+    expect(alice.revenueShare).toBe(25); // 0.05 x 1000 x 4/8 (Bob's hours still count in the denominator)
+    expect(result.lines.find((l) => l.employeeId === 'e2')).toBeUndefined();
+  });
 });

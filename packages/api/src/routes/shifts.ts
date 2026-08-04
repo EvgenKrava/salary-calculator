@@ -74,13 +74,14 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
     return id;
   }
 
-  // Two approved shifts for the same employee at the same location-day whose windows
-  // overlap would inflate the calculation's proration denominator and silently underpay
-  // every other person working that day. The composite UNIQUE only blocks an identical
+  // Two approved shifts for the same employee whose windows overlap in wall-clock time
+  // would double-pay that employee for the same hours and inflate the proration
+  // denominator at whichever location(s) they claim to also be working, silently
+  // underpaying every other person working that day — regardless of location, a person
+  // cannot be in two places at once. The composite UNIQUE only blocks an identical
   // starts_at, so this must be checked explicitly.
   async function assertNoOverlap(
     employeeId: string,
-    locationId: string,
     workDate: string,
     startsAt: string,
     endsAt: string,
@@ -92,7 +93,6 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
       .where(
         and(
           eq(shifts.employeeId, employeeId),
-          eq(shifts.locationId, locationId),
           eq(shifts.workDate, workDate),
           eq(shifts.status, 'approved'),
         ),
@@ -166,7 +166,7 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
     await requireEmployee(body.employeeId);
     const window = await resolveWindow(body.locationId, body.startsAt, body.endsAt);
     if (body.status === 'approved') {
-      await assertNoOverlap(body.employeeId, body.locationId, body.workDate, window.startsAt, window.endsAt);
+      await assertNoOverlap(body.employeeId, body.workDate, window.startsAt, window.endsAt);
     }
     try {
       const [row] = await db
@@ -194,7 +194,6 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
     if (!existing) throw new HTTPException(404, { message: 'shift not found' });
     await assertNoOverlap(
       existing.employeeId,
-      existing.locationId,
       existing.workDate,
       existing.startsAt.slice(0, 5),
       existing.endsAt.slice(0, 5),
