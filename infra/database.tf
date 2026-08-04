@@ -3,6 +3,13 @@ resource "random_password" "db" {
   special = false
 }
 
+locals {
+  # Referenced by both the cluster and the Secrets Manager payload — keep it in one place
+  # so the two can never drift (a mismatch would apply cleanly but silently break every
+  # Data API client that reads its credentials from the secret).
+  db_master_username = "salary_admin"
+}
+
 resource "aws_secretsmanager_secret" "db" {
   name = "${var.project_name}-db-credentials"
 }
@@ -10,7 +17,7 @@ resource "aws_secretsmanager_secret" "db" {
 resource "aws_secretsmanager_secret_version" "db" {
   secret_id = aws_secretsmanager_secret.db.id
   secret_string = jsonencode({
-    username = "salary_admin"
+    username = local.db_master_username
     password = random_password.db.result
   })
 }
@@ -21,10 +28,15 @@ resource "aws_rds_cluster" "main" {
   engine_mode            = "provisioned"
   engine_version         = "15.4"
   database_name          = var.db_name
-  master_username        = "salary_admin"
+  master_username        = local.db_master_username
   master_password        = random_password.db.result
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.db.id]
+
+  # This cluster holds payroll and personal data. The AWS provider defaults
+  # storage_encrypted to false, so encryption at rest must be set explicitly — and it
+  # cannot be enabled in place later without recreating the cluster from a snapshot.
+  storage_encrypted = true
 
   # RDS Data API — how the Lambdas reach the DB without being in the VPC.
   enable_http_endpoint = true
