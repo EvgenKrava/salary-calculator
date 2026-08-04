@@ -12,6 +12,12 @@ locals {
 
 resource "aws_secretsmanager_secret" "db" {
   name = "${var.project_name}-db-credentials"
+
+  # Dev stage: the secret name is deterministic and skip_final_snapshot implies
+  # destroy/re-apply is normal, but Secrets Manager's default 30-day recovery window
+  # would block re-creating a secret with the same name for a month. Restore the
+  # default window (or remove this line) for production.
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "db" {
@@ -23,10 +29,17 @@ resource "aws_secretsmanager_secret_version" "db" {
 }
 
 resource "aws_rds_cluster" "main" {
-  cluster_identifier     = "${var.project_name}-db"
-  engine                 = "aurora-postgresql"
-  engine_mode            = "provisioned"
-  engine_version         = "15.4"
+  cluster_identifier = "${var.project_name}-db"
+  engine             = "aurora-postgresql"
+  engine_mode        = "provisioned"
+
+  # Major-version pin only. The provider prefix-matches, so AWS selects the current
+  # default minor: this avoids hardcoding a minor that AWS later retires (15.4 was
+  # already gone — the lowest available 15.x is now 15.10), and avoids the perpetual
+  # "downgrade" diff that appears when auto minor upgrades move the actual version
+  # past a pinned literal.
+  engine_version = var.db_engine_version
+
   database_name          = var.db_name
   master_username        = local.db_master_username
   master_password        = random_password.db.result
@@ -59,5 +72,7 @@ resource "aws_rds_cluster_instance" "main" {
   cluster_identifier = aws_rds_cluster.main.id
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.main.engine
-  engine_version     = aws_rds_cluster.main.engine_version
+
+  # engine_version is deliberately NOT set here: the instance inherits it from the
+  # cluster, and duplicating it doubles the surface for version-drift diffs.
 }

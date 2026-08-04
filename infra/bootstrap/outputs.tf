@@ -2,6 +2,5 @@ output "state_bucket" {
   value = aws_s3_bucket.tfstate.bucket
 }
 
-output "lock_table" {
-  value = aws_dynamodb_table.tflock.name
-}
+// No lock_table output: state locking is S3-native (`use_lockfile = true`), so there is
+// no DynamoDB table to reference from the main stack's backend.

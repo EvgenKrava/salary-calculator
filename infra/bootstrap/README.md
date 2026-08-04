@@ -12,6 +12,6 @@ terraform init
 terraform apply   # uses the "yevhenii" AWS profile
 ```
 
-Note the `state_bucket` and `lock_table` outputs — they must match the `backend
+Note the `state_bucket` output — it must match the `backend
 "s3"` block in `../versions.tf`. The bucket name embeds the AWS account id, so it
 is stable per account.

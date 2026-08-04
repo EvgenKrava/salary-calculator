@@ -16,10 +16,16 @@ terraform {
     # NOTE: backend blocks cannot use variables. Fill these from the bootstrap
     # outputs before `terraform init` (see README). The bucket name embeds the
     # AWS account id.
-    key            = "infra/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "salary-calculator-tflock"
-    encrypt        = true
-    # bucket       = "salary-calculator-tfstate-<ACCOUNT_ID>"  <-- set via `terraform init -backend-config="bucket=..."`
+    key    = "infra/terraform.tfstate"
+    region = "us-east-1"
+
+    # S3-native state locking (conditional writes). Replaces the old
+    # `dynamodb_table` argument, which Terraform now reports as deprecated and
+    # which also hardcoded a `project_name`-derived table name that no variable
+    # could keep in sync with the bootstrap.
+    use_lockfile = true
+
+    encrypt = true
+    # bucket = "salary-calculator-tfstate-<ACCOUNT_ID>"  <-- set via `terraform init -backend-config="bucket=..."`
   }
 }
