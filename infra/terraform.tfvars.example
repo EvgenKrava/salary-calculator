@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored.
+project_name = "salary-calculator"
+region       = "us-east-1"
+aws_profile  = "yevhenii"
+db_name      = "salary"
+db_min_acu   = 0.5
+db_max_acu   = 2
