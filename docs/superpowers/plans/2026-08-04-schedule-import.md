@@ -734,6 +734,29 @@ describe('location shift slots', () => {
     expect(malformed.status).toBe(400);
   });
 
+  it('rejects a slot window outside the location hours (400)', async () => {
+    const { app, loc } = await seed(); // location A opens 08:00, closes 20:00
+    const tooEarly = await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '06:00', endsAt: '07:00' }),
+    });
+    expect(tooEarly.status).toBe(400);
+    const tooLate = await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '19:00', endsAt: '23:00' }),
+    });
+    expect(tooLate.status).toBe(400);
+    // Exactly matching the location hours is allowed.
+    const exact = await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '08:00', endsAt: '20:00' }),
+    });
+    expect(exact.status).toBe(200);
+  });
+
   it('400s an unknown location and 404s a bad slot number', async () => {
     const { app, loc } = await seed();
     const badLoc = await app.request('/api/locations/00000000-0000-0000-0000-000000000000/slots/1', {
@@ -945,12 +968,34 @@ export function createShiftSlotRoutes(db: Db): Hono<AppEnv> {
     return c.json(rows.map(toDto));
   });
 
+  /**
+   * A slot window must fall inside the location's own working hours — otherwise the
+   * importer would happily produce shifts for hours the shop is shut. The DB constrains
+   * the window's shape (ordered, whole minutes, < 24:00) but cannot compare it to the
+   * parent location's hours, so it is enforced here.
+   */
+  async function assertWithinLocationHours(
+    locationId: string,
+    startsAt: string,
+    endsAt: string,
+  ): Promise<void> {
+    const [location] = await db.select().from(locations).where(eq(locations.id, locationId));
+    const opensAt = location.opensAt.slice(0, 5);
+    const closesAt = location.closesAt.slice(0, 5);
+    if (startsAt < opensAt || endsAt > closesAt) {
+      throw new HTTPException(400, {
+        message: `slot window must fall within the location hours ${opensAt}-${closesAt}`,
+      });
+    }
+  }
+
   // PUT is an upsert so re-configuring a slot is idempotent.
   routes.put('/:slotNumber', async (c) => {
     const locationId = c.req.param('locationId')!;
     await requireLocation(locationId);
     const slotNumber = slotNumberParam(c.req.param('slotNumber')!);
     const body = await readJson(c, windowSchema);
+    await assertWithinLocationHours(locationId, body.startsAt, body.endsAt);
     const [row] = await db
       .insert(locationShiftSlots)
       .values({ locationId, slotNumber, startsAt: body.startsAt, endsAt: body.endsAt })
