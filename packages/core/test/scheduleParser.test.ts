@@ -49,9 +49,12 @@ describe('parseScheduleGrid', () => {
 
   it('keeps duplicate names within a block as separate rows', () => {
     // Two different people are both written "Олег" in block 1; the parser must not merge
-    // them — it reports the name and lets the mapping step disambiguate.
+    // them — it reports the name and lets the mapping step disambiguate. An exact cell count
+    // catches regressions where a future change silently dedupes and drops one duplicate row.
     const olegCells = result.cells.filter((c) => c.sourceName === 'Олег' && c.slot === 1);
-    expect(olegCells.length).toBeGreaterThanOrEqual(3);
+    expect(olegCells.length).toBe(4);
+    // Explicitly verify the duplicate row (row 8) is present via its distinguishing cell.
+    expect(olegCells.some((c) => c.date === '2026-05-02')).toBe(true);
   });
 
   it('assigns rows in the second block to slot 2', () => {
@@ -78,6 +81,15 @@ describe('parseScheduleGrid', () => {
   it('reports annotation rows as anomalies', () => {
     expect(result.anomalies.some((a) => a.kind === 'annotation' && a.raw.includes('Загальні'))).toBe(true);
     expect(result.anomalies.some((a) => a.kind === 'annotation' && a.raw.includes('Інвентура'))).toBe(true);
+  });
+
+  it('keeps a name repeated across blocks as separate slot rows', () => {
+    // "Марта" appears in both block 1 (slot 1) and block 2 (slot 2); the parser must keep
+    // them as distinct cells to avoid losing assignment information during the mapping step.
+    const marta1 = result.cells.some((c) => c.sourceName === 'Марта' && c.slot === 1);
+    const marta2 = result.cells.some((c) => c.sourceName === 'Марта' && c.slot === 2);
+    expect(marta1).toBe(true);
+    expect(marta2).toBe(true);
   });
 
   it('lists every distinct source name for the mapping step', () => {
