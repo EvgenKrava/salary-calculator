@@ -19,3 +19,8 @@ build/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+
+# Client spreadsheets — real staff names and business data. Never commit these;
+# parser tests use the synthetic fixture in packages/core/test/fixtures instead.
+docs/*.xlsx
+docs/*.xls
