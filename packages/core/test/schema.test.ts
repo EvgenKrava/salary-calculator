@@ -128,6 +128,61 @@ describe('schema 0001_init + 0002_hours_model', () => {
       ),
     ).rejects.toThrow();
   });
+
+  it('stores a slot window and enforces one row per location-slot', async () => {
+    await db.exec(
+      `INSERT INTO location_shift_slots (location_id, slot_number, starts_at, ends_at)
+       VALUES ('${LOC}', 1, '08:00', '14:00');`,
+    );
+    await expect(
+      db.exec(
+        `INSERT INTO location_shift_slots (location_id, slot_number, starts_at, ends_at)
+         VALUES ('${LOC}', 1, '14:00', '20:00');`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a slot window at 24:00 or with seconds', async () => {
+    await expect(
+      db.exec(
+        `INSERT INTO location_shift_slots (location_id, slot_number, starts_at, ends_at)
+         VALUES ('${LOC}', 8, '20:00', '24:00:00');`,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.exec(
+        `INSERT INTO location_shift_slots (location_id, slot_number, starts_at, ends_at)
+         VALUES ('${LOC}', 9, '08:00:30', '14:00');`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('maps a name to an employee or marks it ignored, never both', async () => {
+    await db.exec(
+      `INSERT INTO schedule_name_map (source_name, employee_id) VALUES ('Олег', '${EMP}');`,
+    );
+    await db.exec(
+      `INSERT INTO schedule_name_map (source_name, ignored) VALUES ('Бариста 1', TRUE);`,
+    );
+    // Both set is contradictory.
+    await expect(
+      db.exec(
+        `INSERT INTO schedule_name_map (source_name, employee_id, ignored)
+         VALUES ('Bad', '${EMP}', TRUE);`,
+      ),
+    ).rejects.toThrow();
+    // Neither set resolves nothing.
+    await expect(
+      db.exec(`INSERT INTO schedule_name_map (source_name) VALUES ('Unresolved');`),
+    ).rejects.toThrow();
+  });
+
+  it('enforces one mapping row per source name', async () => {
+    await db.exec(`INSERT INTO schedule_name_map (source_name, ignored) VALUES ('Dup', TRUE);`);
+    await expect(
+      db.exec(`INSERT INTO schedule_name_map (source_name, ignored) VALUES ('Dup', TRUE);`),
+    ).rejects.toThrow();
+  });
 });
 
 describe('0002_hours_model migration preserves real shift length', () => {

@@ -5,6 +5,7 @@
 import {
   boolean,
   date,
+  integer,
   jsonb,
   numeric,
   pgEnum,
@@ -112,3 +113,26 @@ export const salaryRunLines = pgTable(
   },
   (t) => [unique().on(t.runId, t.employeeId)],
 );
+
+export const locationShiftSlots = pgTable(
+  'location_shift_slots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    slotNumber: integer('slot_number').notNull(),
+    startsAt: time('starts_at').notNull(),
+    endsAt: time('ends_at').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.locationId, t.slotNumber)],
+);
+
+export const scheduleNameMap = pgTable('schedule_name_map', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sourceName: text('source_name').notNull().unique(),
+  employeeId: uuid('employee_id').references(() => employees.id, { onDelete: 'cascade' }),
+  ignored: boolean('ignored').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
