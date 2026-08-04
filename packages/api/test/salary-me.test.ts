@@ -18,12 +18,12 @@ const JSONH = { 'content-type': 'application/json' };
 async function seedAndRun() {
   const { db } = await createTestDb();
   const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
-  const [loc] = await db.insert(locations).values({ name: 'A', standardShiftHours: '8.00' }).returning();
+  const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)
     .values({ name: 'Alice', levelId: level.id, revenuePercent: '0.0500', cognitoSub: 'sub-alice' })
     .returning();
-  await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', status: 'approved', source: 'native' });
+  await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', startsAt: '08:00', endsAt: '16:00', status: 'approved', source: 'native' });
   await db.insert(dailyRevenue).values({ locationId: loc.id, revenueDate: '2026-08-03', amount: '1000.00', source: 'manual', status: 'approved' });
   const app = createApp({ db, verifier });
   await app.request('/api/salary-runs', {

@@ -30,11 +30,11 @@ describe('locations routes', () => {
     const created = await app.request('/api/locations', {
       method: 'POST',
       headers: { ...ADMIN, ...JSONH },
-      body: JSON.stringify({ name: 'Downtown', standardShiftHours: 8 }),
+      body: JSON.stringify({ name: 'Downtown', opensAt: '08:00', closesAt: '16:00' }),
     });
     expect(created.status).toBe(201);
-    const loc = (await created.json()) as { id: string; name: string; standardShiftHours: number };
-    expect(loc).toMatchObject({ name: 'Downtown', standardShiftHours: 8 });
+    const loc = (await created.json()) as { id: string; name: string; opensAt: string; closesAt: string };
+    expect(loc).toMatchObject({ name: 'Downtown', opensAt: '08:00', closesAt: '16:00' });
 
     expect((await (await app.request('/api/locations', { headers: ADMIN })).json())).toHaveLength(1);
     expect((await app.request(`/api/locations/${loc.id}`, { headers: ADMIN })).status).toBe(200);
@@ -42,24 +42,24 @@ describe('locations routes', () => {
     const patched = await app.request(`/api/locations/${loc.id}`, {
       method: 'PATCH',
       headers: { ...ADMIN, ...JSONH },
-      body: JSON.stringify({ standardShiftHours: 6 }),
+      body: JSON.stringify({ closesAt: '18:00' }),
     });
-    expect(((await patched.json()) as { standardShiftHours: number }).standardShiftHours).toBe(6);
+    expect(((await patched.json()) as { closesAt: string }).closesAt).toBe('18:00');
   });
 
-  it('rejects zero/negative shift hours with 400', async () => {
+  it('rejects closesAt not after opensAt (400)', async () => {
     const app = await makeApp();
     const res = await app.request('/api/locations', {
       method: 'POST',
       headers: { ...ADMIN, ...JSONH },
-      body: JSON.stringify({ name: 'Bad', standardShiftHours: 0 }),
+      body: JSON.stringify({ name: 'Bad', opensAt: '18:00', closesAt: '09:00' }),
     });
     expect(res.status).toBe(400);
   });
 
   it('rejects a duplicate name with 409', async () => {
     const app = await makeApp();
-    const body = JSON.stringify({ name: 'Dup', standardShiftHours: 8 });
+    const body = JSON.stringify({ name: 'Dup', opensAt: '08:00', closesAt: '16:00' });
     await app.request('/api/locations', { method: 'POST', headers: { ...ADMIN, ...JSONH }, body });
     expect((await app.request('/api/locations', { method: 'POST', headers: { ...ADMIN, ...JSONH }, body })).status).toBe(409);
   });

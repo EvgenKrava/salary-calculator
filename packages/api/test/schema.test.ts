@@ -11,7 +11,7 @@ describe('drizzle schema against the core migration', () => {
       .insert(levels)
       .values({ name: 'Junior', ratePerHour: '20.00' })
       .returning();
-    await db.insert(locations).values({ name: 'Downtown', standardShiftHours: '8.00' });
+    await db.insert(locations).values({ name: 'Downtown', opensAt: '08:00', closesAt: '16:00' });
     const [employee] = await db
       .insert(employees)
       .values({ name: 'Alice', levelId: level.id, revenuePercent: '0.0500' })
@@ -24,16 +24,28 @@ describe('drizzle schema against the core migration', () => {
     expect(found[0].active).toBe(true);
   });
 
-  it('enforces the employee-per-day uniqueness through drizzle inserts', async () => {
+  it('enforces the employee/day/location/start-time uniqueness through drizzle inserts', async () => {
     const { db } = await createTestDb();
     const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '10.00' }).returning();
-    const [loc] = await db.insert(locations).values({ name: 'Loc', standardShiftHours: '8.00' }).returning();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '16:00' }).returning();
     const [emp] = await db.insert(employees).values({ name: 'Bob', levelId: level.id }).returning();
 
     const { shifts } = await import('../src/schema');
-    await db.insert(shifts).values({ employeeId: emp.id, locationId: loc.id, workDate: '2026-09-01' });
+    await db.insert(shifts).values({
+      employeeId: emp.id,
+      locationId: loc.id,
+      workDate: '2026-09-01',
+      startsAt: '08:00',
+      endsAt: '16:00',
+    });
     await expect(
-      db.insert(shifts).values({ employeeId: emp.id, locationId: loc.id, workDate: '2026-09-01' }),
+      db.insert(shifts).values({
+        employeeId: emp.id,
+        locationId: loc.id,
+        workDate: '2026-09-01',
+        startsAt: '08:00',
+        endsAt: '16:00',
+      }),
     ).rejects.toThrow();
   });
 });

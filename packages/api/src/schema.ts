@@ -1,6 +1,7 @@
 // This Drizzle schema is for query building only. CHECK constraints
-// (rate_per_hour >= 0, standard_shift_hours > 0, revenue_percent in [0,1], amount >= 0)
-// are defined and enforced in packages/core/db/migrations/0001_init.sql, the source of truth.
+// (rate_per_hour >= 0, revenue_percent in [0,1], amount >= 0, closes_at > opens_at,
+// ends_at > starts_at) are defined and enforced in packages/core/db/migrations/
+// 0001_init.sql and 0002_hours_model.sql, the source of truth.
 import {
   boolean,
   date,
@@ -9,13 +10,14 @@ import {
   pgEnum,
   pgTable,
   text,
+  time,
   timestamp,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 
 export const shiftStatus = pgEnum('shift_status', ['requested', 'approved', 'rejected']);
-export const shiftSource = pgEnum('shift_source', ['native', 'extracted']);
+export const shiftSource = pgEnum('shift_source', ['native', 'extracted', 'imported']);
 export const revenueSource = pgEnum('revenue_source', ['manual', 'extracted']);
 export const revenueStatus = pgEnum('revenue_status', ['pending', 'needs_review', 'approved', 'rejected']);
 export const docType = pgEnum('doc_type', ['revenue', 'schedule']);
@@ -30,7 +32,8 @@ export const levels = pgTable('levels', {
 export const locations = pgTable('locations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().unique(),
-  standardShiftHours: numeric('standard_shift_hours', { precision: 5, scale: 2 }).notNull(),
+  opensAt: time('opens_at').notNull(),
+  closesAt: time('closes_at').notNull(),
 });
 
 export const employees = pgTable('employees', {
@@ -49,11 +52,13 @@ export const shifts = pgTable(
     employeeId: uuid('employee_id').notNull().references(() => employees.id),
     locationId: uuid('location_id').notNull().references(() => locations.id),
     workDate: date('work_date').notNull(),
+    startsAt: time('starts_at').notNull(),
+    endsAt: time('ends_at').notNull(),
     status: shiftStatus('status').notNull().default('requested'),
     source: shiftSource('source').notNull().default('native'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique().on(t.employeeId, t.workDate)],
+  (t) => [unique().on(t.employeeId, t.workDate, t.locationId, t.startsAt)],
 );
 
 export const dailyRevenue = pgTable(

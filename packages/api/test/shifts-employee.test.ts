@@ -21,7 +21,7 @@ const JSONH = { 'content-type': 'application/json' };
 async function seed() {
   const { db, client } = await createTestDb();
   const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
-  const [loc] = await db.insert(locations).values({ name: 'A', standardShiftHours: '8.00' }).returning();
+  const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)
     .values({ name: 'Alice', levelId: level.id, cognitoSub: 'sub-alice' })
@@ -121,5 +121,26 @@ describe('employee scheduling', () => {
     await db.update(employees).set({ active: false }).where(eq(employees.id, alice.id));
     const res = await app.request('/api/shifts/me', { headers: ALICE });
     expect(res.status).toBe(403);
+  });
+
+  it('defaults the shift window to the location hours', async () => {
+    const { app, loc } = await seed();
+    const res = await app.request('/api/shifts/requests', {
+      method: 'POST',
+      headers: { ...ALICE, ...JSONH },
+      body: JSON.stringify({ locationId: loc.id, workDate: '2026-08-14' }),
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ startsAt: '08:00', endsAt: '16:00' });
+  });
+
+  it('rejects an inverted window (400)', async () => {
+    const { app, loc } = await seed();
+    const res = await app.request('/api/shifts/requests', {
+      method: 'POST',
+      headers: { ...ALICE, ...JSONH },
+      body: JSON.stringify({ locationId: loc.id, workDate: '2026-08-15', startsAt: '16:00', endsAt: '08:00' }),
+    });
+    expect(res.status).toBe(400);
   });
 });

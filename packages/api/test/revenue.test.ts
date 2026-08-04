@@ -17,7 +17,7 @@ const JSONH = { 'content-type': 'application/json' };
 
 async function seed() {
   const { db } = await createTestDb();
-  const [loc] = await db.insert(locations).values({ name: 'A', standardShiftHours: '8.00' }).returning();
+  const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   return { app: createApp({ db, verifier }), loc };
 }
 

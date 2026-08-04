@@ -37,7 +37,7 @@ interface BlockedDto {
 async function seed() {
   const { db } = await createTestDb();
   const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
-  const [loc] = await db.insert(locations).values({ name: 'A', standardShiftHours: '8.00' }).returning();
+  const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)
     .values({ name: 'Alice', levelId: level.id, revenuePercent: '0.0500', cognitoSub: 'sub-alice' })
@@ -58,7 +58,7 @@ describe('salary runs', () => {
 
   it('blocks (409) with gaps when a worked day has no approved revenue', async () => {
     const { db, app, loc, alice } = await seed();
-    await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', status: 'approved', source: 'native' });
+    await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', startsAt: '08:00', endsAt: '16:00', status: 'approved', source: 'native' });
     // no revenue for 2026-08-03
     const res = await app.request('/api/salary-runs', {
       method: 'POST',
@@ -75,7 +75,7 @@ describe('salary runs', () => {
 
   it('computes and persists a run, applying a bonus', async () => {
     const { db, app, loc, alice } = await seed();
-    await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', status: 'approved', source: 'native' });
+    await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', startsAt: '08:00', endsAt: '16:00', status: 'approved', source: 'native' });
     await db.insert(dailyRevenue).values({ locationId: loc.id, revenueDate: '2026-08-03', amount: '1000.00', source: 'manual', status: 'approved' });
 
     const res = await app.request('/api/salary-runs', {
@@ -98,7 +98,7 @@ describe('salary runs', () => {
 
   it('409s a second run for the same period', async () => {
     const { db, app, loc, alice } = await seed();
-    await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', status: 'approved', source: 'native' });
+    await db.insert(shifts).values({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03', startsAt: '08:00', endsAt: '16:00', status: 'approved', source: 'native' });
     await db.insert(dailyRevenue).values({ locationId: loc.id, revenueDate: '2026-08-03', amount: '1000.00', source: 'manual', status: 'approved' });
     const body = JSON.stringify({ year: 2026, month: 8, half: 1 });
     await app.request('/api/salary-runs', { method: 'POST', headers: { ...MGR, ...JSONH }, body });

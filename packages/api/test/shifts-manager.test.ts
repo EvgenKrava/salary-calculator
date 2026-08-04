@@ -18,7 +18,7 @@ const JSONH = { 'content-type': 'application/json' };
 async function seed() {
   const { db } = await createTestDb();
   const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
-  const [loc] = await db.insert(locations).values({ name: 'A', standardShiftHours: '8.00' }).returning();
+  const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)
     .values({ name: 'Alice', levelId: level.id, cognitoSub: 'sub-alice' })
@@ -54,11 +54,43 @@ describe('manager scheduling', () => {
     expect(badLoc.status).toBe(400);
   });
 
-  it('409s an assign that duplicates an employee-day', async () => {
+  it('allows a second same-day shift at a different time', async () => {
     const { app, loc, alice } = await seed();
-    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-10' });
-    const dup = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-10' });
-    expect(dup.status).toBe(409);
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-10', startsAt: '08:00', endsAt: '12:00' });
+    const second = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-10', startsAt: '12:00', endsAt: '16:00' });
+    expect(second.status).toBe(201);
+  });
+
+  it('409s an assign duplicating the same window', async () => {
+    const { app, loc, alice } = await seed();
+    const body = { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-11', startsAt: '08:00', endsAt: '12:00' };
+    await assign(app, body);
+    expect((await assign(app, body)).status).toBe(409);
+  });
+
+  it('409s an assign whose window overlaps an approved shift', async () => {
+    const { app, loc, alice } = await seed();
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-12', startsAt: '08:00', endsAt: '12:00' });
+    // Different start (so the UNIQUE constraint does not catch it) but overlapping window.
+    const overlap = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-12', startsAt: '09:00', endsAt: '13:00' });
+    expect(overlap.status).toBe(409);
+  });
+
+  it('allows back-to-back approved shifts that only touch', async () => {
+    const { app, loc, alice } = await seed();
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-13', startsAt: '08:00', endsAt: '12:00' });
+    const adjacent = await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-13', startsAt: '12:00', endsAt: '16:00' });
+    expect(adjacent.status).toBe(201);
+  });
+
+  it('409s approving a requested shift that overlaps an approved one', async () => {
+    const { app, loc, alice } = await seed();
+    await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-16', startsAt: '08:00', endsAt: '12:00' });
+    const requested = await (
+      await assign(app, { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-16', startsAt: '10:00', endsAt: '14:00', status: 'requested' })
+    ).json() as { id: string };
+    const approve = await app.request(`/api/shifts/${requested.id}/approve`, { method: 'POST', headers: MGR });
+    expect(approve.status).toBe(409);
   });
 
   it('approves and rejects a requested shift', async () => {
