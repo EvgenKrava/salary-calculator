@@ -31,25 +31,35 @@ Pay periods are fixed: **1st–15th** and **16th–end of month**.
 For a pay period, for each active employee **E**:
 
 ```
+hours(shift)   = shift.ends_at − shift.starts_at        (in hours)
+
 hourly_pay     = Σ over E's confirmed shifts in period:
-                   E.level.rate_per_hour × shift.location.standard_shift_hours
+                   E.level.rate_per_hour × hours(shift)
 
 revenue_share  = Σ over E's confirmed shifts in period:
                    E.revenue_percent × daily_revenue(shift.location, shift.date)
+                   × hours(shift) / total_hours(shift.location, shift.date)
 
 personal_bonus = manual amount entered per employee at run time
 
 total          = hourly_pay + revenue_share + personal_bonus
 ```
 
+where `total_hours(location, date)` is the sum of `hours(shift)` over **all** confirmed
+shifts at that location on that date.
+
 Key rules:
 
-- **Revenue share is attributed by shift.** Each employee gets their own full percent of
-  the *full* daily revenue of each location they worked, on each day they worked it —
-  independent of hours and independent of other staff working the same location that day.
-- **Hourly pay uses a fixed full shift per day**, and the shift length is defined
-  **per location**. A scheduled day at a location contributes
-  `level.rate_per_hour × location.standard_shift_hours`.
+- **Hourly pay uses actual hours.** Every shift records explicit `starts_at`/`ends_at`
+  times; hours worked is their difference. A day can be split between people (one works
+  part of it, another finishes) — a real and common case in this business.
+- **Revenue share is attributed by shift and prorated by hours.** An employee earns their
+  percent of a location-day's revenue scaled by their share of the hours worked at that
+  location that day. If one person works the whole day, they get their full percent; if two
+  split it evenly, each gets half of their own percent. Proration is by hours worked, not
+  by headcount.
+- **Each location has its own working hours** (`opens_at`/`closes_at`), which provide the
+  default shift times when a schedule source supplies none.
 - **One-shot run.** The manager enters personal bonuses, runs the calculation, and the
   result is saved as the final immutable record — immediately visible to the affected
   employee. There is no separate draft/finalize step.
@@ -60,11 +70,14 @@ Key rules:
 ## 4. Data model (Aurora Serverless v2 Postgres)
 
 - **levels** (id, name, rate_per_hour)
-- **locations** (id, name, standard_shift_hours)
+- **locations** (id, name, opens_at, closes_at) — each location has its own working hours,
+  used as the default shift window
 - **employees** (id, name, level_id, revenue_percent, cognito_sub nullable, active)
-- **shifts** (id, employee_id, location_id, work_date,
+- **shifts** (id, employee_id, location_id, work_date, starts_at, ends_at,
   status: `requested` | `approved` | `rejected`,
-  source: `native` | `extracted`) — unique per (employee, work_date)
+  source: `native` | `extracted` | `imported`) — unique per
+  (employee, work_date, location, starts_at); an employee may work more than one shift or
+  location in a day
 - **daily_revenue** (id, location_id, revenue_date, amount,
   source: `manual` | `extracted`, status)
 - **extraction_jobs** (id, doc_type: `revenue` | `schedule`, s3_key,
@@ -76,19 +89,30 @@ Key rules:
 
 Assumptions:
 
-- An employee works **at most one location per day** (one shift per employee per day).
+- An employee **may work more than one shift and more than one location per day** (days are
+  split between people in practice).
 - The `salary_run_lines` snapshot preserves the computed values even if inputs change
   later.
 
-## 5. Scheduling (two input paths → one confirmed schedule)
+## 5. Scheduling (three input paths → one confirmed schedule)
 
-Both paths converge on the same `shifts` table; the calculation only reads
+All paths converge on the same `shifts` table; the calculation only reads
 `status = approved`.
 
 - **Native scheduling:** an employee submits a shift request (location + date) → the
   manager approves or rejects it → approved shifts form the confirmed schedule.
-- **Extraction:** hand-written schedules are uploaded, AI extracts shift rows, the
-  manager reviews and approves → they become confirmed shifts.
+- **Spreadsheet import (`imported`):** the business currently keeps the schedule in an
+  Excel workbook (`Графік роботи Coffee Shop.xlsx`). A manager uploads the `.xlsx`; the app
+  **parses** it (structured data — no AI vision needed), maps rows to employees and cells to
+  locations, and presents the parsed shifts for manager review before they are committed.
+  Observed layout: repeating per-shift blocks, each with employee-name rows × day-of-month
+  columns, where the cell value is the **location number**; some cells contain an
+  abbreviated substitute name, and rows carry annotations (meetings, inventory, training).
+  Because first names repeat across and within blocks, the importer must map names to
+  employee records explicitly (a review/confirm step, not a silent guess). Times default to
+  the location's working hours unless the sheet supplies them.
+- **Extraction (`extracted`):** hand-written schedules are uploaded, AI extracts shift rows,
+  the manager reviews and approves → they become confirmed shifts.
 
 ## 6. Document extraction pipeline (AI, human-in-the-loop)
 
