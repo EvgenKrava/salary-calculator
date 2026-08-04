@@ -9,6 +9,7 @@ import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
 import { readJson, getOr404 } from '../http/validation';
 import { isUniqueViolation } from '../http/dbErrors';
+import { currentEmployee } from '../http/employeeContext';
 import { employees, levels, locations, shifts, dailyRevenue, salaryRuns, salaryRunLines } from '../schema';
 
 const createSchema = z.object({
@@ -35,6 +36,35 @@ function lineDto(row: LineRow) {
 
 export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
   const routes = new Hono<AppEnv>();
+
+  routes.get('/me', requireRole('employee'), async (c) => {
+    const employee = await currentEmployee(db, c);
+    const rows = await db
+      .select({
+        runId: salaryRunLines.runId,
+        periodStart: salaryRuns.periodStart,
+        periodEnd: salaryRuns.periodEnd,
+        hourlyPay: salaryRunLines.hourlyPay,
+        revenueShare: salaryRunLines.revenueShare,
+        bonus: salaryRunLines.bonus,
+        total: salaryRunLines.total,
+      })
+      .from(salaryRunLines)
+      .innerJoin(salaryRuns, eq(salaryRunLines.runId, salaryRuns.id))
+      .where(eq(salaryRunLines.employeeId, employee.id));
+    return c.json(
+      rows.map((r) => ({
+        runId: r.runId,
+        periodStart: r.periodStart,
+        periodEnd: r.periodEnd,
+        hourlyPay: Number(r.hourlyPay),
+        revenueShare: Number(r.revenueShare),
+        bonus: Number(r.bonus),
+        total: Number(r.total),
+      })),
+    );
+  });
+
   routes.use('*', requireRole('manager', 'admin'));
 
   function idParam(c: Context<AppEnv>): string {
