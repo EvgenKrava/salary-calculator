@@ -123,6 +123,32 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
     };
   }
 
+  /**
+   * A person cannot be in two places at once: reject an imported window that overlaps an
+   * existing approved shift for that employee on that date, at ANY location. Half-open, so
+   * touching windows (08:00-14:00 then 14:00-20:00) are fine.
+   */
+  async function overlapsApproved(
+    employeeId: string,
+    workDate: string,
+    startsAt: string,
+    endsAt: string,
+  ): Promise<boolean> {
+    const sameDay = await db
+      .select()
+      .from(shifts)
+      .where(
+        and(
+          eq(shifts.employeeId, employeeId),
+          eq(shifts.workDate, workDate),
+          eq(shifts.status, 'approved'),
+        ),
+      );
+    return sameDay.some(
+      (s) => startsAt < s.endsAt.slice(0, 5) && s.startsAt.slice(0, 5) < endsAt,
+    );
+  }
+
   routes.post('/preview', async (c) => {
     const { grid, year } = await gridFromUpload(c);
     const parsed = parseScheduleGrid(grid, { year });
@@ -164,6 +190,12 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
         );
       if (existing.length > 0) {
         skipped += 1;
+        continue;
+      }
+      if (await overlapsApproved(shift.employeeId, shift.workDate, shift.startsAt, shift.endsAt)) {
+        conflicts.push(
+          `${shift.sourceName} ${shift.workDate} slot ${shift.slot}: overlaps an approved shift`,
+        );
         continue;
       }
       try {

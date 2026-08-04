@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
 import { levels, locations, employees, locationShiftSlots, scheduleNameMap, shifts } from '../src/schema';
@@ -146,6 +147,34 @@ describe('schedule import', () => {
     ).json()) as CommitResponse;
     expect(second.created).toBe(0);
     expect(second.skipped).toBe(first.created);
+  });
+
+  it('does not write an imported shift that overlaps an existing approved shift', async () => {
+    const { db, app, loc2, oleg } = await seed();
+    // Олег already works 09:00-15:00 at another location on a day the sheet schedules him.
+    await db.insert(shifts).values({
+      employeeId: oleg.id,
+      locationId: loc2.id,
+      workDate: '2026-05-01',
+      startsAt: '09:00',
+      endsAt: '15:00',
+      status: 'approved',
+      source: 'native',
+    });
+
+    const res = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026', month: '5' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as CommitResponse;
+    expect(body.conflicts.length).toBeGreaterThan(0);
+
+    // The overlapping day was not written; the pre-existing shift is untouched.
+    const onDay = await db.select().from(shifts).where(eq(shifts.workDate, '2026-05-01'));
+    expect(onDay).toHaveLength(1);
+    expect(onDay[0].source).toBe('native');
   });
 
   it('400s a missing file or invalid year', async () => {
