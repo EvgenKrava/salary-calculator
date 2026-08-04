@@ -111,6 +111,23 @@ describe('schema 0001_init + 0002_hours_model', () => {
       ),
     ).rejects.toThrow();
   });
+
+  it('rejects a shift window at 24:00', async () => {
+    await expect(
+      db.exec(
+        `INSERT INTO shifts (employee_id, location_id, work_date, starts_at, ends_at)
+         VALUES ('${EMP}', '${LOC}', '2026-09-06', '20:00', '24:00:00');`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a location window at 24:00', async () => {
+    await expect(
+      db.exec(
+        `INSERT INTO locations (name, opens_at, closes_at) VALUES ('Midnight Loc', '08:00', '24:00:00');`,
+      ),
+    ).rejects.toThrow();
+  });
 });
 
 describe('0002_hours_model migration preserves real shift length', () => {
@@ -144,5 +161,22 @@ describe('0002_hours_model migration preserves real shift length', () => {
     );
     expect(shiftRes.rows[0].starts_at).toBe('08:00:00');
     expect(shiftRes.rows[0].ends_at).toBe('14:00:00');
+  });
+
+  it('aborts the migration when a location shift length cannot fit the day', async () => {
+    // Same fresh-PGlite, pre-migration-insert pattern as above: the shift length must be
+    // recorded on the OLD (pre-0002) schema before 0002 runs, so the guard has something
+    // to reject during the migration itself rather than at insert time.
+    const oldModelDb = new PGlite();
+    await oldModelDb.exec(INIT_SQL);
+
+    const level = '77777777-7777-7777-7777-777777777777';
+    const loc = '88888888-8888-8888-8888-888888888888';
+    await oldModelDb.exec(`
+      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${level}', 'Junior', 20.00);
+      INSERT INTO locations (id, name, standard_shift_hours) VALUES ('${loc}', 'Overnight', 25.00);
+    `);
+
+    await expect(oldModelDb.exec(HOURS_MODEL_SQL)).rejects.toThrow();
   });
 });
