@@ -68,4 +68,24 @@ describe('locations routes', () => {
     const app = await makeApp();
     expect((await app.request('/api/locations/00000000-0000-0000-0000-000000000000', { headers: ADMIN })).status).toBe(404);
   });
+
+  it('400s a PATCH that inverts the window against the stored opensAt', async () => {
+    const app = await makeApp();
+    // Create a location with opensAt: '08:00', closesAt: '16:00'
+    const created = await app.request('/api/locations', {
+      method: 'POST',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ name: 'TestLoc', opensAt: '08:00', closesAt: '16:00' }),
+    });
+    expect(created.status).toBe(201);
+    const loc = (await created.json()) as { id: string };
+
+    // PATCH only closesAt to '07:00', earlier than stored opensAt '08:00'
+    const patched = await app.request(`/api/locations/${loc.id}`, {
+      method: 'PATCH',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ closesAt: '07:00' }),
+    });
+    expect(patched.status).toBe(400);
+  });
 });
