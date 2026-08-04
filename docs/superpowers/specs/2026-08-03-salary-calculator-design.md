@@ -72,6 +72,12 @@ Key rules:
 - **levels** (id, name, rate_per_hour)
 - **locations** (id, name, opens_at, closes_at) — each location has its own working hours,
   used as the default shift window
+- **location_shift_slots** (id, location_id, slot_number, starts_at, ends_at) — the window
+  for each shift slot at a location; unique per (location_id, slot_number). Used by the
+  spreadsheet importer to turn a slot block into concrete shift times (§5.1)
+- **schedule_name_map** (id, source_name, employee_id nullable, ignored) — persisted mapping
+  from a spreadsheet name-row to an employee record; `ignored` marks rows that are not
+  people (e.g. `Бариста 1`). Unique per source_name (§5.1)
 - **employees** (id, name, level_id, revenue_percent, cognito_sub nullable, active)
 - **shifts** (id, employee_id, location_id, work_date, starts_at, ends_at,
   status: `requested` | `approved` | `rejected`,
@@ -103,14 +109,37 @@ All paths converge on the same `shifts` table; the calculation only reads
   manager approves or rejects it → approved shifts form the confirmed schedule.
 - **Spreadsheet import (`imported`):** the business currently keeps the schedule in an
   Excel workbook (`Графік роботи Coffee Shop.xlsx`). A manager uploads the `.xlsx`; the app
-  **parses** it (structured data — no AI vision needed), maps rows to employees and cells to
-  locations, and presents the parsed shifts for manager review before they are committed.
-  Observed layout: repeating per-shift blocks, each with employee-name rows × day-of-month
-  columns, where the cell value is the **location number**; some cells contain an
-  abbreviated substitute name, and rows carry annotations (meetings, inventory, training).
-  Because first names repeat across and within blocks, the importer must map names to
-  employee records explicitly (a review/confirm step, not a silent guess). Times default to
-  the location's working hours unless the sheet supplies them.
+  **parses** it (structured data — no AI vision needed) and presents the parsed shifts for
+  manager review before they are committed. See §5.1 for the layout and rules.
+
+### 5.1 Spreadsheet schedule layout and import rules
+
+Verified against the real workbook, sheet `Графік роботи`:
+
+- **Months run horizontally.** `Травень` (May) occupies day columns 4–34, `Червень` (June)
+  starts at column 37, and so on. A header row carries weekday labels and the row below it
+  the day-of-month numbers. A per-employee **shift-count total** sits in the column after
+  each month's days (e.g. col 35) — it is a spreadsheet summary, not input.
+- **Blocks are shift slots.** The sheet repeats vertically in blocks (5 in May); each block
+  is a **shift slot** (1st shift, 2nd shift, …). Within a block, rows are employees and
+  columns are days.
+- **A cell value is the location number** the person works that day in that slot. Cells may
+  instead hold an **abbreviated substitute name** (`Сві`, `Хри`, `Вла`) meaning someone else
+  covered; rows also carry annotations (`Загальні збори`, `Інвентура`, `Навчання`) that are
+  not shifts.
+- **Slot times come from the location.** Each location defines the window for each shift
+  slot (`location_shift_slots`: location_id, slot_number, starts_at, ends_at). The importer
+  resolves a cell to `(employee, date, location, slot window)`. A slot with no configured
+  window for that location is reported, not guessed.
+- **Names require an explicit mapping.** First names repeat within a block (`Андрій` twice)
+  and across blocks, and some rows are placeholders (`Бариста 1`, `Бариста Н`). The importer
+  lists every distinct name-row and the manager maps each to an employee record (or marks it
+  ignored) **once**; the mapping is persisted and reused for later imports. The importer
+  never guesses who gets paid.
+- **The manager chooses the period to commit.** Parsing covers the whole sheet; only the
+  selected month/pay period is written, so stale months are not imported by accident.
+- Imported shifts are written with `source = 'imported'` and are subject to the same
+  overlap rejection as any other approved shift.
 - **Extraction (`extracted`):** hand-written schedules are uploaded, AI extracts shift rows,
   the manager reviews and approves → they become confirmed shifts.
 
