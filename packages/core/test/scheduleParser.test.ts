@@ -58,8 +58,8 @@ describe('parseScheduleGrid', () => {
   });
 
   it('assigns rows in the second block to slot 2', () => {
-    const igor = result.cells.find((c) => c.sourceName === 'Ігор');
-    expect(igor).toMatchObject({ slot: 2, locationNumber: 3 });
+    const taras = result.cells.find((c) => c.sourceName === 'Тарас');
+    expect(taras).toMatchObject({ slot: 2, locationNumber: 3 });
   });
 
   it('parses the second month with the correct dates', () => {
@@ -93,7 +93,7 @@ describe('parseScheduleGrid', () => {
   });
 
   it('lists every distinct source name for the mapping step', () => {
-    expect(result.sourceNames).toEqual(expect.arrayContaining(['Олег', 'Марта', 'Бариста 1', 'Ігор']));
+    expect(result.sourceNames).toEqual(expect.arrayContaining(['Олег', 'Марта', 'Бариста 1', 'Тарас']));
   });
 
   it('excludes the slot marker row from source names', () => {

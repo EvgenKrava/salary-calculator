@@ -131,7 +131,7 @@ Verified against the real workbook, sheet `Графік роботи`:
   slot (`location_shift_slots`: location_id, slot_number, starts_at, ends_at). The importer
   resolves a cell to `(employee, date, location, slot window)`. A slot with no configured
   window for that location is reported, not guessed.
-- **Names require an explicit mapping.** First names repeat within a block (`Андрій` twice)
+- **Names require an explicit mapping.** First names repeat within a block (one name appears twice)
   and across blocks, and some rows are placeholders (`Бариста 1`, `Бариста Н`). The importer
   lists every distinct name-row and the manager maps each to an employee record (or marks it
   ignored) **once**; the mapping is persisted and reused for later imports. The importer

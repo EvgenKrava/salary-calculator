@@ -59,7 +59,7 @@ export async function makeScheduleWorkbookBuffer(): Promise<Buffer> {
   writeBlockHeader(14);
   ws.getCell(17, 3).value = 'Марта'; // name repeated ACROSS blocks
   ws.getCell(17, 4).value = 1;
-  ws.getCell(18, 3).value = 'Ігор';
+  ws.getCell(18, 3).value = 'Тарас';
   ws.getCell(18, 6).value = 3;
   ws.getCell(19, 4).value = 'Інвентура'; // annotation
 

@@ -87,8 +87,8 @@ describe('schedule import', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as PreviewResponse;
     expect(body.months).toEqual(expect.arrayContaining([{ year: 2026, month: 5 }]));
-    // Олег is mapped; Марта/Ігор/Бариста 1 are not.
-    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Ігор', 'Бариста 1']));
+    // Олег is mapped; Марта/Тарас/Бариста 1 are not.
+    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Тарас', 'Бариста 1']));
     expect(body.resolved.length).toBeGreaterThan(0);
     expect(body.anomalies.length).toBeGreaterThan(0);
     // Nothing persisted.

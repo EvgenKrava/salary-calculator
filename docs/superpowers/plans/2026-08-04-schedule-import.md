@@ -113,7 +113,7 @@ export async function makeScheduleWorkbookBuffer(): Promise<Buffer> {
   writeBlockHeader(14);
   ws.getCell(17, 3).value = 'Марта'; // name repeated ACROSS blocks
   ws.getCell(17, 4).value = 1;
-  ws.getCell(18, 3).value = 'Ігор';
+  ws.getCell(18, 3).value = 'Тарас';
   ws.getCell(18, 6).value = 3;
   ws.getCell(19, 4).value = 'Інвентура'; // annotation
 
@@ -229,8 +229,8 @@ describe('parseScheduleGrid', () => {
   });
 
   it('assigns rows in the second block to slot 2', () => {
-    const igor = result.cells.find((c) => c.sourceName === 'Ігор');
-    expect(igor).toMatchObject({ slot: 2, locationNumber: 3 });
+    const taras = result.cells.find((c) => c.sourceName === 'Тарас');
+    expect(taras).toMatchObject({ slot: 2, locationNumber: 3 });
   });
 
   it('parses the second month with the correct dates', () => {
@@ -255,7 +255,7 @@ describe('parseScheduleGrid', () => {
   });
 
   it('lists every distinct source name for the mapping step', () => {
-    expect(result.sourceNames).toEqual(expect.arrayContaining(['Олег', 'Марта', 'Бариста 1', 'Ігор']));
+    expect(result.sourceNames).toEqual(expect.arrayContaining(['Олег', 'Марта', 'Бариста 1', 'Тарас']));
   });
 
   it('excludes the slot marker row from source names', () => {
@@ -1227,8 +1227,8 @@ describe('schedule import', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.months).toEqual(expect.arrayContaining([{ year: 2026, month: 5 }]));
-    // Олег is mapped; Марта/Ігор/Бариста 1 are not.
-    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Ігор', 'Бариста 1']));
+    // Олег is mapped; Марта/Тарас/Бариста 1 are not.
+    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Тарас', 'Бариста 1']));
     expect(body.resolved.length).toBeGreaterThan(0);
     expect(body.anomalies.length).toBeGreaterThan(0);
     // Nothing persisted.
