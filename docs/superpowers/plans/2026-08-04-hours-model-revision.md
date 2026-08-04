@@ -938,3 +938,32 @@ git commit -m "Map hours into the salary run and verify proration end to end"
 **Placeholder scan:** No TBD/TODO. The two contingencies (the `DROP CONSTRAINT` name, and `ALTER TYPE ADD VALUE` transaction placement) are concrete, test-arbitrated instructions with the exact remedy stated.
 
 **Type consistency:** `Location.opensAt/closesAt` and `Shift.startsAt/endsAt` are `'HH:MM'` strings everywhere in core; the API normalizes Postgres `TIME` (`'HH:MM:SS'`) with `.slice(0, 5)` at every boundary (location DTO, shift DTO, `CalcInput` mapping) so core never sees seconds. `hoursBetween` is the single place shift duration is computed, used by the engine and validated by the API's window checks.
+
+---
+
+## Post-Review Fixes (final whole-branch review returned "No — do not merge")
+
+Three Critical defects reached payroll and are fixed here; one Important test gap closed.
+
+1. **CRITICAL — overlap check was scoped per location** (`routes/shifts.ts`). `assertNoOverlap`
+   filtered on `locationId`, so one employee could hold two *simultaneous* approved shifts at
+   different locations: their hourly pay doubled for the same wall-clock hours, and their
+   phantom hours inflated the other location's proration denominator, underpaying coworkers.
+   A person cannot be in two places at once — the check now spans **all locations** for that
+   employee+date. Sequential multi-location days (08:00-12:00 at A, 13:00-17:00 at B) remain
+   legal; only true time overlap is rejected.
+2. **CRITICAL — migration destroyed real shift lengths** (`0002_hours_model.sql`). The old
+   `standard_shift_hours` was dropped *before* the shift backfill ran, so historic shifts
+   inherited the new column defaults (08:00-20:00) instead of their location's actual length.
+   The migration now derives each location's `closes_at` from `standard_shift_hours`
+   (truncated to the minute) **before** dropping the column.
+3. **CRITICAL — sub-minute times crashed the salary run.** `TIME` values with non-zero
+   seconds satisfied `ends_at > starts_at` but collapsed to an equal `'HH:MM'` after
+   `.slice(0, 5)`, making `hoursBetween` throw and the run return 500 with no in-app repair
+   path. Whole-minute CHECK constraints on both `shifts` and `locations` make such rows
+   unstorable, closing it at the source (the API's `HH:MM` regex already blocked seconds on
+   input; the coming import path is what would have written them).
+4. **IMPORTANT — proration was only tested with even splits**, so a wrong headcount-based
+   implementation would have passed every test. Added an uneven-split case (6h at 5% + 2h at
+   10% of an 8h day) whose expectations differ under headcount, plus a case proving an
+   inactive employee's approved hours still count toward the denominator.
