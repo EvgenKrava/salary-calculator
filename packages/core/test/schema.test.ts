@@ -177,6 +177,10 @@ describe('0002_hours_model migration preserves real shift length', () => {
       INSERT INTO locations (id, name, standard_shift_hours) VALUES ('${loc}', 'Overnight', 25.00);
     `);
 
+    // 25.00 is load-bearing: it wraps past opens_at (08:00 + 25h -> 09:00), which passes
+    // the closes_at > opens_at ordering check, so ONLY locations_shift_hours_fit_day can
+    // catch it. Values like 16.00 or 48.00 would abort via the ordering check even with
+    // the fit-day guard removed, making this test vacuous. Do not change this value.
     await expect(oldModelDb.exec(HOURS_MODEL_SQL)).rejects.toThrow();
   });
 });
