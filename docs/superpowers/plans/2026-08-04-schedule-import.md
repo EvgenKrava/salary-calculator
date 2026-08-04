@@ -1686,3 +1686,50 @@ can never produce an unstorable shift.
 `locations.name` (the sheet calls them `1`–`5`). If the business renames a location to
 something non-numeric, imports report it under `unknownLocations` rather than failing
 silently — visible and fixable, and cheaper than adding a separate mapping table now.
+
+---
+
+## Post-Review Fixes (final review returned "No — with fixes")
+
+Two Critical defects, both verified by running the parser, both reachable on the first real
+upload, and both originating in this plan's own reference code:
+
+1. **CRITICAL — a formatted cell crashes the parser (opaque 500).** The `(v as string | number)`
+   cast when reading the worksheet lets 4 of exceljs's 10 `CellValue` variants (rich text,
+   formula, `Date`, boolean) reach `asNumber`'s `.trim()`, which throws a `TypeError` — not an
+   `HTTPException`, so it surfaces as `{error:'internal'}` 500 with no indication of which cell
+   broke. Hand-edited cells are the ones that pick up bold/colour formatting, so the substitute
+   names (`Сві`, `Хри`, `Вла`) are the most likely to hit it. Fix: a `flatten(v: ExcelJS.CellValue)`
+   boundary helper that reduces every variant to `string | number | null`, plus making
+   `asNumber` total (`value: unknown`, return `null` for non-strings) so the parser cannot throw
+   regardless of caller.
+2. **CRITICAL — day 31 in a 30-day month emits an invalid date.** The day guard was the purely
+   syntactic `day >= 1 && day <= 31`, so a stale day-31 column in a 30-day month block (common
+   when a block is copy-pasted) produced `'2026-06-31'` as a clean shift with ZERO anomalies.
+   Postgres then rejects it, and because that is not a unique violation it lands in the generic
+   catch and is reported to the manager as an *overlap conflict* — a misleading diagnosis for a
+   malformed source cell. February hits this every import. Fix: validate the day against the
+   real length of its attributed month in the parser and report an `unparsed` anomaly instead of
+   emitting a cell. This also gives the `'unparsed'` anomaly kind its first use — it was declared
+   and never emitted.
+3. **IMPORTANT — a rich-text NAME cell silently deletes that person's month** (same root cause as
+   #1): `nameFromRow` returns null and `nameCellBlank` is false, so every location number on the
+   row is filed as a nameless `substitute` and the name never reaches `sourceNames`, so the
+   manager is never prompted to map it. Fixed by the same `flatten` helper.
+4. **IMPORTANT — an inactive employee's imported hours dilute coworkers' pay.** `resolve()` never
+   consulted `employees.active`. `calculateSalaries` skips inactive employees for *payment* but
+   still counts their shifts in the pass-1 proration denominator, so importing shifts for a
+   departed employee silently reduces every active coworker's revenue share on those
+   location-days. Fix: report such mappings in an `inactiveEmployees` array instead of resolving
+   them.
+5. **IMPORTANT — idempotency probe ignored `endsAt`.** If an admin narrows a slot window and the
+   manager re-imports, the probe matched the stale row on `startsAt` alone, counted it `skipped`,
+   and left the OLD longer window in place — overpaying that employee and diluting coworkers.
+   Fix: include `endsAt` in the probe and report a mismatch in a distinct `windowChanged` array
+   rather than folding it into `skipped`.
+6. **MINOR — a dead assertion.** `expect(...locationNumber === Number.NaN).toBe(false)` is
+   vacuous (`NaN === NaN` is always false); use `Number.isNaN`.
+
+**Structural lesson (why the tests missed all of this):** the fixture can only emit the cell
+types exceljs *writes*, never the hostile types it *reads*. Adversarial inputs belong in direct
+unit tests of `parseScheduleGrid`, which takes a plain array and needs no workbook at all.
