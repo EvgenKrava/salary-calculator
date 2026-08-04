@@ -5,7 +5,7 @@ export interface PayPeriod {
 }
 
 export type ShiftStatus = 'requested' | 'approved' | 'rejected';
-export type ShiftSource = 'native' | 'extracted';
+export type ShiftSource = 'native' | 'extracted' | 'imported';
 export type RevenueSource = 'manual' | 'extracted';
 export type RevenueStatus = 'pending' | 'needs_review' | 'approved' | 'rejected';
 
@@ -18,7 +18,9 @@ export interface Level {
 export interface Location {
   id: string;
   name: string;
-  standardShiftHours: number;
+  /** Location working hours, 'HH:MM'. Used as the default shift window. */
+  opensAt: string;
+  closesAt: string;
 }
 
 export interface Employee {
@@ -36,6 +38,9 @@ export interface Shift {
   employeeId: string;
   locationId: string;
   workDate: string; // 'YYYY-MM-DD'
+  /** Shift window, 'HH:MM'. Hours worked is the difference. */
+  startsAt: string;
+  endsAt: string;
   status: ShiftStatus;
   source: ShiftSource;
 }
