@@ -12,6 +12,7 @@ import { createSalaryRunRoutes } from './routes/salaryRuns';
 import { createShiftSlotRoutes } from './routes/shiftSlots';
 import { createScheduleNameMapRoutes } from './routes/scheduleNameMap';
 import { createScheduleImportRoutes } from './routes/scheduleImports';
+import { createExtractionJobRoutes } from './routes/extractionJobs';
 
 export interface AppDeps {
   db: Db;
@@ -39,6 +40,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/locations/:locationId/slots', createShiftSlotRoutes(deps.db));
   app.route('/api/schedule-name-map', createScheduleNameMapRoutes(deps.db));
   app.route('/api/schedule-imports', createScheduleImportRoutes(deps.db));
+  app.route('/api/extraction-jobs', createExtractionJobRoutes(deps.db));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {
