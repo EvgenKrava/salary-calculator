@@ -1,0 +1,60 @@
+.table-wrap {
+  overflow-x: auto; /* fallback only — below 720px screens stack instead */
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Tables run edge-to-edge in their panel; the row rules are the structure. */
+}
+
+.table__caption {
+  text-align: left;
+  padding: var(--s3) var(--s4);
+  font-weight: 600;
+  border-bottom: 1px solid var(--rule);
+}
+
+.th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.th--num {
+  text-align: right;
+}
+
+.td {
+  height: var(--row-h);
+  padding: 0 var(--s3);
+  border-bottom: 1px solid var(--rule);
+  /* No zebra striping — it fights the money column. */
+}
+
+.td--num {
+  text-align: right;
+}
+
+/* The signature detail: a hairline rule and a wash so the eye finds money instantly. */
+.td--money {
+  border-left: 1px solid var(--rule);
+  background: var(--amber-tint);
+}
+
+.table tbody tr:hover .td {
+  background: var(--surface-sunk);
+}
+
+.table tbody tr[aria-selected='true'] .td {
+  background: var(--amber-tint);
+}

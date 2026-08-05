@@ -1,0 +1,40 @@
+.btn {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 500;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius);
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-sunk);
+}
+
+.btn:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+/* Amber is the primary action — at most one per view. */
+.btn--primary {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #fff;
+}
+.btn--primary:hover:not(:disabled) {
+  background: #9a5c00;
+}
+
+/* Destructive is outlined here; filled red is reserved for confirmation dialogs. */
+.btn--danger {
+  color: var(--stop);
+  border-color: var(--stop);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--stop-tint);
+}

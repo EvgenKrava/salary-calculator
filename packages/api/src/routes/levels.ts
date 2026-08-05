@@ -24,17 +24,27 @@ function toDto(row: LevelRow) {
 
 export function createLevelRoutes(db: Db): Hono<AppEnv> {
   const routes = new Hono<AppEnv>();
-  routes.use('*', requireRole('admin'));
 
-  routes.get('/', async (c) => {
+  /**
+   * Reads are manager+admin; writes stay admin-only.
+   *
+   * Same reasoning as locations: setting the rate for a level is an admin decision, but
+   * managing employees is a manager job (design §2) and an employee's level has to be
+   * *shown and chosen* by name on that screen. Note this exposes `ratePerHour` to managers —
+   * acceptable, because a manager already sees every employee's computed pay in a salary run.
+   */
+  routes.get('/', requireRole('manager', 'admin'), async (c) => {
     const rows = await db.select().from(levels);
     return c.json(rows.map(toDto));
   });
 
-  routes.get('/:id', async (c) => {
+  routes.get('/:id', requireRole('manager', 'admin'), async (c) => {
     const rows = await db.select().from(levels).where(eq(levels.id, c.req.param('id')));
     return c.json(toDto(getOr404(rows, 'level not found')));
   });
+
+  // Everything below mutates setup data and remains admin-only.
+  routes.use('*', requireRole('admin'));
 
   routes.post('/', async (c) => {
     const body = await readJson(c, createSchema);

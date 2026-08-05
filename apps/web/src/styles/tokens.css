@@ -1,0 +1,55 @@
+:root {
+  /* Ground — cool gray, deliberately not cream and not pure white */
+  --ground: #f2f4f5;
+  --surface: #ffffff;
+  --surface-sunk: #e8ebed;
+
+  /* Ink */
+  --ink: #16191c;
+  --ink-muted: #5a636b;
+  --ink-faint: #8b959d;
+
+  /* Structure — visible and embraced, not hidden behind shadows */
+  --rule: #d3d9dd;
+  --rule-strong: #a9b2b9;
+
+  /* Amber — value and primary action, used sparingly */
+  --amber: #b26b00;
+  --amber-tint: #fbf0dc;
+  --amber-edge: #e0a64b;
+
+  /* State — functional only */
+  --ok: #1f6b4a;
+  --warn: #8a5a00;
+  --stop: #a32020;
+  --stop-tint: #fbebeb;
+
+  /* Type */
+  --font-ui: 'Instrument Sans', ui-sans-serif, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+
+  /* Space — 4px base */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s6: 24px;
+  --s8: 32px;
+  --s12: 48px;
+
+  --radius: 2px;
+  --row-h: 34px;
+  --transition: 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition: 0ms;
+  }
+}

@@ -1,0 +1,31 @@
+.pill {
+  display: inline-block;
+  padding: 1px var(--s2);
+  border-radius: var(--radius);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.pill--approved,
+.pill--active {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+/* Inactive is neutral, not a failure: the person simply no longer works here. */
+.pill--requested,
+.pill--processing,
+.pill--inactive {
+  color: var(--ink-muted);
+  border-color: var(--rule-strong);
+}
+.pill--needs_review {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.pill--rejected,
+.pill--blocked {
+  color: var(--stop);
+  border-color: var(--stop);
+  background: var(--stop-tint);
+}

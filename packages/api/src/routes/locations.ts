@@ -30,17 +30,28 @@ function toDto(row: LocationRow) {
 
 export function createLocationRoutes(db: Db): Hono<AppEnv> {
   const routes = new Hono<AppEnv>();
-  routes.use('*', requireRole('admin'));
 
-  routes.get('/', async (c) => {
+  /**
+   * Reads are manager+admin; writes stay admin-only.
+   *
+   * Managing locations is an admin job (design §2), but *naming* one is unavoidable for
+   * managers: the shifts, revenue, and salary-run screens all render a location column, and
+   * shifts/revenue are manager-scoped routes. With reads gated to admin, a manager's
+   * `GET /api/locations` 403s and every location silently renders as '—' — the data looks
+   * present but anonymous, which is worse than an error.
+   */
+  routes.get('/', requireRole('manager', 'admin'), async (c) => {
     const rows = await db.select().from(locations);
     return c.json(rows.map(toDto));
   });
 
-  routes.get('/:id', async (c) => {
+  routes.get('/:id', requireRole('manager', 'admin'), async (c) => {
     const rows = await db.select().from(locations).where(eq(locations.id, c.req.param('id')));
     return c.json(toDto(getOr404(rows, 'location not found')));
   });
+
+  // Everything below mutates setup data and remains admin-only.
+  routes.use('*', requireRole('admin'));
 
   routes.post('/', async (c) => {
     const body = await readJson(c, createSchema);
