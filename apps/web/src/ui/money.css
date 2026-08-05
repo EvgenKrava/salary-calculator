@@ -1,0 +1,11 @@
+.money {
+  display: inline-block;
+  text-align: right;
+  color: var(--amber);
+  font-weight: 500;
+  font-size: var(--text-base);
+}
+
+.money--unknown {
+  min-width: 3ch;
+}
