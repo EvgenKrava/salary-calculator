@@ -4,6 +4,7 @@ import { parseExtractionResponse } from './parseResponse';
 import type { DocType } from './schemas';
 import { createBedrockClient, invokeModel } from './bedrock';
 import { createJobRecorder, type JobRecord } from './db';
+import { resolveMediaType } from './mediaType';
 
 export interface HandlerDeps {
   getObject: (bucket: string, key: string) => Promise<{ body: Buffer; contentType: string }>;
@@ -29,29 +30,49 @@ function docTypeFromKey(key: string): DocType | null {
 export function createHandler(deps: HandlerDeps) {
   return async function handler(event: S3Event): Promise<void> {
     for (const record of event.Records) {
-      const bucket = record.s3.bucket.name;
-      // S3 event keys are URL-encoded, and '+' means space.
-      const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+      // The ENTIRE per-record body is inside try/catch, and nothing outside it can throw.
+      // Previously the key decode and the unknown-prefix branch sat outside: a malformed
+      // percent-sequence threw URIError, or that branch's recordJob threw, and the whole
+      // loop aborted — so every *remaining* record in the batch got no row at all, which is
+      // precisely the "document vanished with no queue entry" failure the invariant exists
+      // to prevent.
+      let key = record.s3.object.key;
+      // `recorded` makes the recording step at-most-once. Without it, a recordJob that
+      // committed its INSERT but failed while reading the response fell through to the catch,
+      // which recorded a SECOND row for the same document — one approved, one rejected. There
+      // is no UNIQUE constraint on extraction_jobs.s3_key to stop that.
+      let recorded = false;
+      let docType: DocType = 'revenue';
 
-      const docType = docTypeFromKey(key);
-      if (!docType) {
-        await deps.recordJob({
-          docType: 'revenue',
-          s3Key: key,
-          status: 'rejected',
-          confidence: null,
-          extracted: null,
-          error: `key does not match uploads/<revenue|schedule>/: ${key}`,
-        });
-        continue;
-      }
+      const record1 = async (job: JobRecord): Promise<void> => {
+        if (recorded) return;
+        recorded = true;
+        await deps.recordJob(job);
+      };
 
       try {
-        const object = await deps.getObject(bucket, key);
+        // S3 event keys are URL-encoded, and '+' means space.
+        key = decodeURIComponent(key.replace(/\+/g, ' '));
+
+        const resolved = docTypeFromKey(key);
+        if (!resolved) {
+          await record1({
+            docType,
+            s3Key: key,
+            status: 'rejected',
+            confidence: null,
+            extracted: null,
+            error: `key does not match uploads/<revenue|schedule>/: ${key}`,
+          });
+          continue;
+        }
+        docType = resolved;
+
+        const object = await deps.getObject(bucket(record), key);
         const request = buildExtractionRequest({
           docType,
           media: {
-            mediaType: object.contentType,
+            mediaType: resolveMediaType(object.contentType, key, object.body),
             // 'base64' never inserts line breaks; explicit for the API's no-newline rule.
             base64: object.body.toString('base64'),
           },
@@ -61,7 +82,7 @@ export function createHandler(deps: HandlerDeps) {
         const outcome = parseExtractionResponse(response, { docType, threshold: deps.threshold });
 
         if (outcome.kind === 'refused') {
-          await deps.recordJob({
+          await record1({
             docType,
             s3Key: key,
             status: 'rejected',
@@ -73,36 +94,52 @@ export function createHandler(deps: HandlerDeps) {
         }
 
         if (outcome.kind === 'unusable') {
-          await deps.recordJob({
+          await record1({
             docType,
             s3Key: key,
             status: 'rejected',
             confidence: null,
             extracted: null,
             error: outcome.reason,
+            // Keep what the model actually said, so a manager can see why it was unusable
+            // instead of only a one-line reason.
+            raw: outcome.raw,
           });
           continue;
         }
 
-        await deps.recordJob({
+        await record1({
           docType,
           s3Key: key,
           status: outcome.route,
           confidence: outcome.confidence,
           extracted: outcome.rows,
+          // The prompt asks the model to explain anything illegible or ambiguous in `notes`.
+          // Dropping it threw away the explanation exactly when a reviewer needs it.
+          notes: outcome.notes,
         });
       } catch (err) {
-        await deps.recordJob({
-          docType,
-          s3Key: key,
-          status: 'rejected',
-          confidence: null,
-          extracted: null,
-          error: (err as Error).message,
-        });
+        try {
+          await record1({
+            docType,
+            s3Key: key,
+            status: 'rejected',
+            confidence: null,
+            extracted: null,
+            error: (err as Error).message,
+          });
+        } catch (recordErr) {
+          // Last resort: the DB is unreachable. Log and move on, so the remaining records in
+          // the batch still get processed rather than the whole invocation dying here.
+          console.error('failed to record extraction job', { key, err, recordErr });
+        }
       }
     }
   };
+}
+
+function bucket(record: S3Event['Records'][number]): string {
+  return record.s3.bucket.name;
 }
 
 /**

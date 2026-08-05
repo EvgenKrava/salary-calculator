@@ -1,13 +1,39 @@
 import { z } from 'zod';
 import type { DocType } from './schemas';
 
-const rowBase = z.object({ confidence: z.number() }).passthrough();
+/**
+ * Row shapes mirroring each doc type's JSON Schema `required` list.
+ *
+ * These are not redundant with the outbound schemas. `output_config.format` constrains what
+ * the model is *asked* for, but the response still has to be validated here: a row that
+ * parses as `{confidence: 0.95}` with no amount and no date would otherwise be staged as
+ * approved revenue data. `.passthrough()` keeps unknown fields rather than stripping them,
+ * so nothing the model reported is lost before a human sees it.
+ */
+const revenueRow = z
+  .object({
+    locationName: z.string(),
+    date: z.string(),
+    amount: z.string(),
+    confidence: z.number(),
+  })
+  .passthrough();
 
-const payloadSchema = z.object({
-  rows: z.array(rowBase),
-  confidence: z.number(),
-  notes: z.string().optional().default(''),
-});
+const scheduleRow = z
+  .object({
+    employeeName: z.string(),
+    date: z.string(),
+    locationName: z.string(),
+    confidence: z.number(),
+  })
+  .passthrough();
+
+const payloadFor = (docType: DocType) =>
+  z.object({
+    rows: z.array(docType === 'revenue' ? revenueRow : scheduleRow),
+    confidence: z.number(),
+    notes: z.string().optional().default(''),
+  });
 
 export type ExtractionOutcome =
   | {
@@ -18,7 +44,7 @@ export type ExtractionOutcome =
       route: 'approved' | 'needs_review';
     }
   | { kind: 'refused'; category: string | null }
-  | { kind: 'unusable'; reason: string };
+  | { kind: 'unusable'; reason: string; raw?: string };
 
 /**
  * Read a model-reported confidence, treating anything outside 0–1 as untrustworthy.
@@ -79,12 +105,18 @@ export function parseExtractionResponse(
   try {
     raw = JSON.parse(text);
   } catch {
-    return { kind: 'unusable', reason: 'response was not valid JSON' };
+    return { kind: 'unusable', reason: 'response was not valid JSON', raw: text };
   }
 
-  const parsed = payloadSchema.safeParse(raw);
+  // Validate against the schema for THIS doc type, not a shape that only requires a
+  // confidence. A revenue row missing `amount` must never reach `approved`.
+  const parsed = payloadFor(opts.docType).safeParse(raw);
   if (!parsed.success) {
-    return { kind: 'unusable', reason: `payload did not match the schema: ${parsed.error.message}` };
+    return {
+      kind: 'unusable',
+      reason: `payload did not match the ${opts.docType} schema: ${parsed.error.message}`,
+      raw: text,
+    };
   }
 
   const confidence = confidence01(parsed.data.confidence);

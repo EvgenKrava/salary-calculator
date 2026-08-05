@@ -7,6 +7,17 @@ export interface JobRecord {
   confidence: number | null;
   extracted: unknown;
   error?: string;
+  /**
+   * The model's own explanation of anything illegible, ambiguous, or crossed out. The prompt
+   * explicitly asks for this; a reviewer looking at a `needs_review` job needs to know *why*
+   * it is ambiguous, so it is persisted rather than discarded.
+   */
+  notes?: string;
+  /**
+   * The raw response text for an unusable outcome. Without it a manager sees only a one-line
+   * reason ("response was not valid JSON") and cannot tell what the model actually returned.
+   */
+  raw?: string;
 }
 
 /**
@@ -39,7 +50,14 @@ export function createJobRecorder() {
             : { name: 'confidence', value: { doubleValue: job.confidence } },
           {
             name: 'extracted',
-            value: { stringValue: JSON.stringify({ rows: job.extracted, error: job.error ?? null }) },
+            value: {
+              stringValue: JSON.stringify({
+                rows: job.extracted,
+                error: job.error ?? null,
+                notes: job.notes ?? null,
+                raw: job.raw ?? null,
+              }),
+            },
           },
         ],
       }),

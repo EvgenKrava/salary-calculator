@@ -64,14 +64,76 @@ describe('extraction job review', () => {
     expect(body.reviewedBy).toBe('u-mgr');
   });
 
-  it('rejects a job with a reason', async () => {
+  it('rejects a job, recording the reason, the reviewer, and the original rows', async () => {
     const { app, job } = await seed();
     const res = await app.request(`/api/extraction-jobs/${job.id}/reject`, {
       method: 'POST',
       headers: { ...MGR, ...JSONH },
       body: JSON.stringify({ reason: 'photo unreadable' }),
     });
-    expect(((await res.json()) as { status: string }).status).toBe('rejected');
+    const body = (await res.json()) as {
+      status: string;
+      reviewedBy: string;
+      extracted: { rejectionReason?: string; rows?: unknown[] };
+    };
+    expect(body.status).toBe('rejected');
+    // Asserting only the status let three required behaviours regress silently: WHO decided,
+    // WHY, and that the extracted rows survived the payload merge.
+    expect(body.reviewedBy).toBe('u-mgr');
+    expect(body.extracted.rejectionReason).toBe('photo unreadable');
+    expect(body.extracted.rows).toHaveLength(1);
+  });
+
+  it('forbids an employee from approving or rejecting (403)', async () => {
+    const { app, job } = await seed();
+    const approve = await app.request(`/api/extraction-jobs/${job.id}/approve`, {
+      method: 'POST',
+      headers: EMP,
+    });
+    expect(approve.status).toBe(403);
+    const reject = await app.request(`/api/extraction-jobs/${job.id}/reject`, {
+      method: 'POST',
+      headers: { ...EMP, ...JSONH },
+      body: JSON.stringify({ reason: 'nope' }),
+    });
+    expect(reject.status).toBe(403);
+  });
+
+  it('409s a second review decision instead of overwriting the first', async () => {
+    // A re-approve would overwrite reviewedBy and erase who actually made the original call;
+    // once the deferred commit hangs off this route, it would also double-commit payroll data.
+    const { app, job } = await seed();
+    const first = await app.request(`/api/extraction-jobs/${job.id}/approve`, {
+      method: 'POST',
+      headers: MGR,
+    });
+    expect(first.status).toBe(200);
+
+    const again = await app.request(`/api/extraction-jobs/${job.id}/approve`, {
+      method: 'POST',
+      headers: MGR,
+    });
+    expect(again.status).toBe(409);
+
+    // And a rejected job cannot be flipped to approved.
+    const flip = await app.request(`/api/extraction-jobs/${job.id}/reject`, {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ reason: 'changed my mind' }),
+    });
+    expect(flip.status).toBe(409);
+
+    // The original decision stands.
+    const after = await app.request(`/api/extraction-jobs/${job.id}`, { headers: MGR });
+    expect((await after.json()) as { status: string }).toMatchObject({ status: 'approved' });
+  });
+
+  it('400s an unrecognized status filter instead of returning every job', async () => {
+    // Silently ignoring `?status=aproved` returns approved jobs too, while the manager
+    // believes they are looking at a filtered review queue.
+    const { app } = await seed();
+    const res = await app.request('/api/extraction-jobs?status=aproved', { headers: MGR });
+    expect(res.status).toBe(400);
   });
 
   it('404s unknown and malformed ids', async () => {
