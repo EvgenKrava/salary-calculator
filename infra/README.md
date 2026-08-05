@@ -156,7 +156,9 @@ Run these after the infrastructure `apply` from the first-time setup above.
      --database     "$(terraform output -raw db_name)" \
      --sql "SELECT count(*) FROM levels"
    ```
-5. **Create the first admin user** (there is no public sign-up):
+5. **Create the first admin user** (there is no public sign-up). Only this one account needs
+   the CLI — after it exists, every further employee is invited from the Employees screen,
+   which creates the login, assigns the role group, and links the Cognito `sub` in one action:
    ```bash
    POOL=$(terraform output -raw cognito_user_pool_id)
    aws cognito-idp admin-create-user --profile yevhenii \

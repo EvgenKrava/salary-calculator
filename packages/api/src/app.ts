@@ -6,6 +6,7 @@ import { authMiddleware } from './auth/middleware';
 import { createLevelRoutes } from './routes/levels';
 import { createLocationRoutes } from './routes/locations';
 import { createEmployeeRoutes } from './routes/employees';
+import type { IdentityProvider } from './auth/identityProvider';
 import { createShiftRoutes } from './routes/shifts';
 import { createRevenueRoutes } from './routes/revenue';
 import { createSalaryRunRoutes } from './routes/salaryRuns';
@@ -17,6 +18,12 @@ import { createExtractionJobRoutes } from './routes/extractionJobs';
 export interface AppDeps {
   db: Db;
   verifier: TokenVerifier;
+  /**
+   * Creates and disables Cognito logins. Optional: omitted in tests and in any deployment
+   * without Cognito admin permissions, where the invite route returns 503 instead of failing
+   * on undefined.
+   */
+  identity?: IdentityProvider;
 }
 
 /**
@@ -33,7 +40,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
 
   app.route('/api/levels', createLevelRoutes(deps.db));
   app.route('/api/locations', createLocationRoutes(deps.db));
-  app.route('/api/employees', createEmployeeRoutes(deps.db));
+  app.route('/api/employees', createEmployeeRoutes(deps.db, deps.identity));
   app.route('/api/shifts', createShiftRoutes(deps.db));
   app.route('/api/revenue', createRevenueRoutes(deps.db));
   app.route('/api/salary-runs', createSalaryRunRoutes(deps.db));

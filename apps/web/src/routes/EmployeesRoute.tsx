@@ -8,6 +8,7 @@ import { anyLoading, firstError } from '../ui/QueryGate';
 import {
   useAddEmployee,
   useEmployees,
+  useInviteEmployee,
   useLevels,
   useUpdateEmployee,
   type Employee,
@@ -125,9 +126,70 @@ function AddEmployee({ levels }: { levels: Level[] }) {
   );
 }
 
+/**
+ * Invite form for one employee.
+ *
+ * This is what turns an employee record into someone who can actually sign in. Before it
+ * existed, onboarding meant two `aws cognito-idp` CLI calls plus copying a `sub` UUID by hand
+ * into the field above — not something a coffee-shop manager will do.
+ *
+ * The role choice is explicit and has no default, because it decides what payroll data the
+ * person can see: `employee` sees only their own shifts and pay, `manager` sees everyone's.
+ */
+function InviteEmployee({ emp, onDone }: { emp: Employee; onDone: () => void }) {
+  const invite = useInviteEmployee();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'admin' | 'manager' | 'employee'>('employee');
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await invite.mutateAsync({ id: emp.id, email: email.trim(), role });
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', gap: 'var(--s2)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <input
+        className="field__input"
+        type="email"
+        required
+        placeholder="email@example.com"
+        aria-label={`Login email for ${emp.name}`}
+        value={email}
+        onChange={(ev) => setEmail(ev.target.value)}
+      />
+      <select
+        className="field__input"
+        aria-label={`Role for ${emp.name}`}
+        value={role}
+        onChange={(ev) => setRole(ev.target.value as 'admin' | 'manager' | 'employee')}
+      >
+        <option value="employee">employee — own shifts and pay</option>
+        <option value="manager">manager — all payroll operations</option>
+        <option value="admin">admin — setup and accounts</option>
+      </select>
+      <Button type="submit" variant="primary" disabled={invite.isPending}>
+        {invite.isPending ? 'Inviting…' : 'Send invite'}
+      </Button>
+      <Button type="button" onClick={onDone}>Cancel</Button>
+      {error ? <p style={{ color: 'var(--stop)', margin: 0, flexBasis: '100%' }}>{error}</p> : null}
+      <p style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-xs)', margin: 0, flexBasis: '100%' }}>
+        Cognito emails a temporary password; they set their own on first sign-in.
+      </p>
+    </form>
+  );
+}
+
 function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
   const update = useUpdateEmployee();
   const [editing, setEditing] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [percent, setPercent] = useState(fractionToPercent(emp.revenuePercent));
   const [levelId, setLevelId] = useState(emp.levelId);
   const [cognitoSub, setCognitoSub] = useState(emp.cognitoSub ?? '');
@@ -172,9 +234,16 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
         <NumCell>{fractionToPercent(emp.revenuePercent)}%</NumCell>
         <Td>
           {emp.cognitoSub ? (
-            <span className="mono">linked</span>
+            <span className="mono">can sign in</span>
+          ) : inviting ? (
+            <InviteEmployee emp={emp} onDone={() => setInviting(false)} />
           ) : (
-            <span className="mono" style={{ color: 'var(--warn)' }}>not linked</span>
+            <>
+              <span className="mono" style={{ color: 'var(--warn)' }}>no login</span>{' '}
+              {emp.active ? (
+                <Button onClick={() => setInviting(true)}>Invite</Button>
+              ) : null}
+            </>
           )}
         </Td>
         <Td><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>

@@ -122,6 +122,16 @@ export function useAddEmployee() {
   });
 }
 
+export function useInviteEmployee() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; email: string; role: 'admin' | 'manager' | 'employee' }) =>
+      api.post<Employee & { email: string }>(`/api/employees/${id}/invite`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
+}
+
 export function useUpdateEmployee() {
   const api = useApi();
   const qc = useQueryClient();
