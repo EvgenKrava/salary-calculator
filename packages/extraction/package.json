@@ -10,7 +10,7 @@
     "bundle": "esbuild src/handler.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/extract.js --external:@aws-sdk/*"
   },
   "dependencies": {
-    "@anthropic-ai/bedrock-sdk": "^0.24.0",
+    "@anthropic-ai/bedrock-sdk": "^0.32.0",
     "@aws-sdk/client-rds-data": "^3.665.0",
     "@aws-sdk/client-s3": "^3.665.0",
     "@salary/core": "workspace:*",

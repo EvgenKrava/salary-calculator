@@ -69,8 +69,8 @@ importers:
   packages/extraction:
     dependencies:
       '@anthropic-ai/bedrock-sdk':
-        specifier: ^0.24.0
-        version: 0.24.0(zod@3.25.76)
+        specifier: ^0.32.0
+        version: 0.32.0(zod@3.25.76)
       '@aws-sdk/client-rds-data':
         specifier: ^3.665.0
         version: 3.1101.0
@@ -102,8 +102,8 @@ importers:
 
 packages:
 
-  '@anthropic-ai/bedrock-sdk@0.24.0':
-    resolution: {integrity: sha512-oPNH0ljXQKs8KG32gOl7xpUG++ouLaHITt1vq2nyiCtTLXMlJBNZXhh0C27F1OPlBvT5Mh8xXwMmHyYERPFdgQ==}
+  '@anthropic-ai/bedrock-sdk@0.32.0':
+    resolution: {integrity: sha512-V8PV8WTNjK8JkbnzzNIPPJq32oUCB2ue4Oa4xHo9VihDJ8r4v0lsnnbrn5OmbyDbcVojkM1zIYkdEzbOA6sIaQ==}
 
   '@anthropic-ai/sdk@0.115.0':
     resolution: {integrity: sha512-BJrFIVyjNuU8lfDyIJTvlRYzgQg+zEl78BxE7fq8esULsGz9IRQvGtW5spq3tydmtjQb/GFdooKGdGsetpx+lQ==}
@@ -1505,7 +1505,7 @@ packages:
 
 snapshots:
 
-  '@anthropic-ai/bedrock-sdk@0.24.0(zod@3.25.76)':
+  '@anthropic-ai/bedrock-sdk@0.32.0(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.115.0(zod@3.25.76)
       '@aws-crypto/sha256-js': 4.0.0
