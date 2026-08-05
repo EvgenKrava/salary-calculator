@@ -20,9 +20,21 @@ export type ExtractionOutcome =
   | { kind: 'refused'; category: string | null }
   | { kind: 'unusable'; reason: string };
 
-function clamp01(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.min(1, Math.max(0, n));
+/**
+ * Read a model-reported confidence, treating anything outside 0–1 as untrustworthy.
+ *
+ * **Do not replace this with a clamp.** Clamping saturates *upward*: a model that reports
+ * confidence as a percentage (`20` meaning 20%) would become `1.0`, clear the threshold, and
+ * be auto-approved — the exact low-confidence read the human-review gate exists to catch.
+ * Structured outputs do not enforce JSON Schema `minimum`/`maximum`, so nothing upstream
+ * constrains this value and this check is load-bearing rather than defence-in-depth.
+ *
+ * An out-of-range value means the model misunderstood the field, which is itself grounds for
+ * review — so it maps to 0 (never approved) rather than to a guess about intent.
+ */
+function confidence01(n: number): number {
+  if (!Number.isFinite(n) || n < 0 || n > 1) return 0;
+  return n;
 }
 
 /**
@@ -75,14 +87,15 @@ export function parseExtractionResponse(
     return { kind: 'unusable', reason: `payload did not match the schema: ${parsed.error.message}` };
   }
 
-  const confidence = clamp01(parsed.data.confidence);
+  const confidence = confidence01(parsed.data.confidence);
   const rows = parsed.data.rows;
-  const lowestRow = rows.reduce((min, r) => Math.min(min, clamp01(r.confidence)), 1);
+  const lowestRow = rows.reduce((min, r) => Math.min(min, confidence01(r.confidence)), 1);
 
   // An empty read is never "approved" — a blank result with a high score is exactly the
-  // case a human needs to look at.
+  // case a human needs to look at. `threshold > 0` guards against a misconfigured threshold
+  // collapsing the gate: at 0 every score would pass and nothing would ever be reviewed.
   const route =
-    rows.length > 0 && confidence >= opts.threshold && lowestRow >= opts.threshold
+    rows.length > 0 && opts.threshold > 0 && confidence >= opts.threshold && lowestRow >= opts.threshold
       ? 'approved'
       : 'needs_review';
 

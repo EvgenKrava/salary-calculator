@@ -105,6 +105,25 @@ export function createHandler(deps: HandlerDeps) {
   };
 }
 
+/**
+ * Read the review threshold from the environment, failing loudly on a bad value.
+ *
+ * `Number(process.env.X ?? '0.85')` is wrong here in a way that matters: `??` only falls back
+ * on `null`/`undefined`, so an **empty** `CONFIDENCE_THRESHOLD=""` — the most likely
+ * misconfiguration, e.g. Terraform passing an unset variable — yields `Number('') === 0`,
+ * which approves every extraction and silently switches off human review entirely. No error,
+ * no log line. A cold-start throw is far better than months of unreviewed payroll data.
+ */
+export function readThreshold(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.CONFIDENCE_THRESHOLD;
+  if (raw === undefined || raw.trim() === '') return 0.85;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || n > 1) {
+    throw new Error(`CONFIDENCE_THRESHOLD must be a number in (0, 1]; got '${raw}'`);
+  }
+  return n;
+}
+
 /** The Lambda entrypoint named by the deployment contract (`extract.handler`). */
 export const handler = async (event: S3Event): Promise<void> => {
   const { GetObjectCommand, S3Client } = await import('@aws-sdk/client-s3');
@@ -120,6 +139,6 @@ export const handler = async (event: S3Event): Promise<void> => {
     },
     invokeModel: (request) => invokeModel(bedrock, request),
     recordJob,
-    threshold: Number(process.env.CONFIDENCE_THRESHOLD ?? '0.85'),
+    threshold: readThreshold(),
   })(event);
 };

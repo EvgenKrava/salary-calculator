@@ -84,9 +84,41 @@ describe('parseExtractionResponse', () => {
     expect(out).toMatchObject({ kind: 'unusable' });
   });
 
-  it('clamps a nonsense confidence rather than trusting it', () => {
-    const out = parseExtractionResponse(ok({ ...GOOD, confidence: 5 }), OPTS);
-    // A model-reported 5 must not be read as "very confident" — clamp, then route.
-    expect((out as { confidence: number }).confidence).toBeLessThanOrEqual(1);
+  // These assert the ROUTING consequence, not a bound on the number. An earlier version
+  // asserted only `confidence <= 1`, which passed against the bug: clamping saturated an
+  // out-of-range score UP to 1.0, so a percentage-style `20` scored maximum and auto-approved.
+  it.each([20, 5, 100, -1])(
+    'sends an out-of-contract confidence (%p) to review instead of trusting it',
+    (confidence) => {
+      const out = parseExtractionResponse(ok({ ...GOOD, confidence }), OPTS);
+      expect(out).toMatchObject({ kind: 'extracted', route: 'needs_review' });
+      expect((out as { confidence: number }).confidence).toBe(0);
+    },
+  );
+
+  // NaN/Infinity cannot survive JSON: `JSON.stringify(NaN)` is `null`, so these are rejected
+  // as schema violations before confidence is read. Asserted so the safe outcome is pinned —
+  // either way they must not approve.
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+    'treats a non-finite confidence (%p) as unusable, never approved',
+    (confidence) => {
+      const out = parseExtractionResponse(ok({ ...GOOD, confidence }), OPTS);
+      expect(out).toMatchObject({ kind: 'unusable' });
+    },
+  );
+
+  it('sends an out-of-contract ROW confidence to review even when the document score is high', () => {
+    const out = parseExtractionResponse(
+      ok({ ...GOOD, rows: [{ ...GOOD.rows[0], confidence: 20 }], confidence: 0.95 }),
+      OPTS,
+    );
+    expect(out).toMatchObject({ kind: 'extracted', route: 'needs_review' });
+  });
+
+  it('never approves when the threshold is misconfigured to 0', () => {
+    // Number('') === 0. If a zero threshold reached the comparison, every score would pass
+    // and human review would be silently disabled for every document.
+    const out = parseExtractionResponse(ok({ ...GOOD, confidence: 0.01 }), { ...OPTS, threshold: 0 });
+    expect(out).toMatchObject({ kind: 'extracted', route: 'needs_review' });
   });
 });

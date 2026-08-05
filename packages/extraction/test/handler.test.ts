@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createHandler, type HandlerDeps } from '../src/handler';
+import { createHandler, readThreshold, type HandlerDeps } from '../src/handler';
 
 function s3Event(key: string) {
   return {
@@ -118,5 +118,28 @@ describe('extraction handler', () => {
     const d = deps();
     await createHandler(d)(s3Event('uploads/revenue/my+report%20scan.jpg'));
     expect(d.getObject).toHaveBeenCalledWith('docs', 'uploads/revenue/my report scan.jpg');
+  });
+});
+
+describe('readThreshold', () => {
+  // An empty CONFIDENCE_THRESHOLD used to yield Number('') === 0, which approved every
+  // extraction and disabled human review with no error and no log line.
+  it('falls back to the default for an unset or empty value', () => {
+    expect(readThreshold({} as NodeJS.ProcessEnv)).toBe(0.85);
+    expect(readThreshold({ CONFIDENCE_THRESHOLD: '' } as NodeJS.ProcessEnv)).toBe(0.85);
+    expect(readThreshold({ CONFIDENCE_THRESHOLD: '   ' } as NodeJS.ProcessEnv)).toBe(0.85);
+  });
+
+  it('accepts a valid threshold', () => {
+    expect(readThreshold({ CONFIDENCE_THRESHOLD: '0.9' } as NodeJS.ProcessEnv)).toBe(0.9);
+    expect(readThreshold({ CONFIDENCE_THRESHOLD: '1' } as NodeJS.ProcessEnv)).toBe(1);
+  });
+
+  it('throws rather than silently disabling review on a bad value', () => {
+    for (const bad of ['0', '-0.5', '1.5', 'high', 'null']) {
+      expect(() => readThreshold({ CONFIDENCE_THRESHOLD: bad } as NodeJS.ProcessEnv)).toThrow(
+        /CONFIDENCE_THRESHOLD/,
+      );
+    }
   });
 });
