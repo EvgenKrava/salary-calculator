@@ -12,7 +12,7 @@ export type RevenueStatus = 'pending' | 'needs_review' | 'approved' | 'rejected'
 export interface Level {
   id: string;
   name: string;
-  ratePerHour: number;
+  ratePerDay: number;
 }
 
 export interface Location {

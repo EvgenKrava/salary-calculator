@@ -17,7 +17,7 @@ const JSONH = { 'content-type': 'application/json' };
 
 async function seedAndRun() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '20.00' }).returning();
   const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)
@@ -50,9 +50,9 @@ describe('employee pay self-view', () => {
     expect(lines[0]).toMatchObject({
       periodStart: '2026-08-01',
       periodEnd: '2026-08-15',
-      hourlyPay: 160,
+      hourlyPay: 20, // full 8h working day => exactly the 20/day rate
       revenueShare: 50,
-      total: 210,
+      total: 70,
     });
   });
 

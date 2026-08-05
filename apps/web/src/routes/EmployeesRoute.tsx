@@ -25,8 +25,10 @@ import { t } from '../lib/i18n';
  * - **Revenue %** is that person's share of a location-day's revenue, prorated by the hours
  *   they worked (design §3).
  *
- * `cognitoSub` is what links a login to an employee record; without it an employee cannot see
- * their own shifts or pay, since those endpoints key off the verified JWT `sub`.
+ * The Cognito link (`cognitoSub`) is NOT editable here. It is written by the Invite action from
+ * Cognito's own response — asking a manager to paste a UUID leaked an implementation detail into
+ * the UI, and a typo would silently link an employee to no login at all, leaving them unable to
+ * see their own shifts or pay (those endpoints key off the verified JWT `sub`).
  */
 
 /** Percent shown to humans (12.5) vs. the fraction the API stores (0.125). */
@@ -49,7 +51,6 @@ function AddEmployee({ levels }: { levels: Level[] }) {
   const [name, setName] = useState('');
   const [levelId, setLevelId] = useState('');
   const [percent, setPercent] = useState('0');
-  const [cognitoSub, setCognitoSub] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -70,11 +71,13 @@ function AddEmployee({ levels }: { levels: Level[] }) {
         levelId,
         revenuePercent: fraction,
         // Blank means "not linked yet" — send null, not an empty string, which the API rejects.
-        cognitoSub: cognitoSub.trim() === '' ? null : cognitoSub.trim(),
+        // Deliberately NOT sent: the login is created by the Invite action, which sets this
+        // from Cognito's own response. Asking a manager to paste a UUID was an internal
+        // implementation detail leaking into the UI, and a typo would silently link an
+        // employee to nobody.
       });
       setName('');
       setPercent('0');
-      setCognitoSub('');
     } catch (err) {
       setError((err as Error).message);
     }
@@ -95,7 +98,7 @@ function AddEmployee({ levels }: { levels: Level[] }) {
           <option value="">{t.employees.chooseLevel}</option>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>
-              {l.name} — {l.ratePerHour}/h
+              {l.name} — {l.ratePerDay} ₴/{t.employees.perDay}
             </option>
           ))}
         </select>
@@ -107,12 +110,6 @@ function AddEmployee({ levels }: { levels: Level[] }) {
         inputMode="decimal"
         value={percent}
         onChange={(e) => setPercent(e.target.value)}
-      />
-      <Field
-        label={t.employees.cognitoSub}
-        name="cognitoSub"
-        value={cognitoSub}
-        onChange={(e) => setCognitoSub(e.target.value)}
       />
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
       <Button type="submit" variant="primary" disabled={add.isPending || levels.length === 0}>
@@ -193,7 +190,6 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
   const [inviting, setInviting] = useState(false);
   const [percent, setPercent] = useState(fractionToPercent(emp.revenuePercent));
   const [levelId, setLevelId] = useState(emp.levelId);
-  const [cognitoSub, setCognitoSub] = useState(emp.cognitoSub ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const levelName = levels.find((l) => l.id === emp.levelId)?.name ?? '—';
@@ -210,7 +206,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
         id: emp.id,
         levelId,
         revenuePercent: fraction,
-        cognitoSub: cognitoSub.trim() === '' ? null : cognitoSub.trim(),
+        // cognitoSub is managed by Invite, not hand-edited.
       });
       setEditing(false);
     } catch (err) {
@@ -279,13 +275,14 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
           onChange={(e) => setPercent(e.target.value)}
         />
       </NumCell>
+      {/* Login state is read-only here: it is set by Invite from Cognito's own response, so
+          there is nothing for a manager to type or mistype. */}
       <Td>
-        <input
-          className="field__input"
-          aria-label={t.employees.cognitoSubFor(emp.name)}
-          value={cognitoSub}
-          onChange={(e) => setCognitoSub(e.target.value)}
-        />
+        {emp.cognitoSub ? (
+          <span className="mono">{t.employees.canSignIn}</span>
+        ) : (
+          <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
+        )}
       </Td>
       <Td><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
       <Td>

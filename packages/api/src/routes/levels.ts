@@ -10,16 +10,16 @@ import { levels, employees } from '../schema';
 
 const createSchema = z.object({
   name: z.string().min(1),
-  ratePerHour: z.number().nonnegative(),
+  ratePerDay: z.number().nonnegative(),
 });
 const updateSchema = z
-  .object({ name: z.string().min(1), ratePerHour: z.number().nonnegative() })
+  .object({ name: z.string().min(1), ratePerDay: z.number().nonnegative() })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
 
 type LevelRow = typeof levels.$inferSelect;
 function toDto(row: LevelRow) {
-  return { id: row.id, name: row.name, ratePerHour: Number(row.ratePerHour) };
+  return { id: row.id, name: row.name, ratePerDay: Number(row.ratePerDay) };
 }
 
 export function createLevelRoutes(db: Db): Hono<AppEnv> {
@@ -30,7 +30,7 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
    *
    * Same reasoning as locations: setting the rate for a level is an admin decision, but
    * managing employees is a manager job (design §2) and an employee's level has to be
-   * *shown and chosen* by name on that screen. Note this exposes `ratePerHour` to managers —
+   * *shown and chosen* by name on that screen. Note this exposes `ratePerDay` to managers —
    * acceptable, because a manager already sees every employee's computed pay in a salary run.
    */
   routes.get('/', requireRole('manager', 'admin'), async (c) => {
@@ -52,7 +52,7 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
     if (existing.length > 0) throw new HTTPException(409, { message: 'level name already exists' });
     const [row] = await db
       .insert(levels)
-      .values({ name: body.name, ratePerHour: String(body.ratePerHour) })
+      .values({ name: body.name, ratePerDay: String(body.ratePerDay) })
       .returning();
     return c.json(toDto(row), 201);
   });
@@ -61,7 +61,7 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
     const body = await readJson(c, updateSchema);
     const patch: Partial<typeof levels.$inferInsert> = {};
     if (body.name !== undefined) patch.name = body.name;
-    if (body.ratePerHour !== undefined) patch.ratePerHour = String(body.ratePerHour);
+    if (body.ratePerDay !== undefined) patch.ratePerDay = String(body.ratePerDay);
     const [row] = await db
       .update(levels)
       .set(patch)

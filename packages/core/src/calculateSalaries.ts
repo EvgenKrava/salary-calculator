@@ -17,12 +17,24 @@ function dayKey(locationId: string, date: string): string {
 /**
  * Compute per-employee pay for a pay period.
  *
- * Hourly pay = level rate x actual hours worked (shift end - start), summed over the
- * employee's approved shifts in the period. Revenue share = the employee's revenue
- * fraction x the location-day's approved revenue, prorated by that employee's share of
- * the total hours worked at that location on that day (days are commonly split between
- * people). A worked location-day with no approved revenue is recorded as a gap and marks
- * the result `blocked`.
+ * **Base pay = the level's DAY rate, pro-rated by hours actually worked**, summed over the
+ * employee's approved shifts in the period:
+ *
+ *     base = rate_per_day x hours(shift) / working_hours(shift.location)
+ *
+ * A full day pays exactly the day rate; half a day pays half. Pro-rating is required, not a
+ * refinement: a day is regularly split between two people ("Буває що не цілий день а декілька
+ * годин, а решту допрацьовює інша людина"), and paying each a full day would roughly double
+ * that day's wage bill.
+ *
+ * The divisor is the **shift's own location's** working day, because locations have different
+ * opening hours — dividing an 8-hour shift by a 12-hour location and by a 9-hour one must give
+ * different pay for the same rate.
+ *
+ * Revenue share = the employee's revenue fraction x the location-day's approved revenue,
+ * prorated by that employee's share of the total hours worked at that location on that day. A
+ * worked location-day with no approved revenue is recorded as a gap and marks the result
+ * `blocked`.
  */
 export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResult {
   const levelById = new Map(input.levels.map((l) => [l.id, l]));
@@ -82,7 +94,15 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
 
     for (const shift of empShifts) {
       const hours = hoursByShiftId.get(shift.id)!;
-      hourlyPay += level.ratePerHour * hours;
+      // Pro-rate the day rate against this location's own working day.
+      const location = locationById.get(shift.locationId)!;
+      const locationDayHours = hoursBetween(location.opensAt, location.closesAt);
+      if (locationDayHours <= 0) {
+        // Unreachable via the API (a CHECK enforces closes_at > opens_at) but a zero divisor
+        // would silently produce Infinity in someone's pay, so fail loudly instead.
+        throw new Error(`Location ${location.id} has a non-positive working day`);
+      }
+      hourlyPay += level.ratePerDay * (hours / locationDayHours);
 
       const key = dayKey(shift.locationId, shift.workDate);
       const revenue = revenueByDay.get(key);

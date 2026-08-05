@@ -4,6 +4,7 @@ import { Money } from '../ui/Money';
 import { StatusPill } from '../ui/StatusPill';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { t, formatDate } from '../lib/i18n';
 import { useAddRevenue, useLocations, useRevenue, type Location, type RevenueRow } from '../lib/queries';
@@ -75,23 +76,19 @@ export function RevenueForm({
   return (
     <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }} onSubmit={submit}>
       <h2 style={{ marginBottom: 'var(--s4)' }}>{t.revenue.addTitle}</h2>
-      <div className="field">
-        <label className="field__label" htmlFor="locationId">
-          {t.common.location}
-        </label>
-        <select
-          id="locationId"
-          className="field__input"
-          value={locationId}
-          onChange={(e) => setLocationId(e.target.value)}
-        >
-          {locations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Select
+        label={t.common.location}
+        name="locationId"
+        size="wide"
+        value={locationId}
+        onChange={(e) => setLocationId(e.target.value)}
+      >
+        {locations.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </Select>
       <Field
         label={t.revenue.revenueDate}
         name="revenueDate"

@@ -3,6 +3,7 @@ import { Table, Th, Td, NumCell } from '../ui/Table';
 import { Money } from '../ui/Money';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { MonthSelect, Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { ApiError } from '../lib/api';
 import { t, formatDate, formatTimestampDate } from '../lib/i18n';
@@ -178,14 +179,17 @@ export function RunsRoute() {
         <h2 style={{ marginBottom: 'var(--s4)' }}>{t.runs.runTitle}</h2>
         <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.runs.hint}</p>
         <Field label={t.runs.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
-        <Field label={t.runs.month} name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
-        <div className="field">
-          <label className="field__label" htmlFor="half">{t.runs.period}</label>
-          <select id="half" className="field__input" value={half} onChange={(e) => setHalf(e.target.value as '1' | '2')}>
-            <option value="1">{t.runs.firstHalf}</option>
-            <option value="2">{t.runs.secondHalf}</option>
-          </select>
-        </div>
+        <MonthSelect label={t.runs.month} value={month} onChange={setMonth} />
+        <Select
+          label={t.runs.period}
+          name="half"
+          size="wide"
+          value={half}
+          onChange={(e) => setHalf(e.target.value as '1' | '2')}
+        >
+          <option value="1">{t.runs.firstHalf}</option>
+          <option value="2">{t.runs.secondHalf}</option>
+        </Select>
         <fieldset style={{ border: 0, padding: 0, margin: 'var(--s6) 0 0' }}>
           <legend style={{ font: 'inherit', fontWeight: 600, padding: 0, marginBottom: 'var(--s1)' }}>
             {t.runs.bonusesTitle}

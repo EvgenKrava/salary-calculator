@@ -9,7 +9,7 @@ describe('drizzle schema against the core migration', () => {
 
     const [level] = await db
       .insert(levels)
-      .values({ name: 'Junior', ratePerHour: '20.00' })
+      .values({ name: 'Junior', ratePerDay: '20.00' })
       .returning();
     await db.insert(locations).values({ name: 'Downtown', opensAt: '08:00', closesAt: '16:00' });
     const [employee] = await db
@@ -26,7 +26,7 @@ describe('drizzle schema against the core migration', () => {
 
   it('enforces the employee/day/location/start-time uniqueness through drizzle inserts', async () => {
     const { db } = await createTestDb();
-    const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '10.00' }).returning();
+    const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '10.00' }).returning();
     const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '16:00' }).returning();
     const [emp] = await db.insert(employees).values({ name: 'Bob', levelId: level.id }).returning();
 

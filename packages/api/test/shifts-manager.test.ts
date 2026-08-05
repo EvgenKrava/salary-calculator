@@ -19,7 +19,7 @@ const JSONH = { 'content-type': 'application/json' };
 
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '20.00' }).returning();
   const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)

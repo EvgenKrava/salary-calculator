@@ -6,7 +6,7 @@ const PERIOD: PayPeriod = { start: '2026-08-01', end: '2026-08-15' };
 
 function baseInput(): CalcInput {
   return {
-    levels: [{ id: 'lvl1', name: 'Junior', ratePerHour: 20 }],
+    levels: [{ id: 'lvl1', name: 'Junior', ratePerDay: 20 }],
     locations: [{ id: 'locA', name: 'A', opensAt: '08:00', closesAt: '16:00' }],
     employees: [
       { id: 'e1', name: 'Alice', levelId: 'lvl1', revenuePercent: 0.05, cognitoSub: null, active: true },
@@ -40,10 +40,10 @@ describe('calculateSalaries', () => {
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0]).toEqual({
       employeeId: 'e1',
-      hourlyPay: 160, // 20 * 8
+      hourlyPay: 20, // full 8h working day => exactly the 20/day rate
       revenueShare: 50, // 0.05 * 1000
       bonus: 0,
-      total: 210,
+      total: 70,
     });
     expect(result.blocked).toBe(false);
   });
@@ -52,7 +52,8 @@ describe('calculateSalaries', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '12:00'; // 4 hours instead of 8
     const result = calculateSalaries(input, PERIOD);
-    expect(result.lines[0].hourlyPay).toBe(80); // 20 x 4
+    // Day rate 20, pro-rated: 4h of an 8h working day is half a day.
+    expect(result.lines[0].hourlyPay).toBe(10);
   });
 
   it('gives the whole day revenue share to the only person who worked it', () => {
@@ -76,8 +77,10 @@ describe('calculateSalaries', () => {
     // total hours that location-day = 8; each worked 4 => half of their own percent
     expect(alice.revenueShare).toBe(25); // 0.05 x 1000 x 4/8
     expect(bob.revenueShare).toBe(50); // 0.10 x 1000 x 4/8
-    expect(alice.hourlyPay).toBe(80);
-    expect(bob.hourlyPay).toBe(80);
+    // Each worked 4h of an 8h working day => half the day rate each. This is the case the
+    // pro-rating exists for: paying both a full day would double the day's wage bill.
+    expect(alice.hourlyPay).toBe(10);
+    expect(bob.hourlyPay).toBe(10);
   });
 
   it('sums multiple shifts for one employee in a day across locations', () => {
@@ -90,7 +93,9 @@ describe('calculateSalaries', () => {
     });
     input.dailyRevenue.push({ locationId: 'locB', revenueDate: '2026-08-02', amount: 500, status: 'approved' });
     const result = calculateSalaries(input, PERIOD);
-    expect(result.lines[0].hourlyPay).toBe(160); // 20 x (4 + 4)
+    // 4h of locA's 8h day (=10) + 4h of locB's 12h day (=6.67). The divisor is each
+    // location's OWN working day, so the same 4 hours are worth different amounts.
+    expect(result.lines[0].hourlyPay).toBe(16.67);
     // sole worker at each location that day => full percent of each
     expect(result.lines[0].revenueShare).toBe(75); // 0.05 x 1000 + 0.05 x 500
   });
@@ -124,7 +129,7 @@ describe('calculateSalaries', () => {
     expect(result.gaps).toEqual([{ employeeId: 'e1', locationId: 'locA', date: '2026-08-02' }]);
     expect(result.blocked).toBe(true);
     // hourly pay still computed; missing revenue contributes 0 to the share.
-    expect(result.lines[0].hourlyPay).toBe(160);
+    expect(result.lines[0].hourlyPay).toBe(20);
     expect(result.lines[0].revenueShare).toBe(0);
   });
 
@@ -167,7 +172,7 @@ describe('calculateSalaries', () => {
     input.bonuses = { e1: 75.5 };
     const result = calculateSalaries(input, PERIOD);
     expect(result.lines[0].bonus).toBe(75.5);
-    expect(result.lines[0].total).toBe(285.5); // 160 + 50 + 75.5
+    expect(result.lines[0].total).toBe(145.5); // 20 (full day) + 50 (share) + 75.5
   });
 
   it('rounds each component and keeps the total consistent', () => {
@@ -213,9 +218,9 @@ describe('calculateSalaries', () => {
     const alice = result.lines.find((l) => l.employeeId === 'e1')!;
     const bob = result.lines.find((l) => l.employeeId === 'e2')!;
     // A headcount split would give 25/50; the hours split must give 37.5/25.
-    expect(alice.hourlyPay).toBe(120); // 20 x 6
+    expect(alice.hourlyPay).toBe(15); // 6h of an 8h day => 3/4 of the 20/day rate
     expect(alice.revenueShare).toBe(37.5); // 0.05 x 1000 x 6/8
-    expect(bob.hourlyPay).toBe(40); // 20 x 2
+    expect(bob.hourlyPay).toBe(5); // 2h of an 8h day => a quarter of the 20/day rate
     expect(bob.revenueShare).toBe(25); // 0.10 x 1000 x 2/8
   });
 

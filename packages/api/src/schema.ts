@@ -1,5 +1,5 @@
 // This Drizzle schema is for query building only. CHECK constraints
-// (rate_per_hour >= 0, revenue_percent in [0,1], amount >= 0, closes_at > opens_at,
+// (rate_per_day >= 0, revenue_percent in [0,1], amount >= 0, closes_at > opens_at,
 // ends_at > starts_at) are defined and enforced in packages/core/db/migrations/
 // 0001_init.sql and 0002_hours_model.sql, the source of truth.
 import {
@@ -27,7 +27,7 @@ export const extractionStatus = pgEnum('extraction_status', ['processing', 'need
 export const levels = pgTable('levels', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().unique(),
-  ratePerHour: numeric('rate_per_hour', { precision: 10, scale: 2 }).notNull(),
+  ratePerDay: numeric('rate_per_day', { precision: 10, scale: 2 }).notNull(),
 });
 
 export const locations = pgTable('locations', {

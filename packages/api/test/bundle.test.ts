@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MIGRATIONS } from '@salary/core/migrations';
 
 /**
  * Load-time checks on the built Lambda bundles.
@@ -106,7 +107,9 @@ describe('lambda bundles', () => {
     expect(out).toContain('RESULT=');
     const result = JSON.parse(out.slice(out.indexOf('RESULT=') + 'RESULT='.length).trim());
     expect(result.errors).toEqual([]);
-    expect(result.applied).toBe(3);
+    // Count comes from the migrations on disk, so adding one does not break this test
+    // while still proving every migration was sent.
+    expect(result.applied).toBe(MIGRATIONS.length);
   });
 
   it('migrate.js carries the migration SQL inside the bundle', () => {

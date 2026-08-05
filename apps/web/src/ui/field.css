@@ -1,7 +1,27 @@
+/*
+ * A field is sized to its CONTENT, not to its container.
+ *
+ * The single worst UX problem in the first deployed build: inputs inherited the panel's full
+ * width, so on a desktop a 4-character year field rendered ~1900px wide. That reads as broken
+ * rather than spacious, and it destroys the visual link between a label and the value it
+ * describes. Fields now cap at a readable measure and shrink further by data type below.
+ */
 .field {
   display: flex;
   flex-direction: column;
   gap: var(--s1);
+  margin-bottom: var(--s4);
+  max-width: 34ch;
+}
+
+/* Two or three short fields sit on one row instead of stacking into a tall column. */
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: flex-start;
+}
+.field-row > .field {
   margin-bottom: var(--s4);
 }
 
@@ -21,7 +41,50 @@
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
-  min-height: 36px;
+  min-height: 38px;
+  width: 100%;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.field__input:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+
+/* Amber ring on focus ties the active field to the primary action colour. */
+.field__input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-tint);
+}
+
+.field__input[aria-invalid='true'] {
+  border-color: var(--stop);
+}
+.field__input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--stop-tint);
+}
+
+.field__input:disabled {
+  background: var(--surface-sunk);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+/*
+ * Numeric and time fields are sized to their DATA, so a year cannot look like a name field.
+ * Right-aligned because these are figures a manager scans down a column.
+ */
+.field--num {
+  max-width: 12ch;
+}
+.field--num .field__input {
+  text-align: right;
+}
+.field--time {
+  max-width: 11ch;
+}
+.field--wide {
+  max-width: 48ch;
 }
 
 .field__input.mono {
@@ -40,4 +103,23 @@
   margin: 0;
   font-size: var(--text-xs);
   color: var(--stop);
+}
+
+/* Month names are long in Ukrainian ("Березень"); size to the longest, not to the container. */
+.field--month {
+  max-width: 18ch;
+}
+
+/*
+ * Native select, restyled to match text inputs. `appearance: none` plus an inline SVG chevron,
+ * because the platform arrow sits inconsistently across browsers and made the control look
+ * like a different family of widget than the inputs beside it.
+ */
+.field__select {
+  appearance: none;
+  padding-right: calc(var(--s3) + 14px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a636b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--s3) center;
+  cursor: pointer;
 }

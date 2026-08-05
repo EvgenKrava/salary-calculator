@@ -162,12 +162,13 @@ export const t = {
     title: 'Працівники',
     addTitle: 'Додати працівника',
     name: "Ім'я",
-    levelWithRate: 'Рівень (визначає ставку за годину)',
+    levelWithRate: 'Рівень (визначає ставку за день)',
     chooseLevel: 'Виберіть рівень…',
     revenuePercent: 'Відсоток від виручки (0–100)',
     /** Short form for a table header, where the long label would not fit. */
     revenuePercentShort: '% виручки',
-    cognitoSub: 'Cognito sub (необов’язково — прив’язує вхід)',
+    /** Unit suffix on a rate, e.g. "600 ₴/день". */
+    perDay: 'день',
     adding: 'Додаємо…',
     addButton: 'Додати працівника',
     noLevels:
@@ -192,12 +193,11 @@ export const t = {
     deactivate: 'Деактивувати',
     reactivate: 'Активувати',
     badPercent: 'Відсоток від виручки має бути числом від 0 до 100.',
-    chooseLevelFirst: 'Виберіть рівень — він визначає ставку за годину.',
+    chooseLevelFirst: 'Виберіть рівень — він визначає ставку за день.',
     loginEmailFor: (name: string) => `Пошта для входу для ${name}`,
     roleFor: (name: string) => `Роль для ${name}`,
     levelFor: (name: string) => `Рівень для ${name}`,
     revenuePercentFor: (name: string) => `Відсоток від виручки для ${name}`,
-    cognitoSubFor: (name: string) => `Cognito sub для ${name}`,
   },
 
   revenue: {
@@ -319,7 +319,7 @@ export const t = {
     levels: 'Рівні',
     addLevel: 'Додати рівень',
     levelName: 'Назва рівня',
-    ratePerHour: 'Ставка за годину, ₴',
+    ratePerDay: 'Ставка за день, ₴',
     noLocations: 'Ще немає локацій.',
     noLocationsAction: 'Додайте одну нижче.',
     noLevels: 'Ще немає рівнів.',

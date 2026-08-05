@@ -10,16 +10,28 @@ export function Field({
   error,
   numeric = false,
   hint,
+  size,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & {
   label: string;
   error?: string;
   numeric?: boolean;
   hint?: ReactNode;
+  /**
+   * Width class, chosen by DATA TYPE rather than by layout.
+   *
+   * Without this every input filled its container — a 4-digit year rendered ~1900px wide on a
+   * desktop, which reads as broken and severs the label/value relationship. `num` and `time`
+   * shrink to their content; `wide` is for names and emails.
+   */
+  size?: 'num' | 'time' | 'wide';
 }) {
   const id = props.id ?? props.name;
+  // A numeric field is a numeric width unless told otherwise — the common case shouldn't need
+  // both props passed at every call site.
+  const width = size ?? (numeric ? 'num' : undefined);
   return (
-    <div className="field">
+    <div className={width ? `field field--${width}` : 'field'}>
       <label className="field__label" htmlFor={id}>
         {label}
       </label>

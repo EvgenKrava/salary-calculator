@@ -102,7 +102,7 @@ function LevelsPanel() {
   const levels = useLevels();
   const add = useAddLevel();
   const [name, setName] = useState('');
-  const [ratePerHour, setRatePerHour] = useState('');
+  const [ratePerDay, setRatePerHour] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -111,7 +111,7 @@ function LevelsPanel() {
     setError(null);
     setBusy(true);
     try {
-      await add.mutateAsync({ name, ratePerHour: Number(ratePerHour) });
+      await add.mutateAsync({ name, ratePerDay: Number(ratePerDay) });
       setName('');
       setRatePerHour('');
     } catch (err) {
@@ -135,14 +135,14 @@ function LevelsPanel() {
           <thead>
             <tr>
               <Th>{t.setup.levelName}</Th>
-              <Th numeric>{t.setup.ratePerHour}</Th>
+              <Th numeric>{t.setup.ratePerDay}</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((l) => (
               <tr key={l.id}>
                 <Td>{l.name}</Td>
-                <NumCell money><Money value={l.ratePerHour} /></NumCell>
+                <NumCell money><Money value={l.ratePerDay} /></NumCell>
               </tr>
             ))}
           </tbody>
@@ -153,14 +153,14 @@ function LevelsPanel() {
         <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.addLevel}</h2>
         <Field label={t.setup.levelName} name="name" required value={name} onChange={(e) => setName(e.target.value)} />
         <Field
-          label={t.setup.ratePerHour}
-          name="ratePerHour"
+          label={t.setup.ratePerDay}
+          name="ratePerDay"
           type="number"
           step="0.01"
           min="0"
           numeric
           required
-          value={ratePerHour}
+          value={ratePerDay}
           onChange={(e) => setRatePerHour(e.target.value)}
           error={error ?? undefined}
         />

@@ -40,6 +40,12 @@ export const HOURS_MODEL_SQL = read('0002_hours_model.sql');
 /** The schedule-import migration. */
 export const SCHEDULE_IMPORT_SQL = read('0003_schedule_import.sql');
 
+/** The day-rate migration: levels carry a rate per DAY, pro-rated by hours worked. */
+export const DAY_RATE_SQL = read('0004_day_rate.sql');
+
+/** Enum columns become TEXT + CHECK so the RDS Data API can write them. */
+export const ENUM_TO_TEXT_SQL = read('0005_enum_to_text.sql');
+
 /**
  * All migrations in apply order.
  *

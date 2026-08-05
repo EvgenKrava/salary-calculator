@@ -34,7 +34,7 @@ async function makeLevel(app: Awaited<ReturnType<typeof makeApp>>) {
   const res = await app.request('/api/levels', {
     method: 'POST',
     headers: { ...ADMIN, ...JSONH },
-    body: JSON.stringify({ name: `L-${Math.round(performance.now() * 1000)}`, ratePerHour: 20 }),
+    body: JSON.stringify({ name: `L-${Math.round(performance.now() * 1000)}`, ratePerDay: 20 }),
   });
   return ((await res.json()) as { id: string }).id;
 }

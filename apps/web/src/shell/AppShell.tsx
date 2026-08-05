@@ -1,4 +1,4 @@
-import { Link, Outlet } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { useAuth, useRole } from '../lib/auth';
 import { Button } from '../ui/Button';
 import { t } from '../lib/i18n';
@@ -8,6 +8,19 @@ import './shell.css';
 export function AppShell() {
   const { email, signOut } = useAuth();
   const { isAdmin, isManager, isEmployee } = useRole();
+  const navigate = useNavigate();
+
+  /**
+   * Sign out, then go to /login.
+   *
+   * `signOut` only clears auth state and the query cache; without an explicit navigation the
+   * user stayed on the page they were on, looking signed in, until something happened to
+   * re-render. `replace` so the back button cannot return to an authenticated screen.
+   */
+  function handleSignOut() {
+    signOut();
+    void navigate({ to: '/login', replace: true });
+  }
 
   return (
     <div className="shell">
@@ -33,7 +46,7 @@ export function AppShell() {
           ) : null}
         </nav>
         <span className="shell__user">{email}</span>
-        <Button onClick={signOut}>{t.common.signOut}</Button>
+        <Button onClick={handleSignOut}>{t.common.signOut}</Button>
       </header>
       <main className="shell__main">
         <Outlet />

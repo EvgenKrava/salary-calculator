@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { MonthSelect } from '../ui/Select';
 import { config } from '../lib/config';
 import { useAuth } from '../lib/auth';
 import { t } from '../lib/i18n';
@@ -148,7 +149,7 @@ export function ImportRoute() {
 
           <div style={{ marginTop: 'var(--s6)' }}>
             <h3 style={{ marginBottom: 'var(--s2)' }}>{t.importScreen.commitHeading}</h3>
-            <Field label={t.importScreen.month} name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
+            <MonthSelect label={t.importScreen.month} value={month} onChange={setMonth} />
             <Button variant="primary" onClick={runCommit} disabled={busy}>
               {busy ? t.importScreen.committing : t.importScreen.commit}
             </Button>

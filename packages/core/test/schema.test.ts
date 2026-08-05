@@ -15,7 +15,7 @@ describe('schema 0001_init + 0002_hours_model', () => {
       await db.exec(sql);
     }
     await db.exec(`
-      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${LEVEL}', 'Junior', 20.00);
+      INSERT INTO levels (id, name, rate_per_day) VALUES ('${LEVEL}', 'Junior', 20.00);
       INSERT INTO locations (id, name, opens_at, closes_at) VALUES ('${LOC}', 'Downtown', '08:00', '20:00');
       INSERT INTO employees (id, name, level_id, revenue_percent)
         VALUES ('${EMP}', 'Alice', '${LEVEL}', 0.0500);
@@ -197,7 +197,7 @@ describe('0002_hours_model migration preserves real shift length', () => {
     const loc = '55555555-5555-5555-5555-555555555555';
     const emp = '66666666-6666-6666-6666-666666666666';
     await oldModelDb.exec(`
-      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${level}', 'Junior', 20.00);
+      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${level}', 'Junior', 20.00); -- pre-0004 column name: this test applies INIT_SQL only
       INSERT INTO locations (id, name, standard_shift_hours) VALUES ('${loc}', 'Uptown', 6.00);
       INSERT INTO employees (id, name, level_id, revenue_percent) VALUES ('${emp}', 'Bob', '${level}', 0.05);
       INSERT INTO shifts (employee_id, location_id, work_date) VALUES ('${emp}', '${loc}', '2026-08-03');
@@ -228,7 +228,7 @@ describe('0002_hours_model migration preserves real shift length', () => {
     const level = '77777777-7777-7777-7777-777777777777';
     const loc = '88888888-8888-8888-8888-888888888888';
     await oldModelDb.exec(`
-      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${level}', 'Junior', 20.00);
+      INSERT INTO levels (id, name, rate_per_hour) VALUES ('${level}', 'Junior', 20.00); -- pre-0004 column name: this test applies INIT_SQL only
       INSERT INTO locations (id, name, standard_shift_hours) VALUES ('${loc}', 'Overnight', 25.00);
     `);
 

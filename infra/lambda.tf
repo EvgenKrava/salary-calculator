@@ -42,8 +42,17 @@ resource "aws_lambda_function" "api" {
   role          = aws_iam_role.api.arn
   handler       = "api.handler"
   runtime       = "nodejs20.x"
-  timeout       = 30
-  memory_size   = 512
+
+  # Sized for the schedule import, the heaviest request by far. Parsing the real 1.25 MB
+  # workbook with exceljs peaked at 299 MB and blew the previous 30 s timeout — API Gateway
+  # surfaced that to the manager as a bare "503 Service Unavailable", with nothing in the
+  # Lambda log but `Status: timeout`.
+  #
+  # Lambda scales CPU with memory, so 1536 MB also makes the parse several times faster
+  # rather than merely fitting. Cost impact is nil: per-request billing on a handful of
+  # imports a month, idle otherwise.
+  timeout     = 120
+  memory_size = 1536
 
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256

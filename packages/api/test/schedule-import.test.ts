@@ -55,7 +55,7 @@ async function form(fields: Record<string, string>): Promise<FormData> {
 /** Location "1" and "2" plus slot windows and a name mapping for Олег. */
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '20.00' }).returning();
   const [loc1] = await db.insert(locations).values({ name: '1', opensAt: '08:00', closesAt: '20:00' }).returning();
   const [loc2] = await db.insert(locations).values({ name: '2', opensAt: '08:00', closesAt: '20:00' }).returning();
   const [oleg] = await db.insert(employees).values({ name: 'Oleg', levelId: level.id }).returning();

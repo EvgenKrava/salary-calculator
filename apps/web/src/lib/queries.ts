@@ -13,7 +13,7 @@ export interface Location {
 export interface Level {
   id: string;
   name: string;
-  ratePerHour: number;
+  ratePerDay: number;
 }
 export interface Employee {
   id: string;
@@ -97,7 +97,7 @@ export function useAddLevel() {
   const api = useApi();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; ratePerHour: number }) => api.post<Level>('/api/levels', body),
+    mutationFn: (body: { name: string; ratePerDay: number }) => api.post<Level>('/api/levels', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['levels'] }),
   });
 }

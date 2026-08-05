@@ -36,7 +36,7 @@ interface BlockedDto {
 
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerHour: '20.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '20.00' }).returning();
   const [loc] = await db.insert(locations).values({ name: 'A', opensAt: '08:00', closesAt: '16:00' }).returning();
   const [alice] = await db
     .insert(employees)
@@ -87,13 +87,14 @@ describe('salary runs', () => {
     const run = (await res.json()) as RunDto;
     expect(run).toMatchObject({ periodStart: '2026-08-01', periodEnd: '2026-08-15' });
     const line = run.lines.find((l) => l.employeeId === alice.id);
-    expect(line).toEqual({ employeeId: alice.id, hourlyPay: 160, revenueShare: 50, bonus: 25, total: 235 });
+    // Day rate 20, full 8h working day => 20. Total 20 + 50 + 25.
+    expect(line).toEqual({ employeeId: alice.id, hourlyPay: 20, revenueShare: 50, bonus: 25, total: 95 });
 
     const got = await app.request(`/api/salary-runs/${run.id}`, { headers: MGR });
     expect(got.status).toBe(200);
     const gotBody = (await got.json()) as RunDto;
     expect(gotBody.lines).toHaveLength(1);
-    expect(gotBody.lines[0]).toEqual({ employeeId: alice.id, hourlyPay: 160, revenueShare: 50, bonus: 25, total: 235 });
+    expect(gotBody.lines[0]).toEqual({ employeeId: alice.id, hourlyPay: 20, revenueShare: 50, bonus: 25, total: 95 });
   });
 
   it('409s a second run for the same period', async () => {
@@ -154,7 +155,7 @@ describe('salary runs', () => {
     const aliceLine = run.lines.find((l) => l.employeeId === alice.id);
     const bobLine = run.lines.find((l) => l.employeeId === bob.id);
     // each worked 4 of the day's 8 hours => half of their own 5%
-    expect(aliceLine).toMatchObject({ hourlyPay: 80, revenueShare: 25 });
-    expect(bobLine).toMatchObject({ hourlyPay: 80, revenueShare: 25 });
+    expect(aliceLine).toMatchObject({ hourlyPay: 10, revenueShare: 25 });
+    expect(bobLine).toMatchObject({ hourlyPay: 10, revenueShare: 25 });
   });
 });
