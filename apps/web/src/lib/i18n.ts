@@ -61,6 +61,31 @@ export function formatDate(iso: string): string {
   return `${d}.${mo}.${y}`;
 }
 
+/**
+ * Format a UTC timestamp (`2026-08-05T22:30:00.000Z`) as the local Ukrainian date.
+ *
+ * **Use this for `timestamptz` columns, and `formatDate` for `DATE` columns — they are not
+ * interchangeable.** A `DATE` (`work_date`, `period_start`, `revenue_date`) carries no timezone
+ * and must be shown exactly as stored, so `formatDate` splits the string and never constructs a
+ * `Date`. A `timestamptz` (`created_at`) is a real instant in UTC, so taking its first 10
+ * characters shows the UTC date: a run created at 22:30 UTC on the 5th renders as 05.08 when in
+ * Kyiv (UTC+3) it was already the 6th. Here converting IS the correct behaviour.
+ */
+export function formatTimestampDate(iso: string, timeZone = 'Europe/Kyiv'): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  // en-GB gives dd/mm/yyyy; swapping the separator yields the Ukrainian dd.mm.yyyy without
+  // relying on the runtime's uk-UA data, which formats as `05.08.26` in some engines.
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+    .format(d)
+    .replace(/\//g, '.');
+}
+
 /** Ukrainian month names in the nominative case, for a month picker. */
 export const MONTHS = [
   'Січень',
@@ -280,7 +305,6 @@ export const t = {
     typeRevenue: 'виручка',
     typeSchedule: 'графік',
     confirm: 'Підтвердити',
-    approve: 'Підтвердити',
     reject: 'Відхилити',
     rejectReason: 'Причина відхилення',
   },
@@ -330,5 +354,7 @@ export const t = {
     created: 'створено',
     skipped: 'пропущено',
     windowChanged: 'Змінено час зміни',
+    chooseFileFirst: 'Спочатку виберіть файл графіка.',
+    monthsFound: (months: string) => `знайдені місяці: ${months}`,
   },
 } as const;

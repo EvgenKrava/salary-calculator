@@ -59,7 +59,7 @@ export function ImportRoute() {
   const [busy, setBusy] = useState(false);
 
   async function postMultipart<T>(path: string, extra: Record<string, string>): Promise<T> {
-    if (!file) throw new Error('Choose a workbook file first.');
+    if (!file) throw new Error(t.importScreen.chooseFileFirst);
     const token = await getToken();
     const form = new FormData();
     form.set('file', file);
@@ -128,7 +128,7 @@ export function ImportRoute() {
         </div>
         <Field label={t.importScreen.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? 'Reading…' : 'Preview'}
+          {busy ? t.importScreen.parsing : t.importScreen.preview}
         </Button>
       </form>
 
@@ -138,7 +138,7 @@ export function ImportRoute() {
         <div className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }}>
           <h2>{t.importScreen.previewResult}</h2>
           <p className="mono" style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>
-            months found: {preview.months.join(', ') || '—'}
+            {t.importScreen.monthsFound(preview.months.join(', ') || '—')}
           </p>
           <ReportList title={t.importScreen.unmappedNames} items={preview.unmappedNames} />
           <ReportList title={t.importScreen.unknownLocations} items={preview.unknownLocations} />

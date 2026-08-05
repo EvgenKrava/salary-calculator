@@ -26,7 +26,7 @@ export function ReviewRoute() {
   const decide = useJobDecision();
 
   if (anyLoading(jobs)) return <p className="mono">{t.common.loading}</p>;
-  // A failing endpoint previously rendered "Nothing waiting for review" — indistinguishable
+  // A failing endpoint previously rendered the empty-state copy — indistinguishable
   // from a healthy empty queue, on the one screen whose job is catching bad data.
   const loadError = firstError(jobs);
   if (loadError) {

@@ -5,7 +5,7 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
 import { ApiError } from '../lib/api';
-import { t, formatDate } from '../lib/i18n';
+import { t, formatDate, formatTimestampDate } from '../lib/i18n';
 import {
   useCreateSalaryRun,
   useEmployees,
@@ -262,7 +262,9 @@ export function RunsRoute() {
               <tr key={r.id}>
                 <Td><span className="mono">{formatDate(r.periodStart)}</span></Td>
                 <Td><span className="mono">{formatDate(r.periodEnd)}</span></Td>
-                <Td><span className="mono">{formatDate(String(r.createdAt))}</span></Td>
+                {/* created_at is a timestamptz, so it must be CONVERTED to local time, not sliced:
+                    a run created at 22:30 UTC on the 5th was already the 6th in Kyiv. */}
+                <Td><span className="mono">{formatTimestampDate(String(r.createdAt))}</span></Td>
               </tr>
             ))}
           </tbody>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDate, hoursLabel, plural, shiftsLabel, t, MONTHS } from '../src/lib/i18n';
+import { formatDate, formatTimestampDate, hoursLabel, plural, shiftsLabel, t, MONTHS } from '../src/lib/i18n';
 
 /**
  * Ukrainian localisation: the two things that are genuinely easy to get wrong.
@@ -75,6 +75,41 @@ describe('formatDate', () => {
     // A malformed value should show the raw string a manager can report, not "NaN.NaN.NaN".
     expect(formatDate('')).toBe('');
     expect(formatDate('not-a-date')).toBe('not-a-date');
+  });
+});
+
+describe('formatTimestampDate', () => {
+  it('converts a UTC timestamp to the local Kyiv date', () => {
+    // The bug: created_at is a timestamptz, so slicing its first 10 characters (or passing it
+    // to formatDate, which does the same) shows the UTC date. A run created at 22:30 UTC on the
+    // 5th was already the 6th in Kyiv, and the "Past runs" table would date it a day early.
+    expect(formatTimestampDate('2026-08-05T22:30:00.000Z')).toBe('06.08.2026');
+    expect(formatDate('2026-08-05T22:30:00.000Z')).toBe('05.08.2026'); // wrong for a timestamp
+  });
+
+  it('keeps the same date when the instant is mid-day', () => {
+    expect(formatTimestampDate('2026-08-05T09:00:00.000Z')).toBe('05.08.2026');
+  });
+
+  it('crosses the year boundary correctly', () => {
+    // 31 Dec 22:00 UTC is already 1 Jan in Kyiv.
+    expect(formatTimestampDate('2026-12-31T22:00:00.000Z')).toBe('01.01.2027');
+  });
+
+  it('handles both Kyiv offsets, so DST does not shift the date', () => {
+    // Kyiv is UTC+2 in winter and UTC+3 in summer; 22:30 crosses midnight in summer only.
+    expect(formatTimestampDate('2026-01-15T22:30:00.000Z')).toBe('16.01.2026');
+    expect(formatTimestampDate('2026-07-15T21:30:00.000Z')).toBe('16.07.2026');
+  });
+
+  it('returns the input rather than "Invalid Date" on junk', () => {
+    expect(formatTimestampDate('not-a-timestamp')).toBe('not-a-timestamp');
+  });
+
+  it('is independent of the machine timezone', () => {
+    // Explicit timeZone means CI in UTC and a laptop in Kyiv agree.
+    expect(formatTimestampDate('2026-08-05T22:30:00.000Z', 'Europe/Kyiv')).toBe('06.08.2026');
+    expect(formatTimestampDate('2026-08-05T22:30:00.000Z', 'UTC')).toBe('05.08.2026');
   });
 });
 
