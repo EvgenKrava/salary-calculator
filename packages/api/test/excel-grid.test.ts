@@ -84,3 +84,38 @@ describe('gridFromWorksheet', () => {
     );
   });
 });
+
+describe('gridFromWorksheet performance', () => {
+  it('reads a wide, tall sheet in well under a second', async () => {
+    /**
+     * Regression guard for an O(rows² × cols) bug that made the real workbook un-importable.
+     *
+     * `ws.rowCount`/`ws.columnCount` are GETTERS, not cached properties: `columnCount` calls
+     * `eachRow` and inspects every row's `cellCount` on each access (exceljs 4.4.0,
+     * lib/doc/worksheet.js:313). Using `ws.columnCount` directly as the inner-loop bound
+     * re-scanned the entire sheet once per row. On the real 1047 × 559 sheet that could not
+     * finish 200k iterations in ten minutes; hoisting the bounds reads the whole grid in
+     * ~100 ms. API Gateway surfaced the timeout to the manager as a bare 503.
+     *
+     * Deliberately generous (2s) so this fails on a reintroduced quadratic scan, not on a
+     * slow CI runner.
+     */
+    const ExcelJS = await import('exceljs');
+    const wb = new ExcelJS.default.Workbook();
+    const ws = wb.addWorksheet('perf');
+    // Sparse but WIDE and TALL — the shape that makes the quadratic cost bite. A dense sheet
+    // this size would be slow for legitimate reasons and would not isolate the bug.
+    for (let r = 1; r <= 600; r++) {
+      ws.getCell(r, 1).value = r;
+      ws.getCell(r, 400).value = 'edge';
+    }
+
+    const started = Date.now();
+    const grid = gridFromWorksheet(ws);
+    const elapsed = Date.now() - started;
+
+    expect(grid).toHaveLength(600);
+    expect(grid[0]).toHaveLength(400);
+    expect(elapsed).toBeLessThan(2000);
+  });
+});

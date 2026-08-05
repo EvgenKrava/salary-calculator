@@ -35,12 +35,28 @@ export function flattenCell(v: ExcelJS.CellValue): string | number | null {
   return null;
 }
 
-/** Read a worksheet into the row-major grid `parseScheduleGrid` expects. */
+/**
+ * Read a worksheet into the row-major grid `parseScheduleGrid` expects.
+ *
+ * **Read the bounds ONCE.** `ws.rowCount` and `ws.columnCount` are getters, not cached
+ * properties: `columnCount` calls `eachRow` and inspects every row's `cellCount` on every
+ * access (exceljs 4.4.0, lib/doc/worksheet.js:313). Using `ws.columnCount` as the inner-loop
+ * bound therefore re-scanned the whole sheet once per row — O(rows² × cols) instead of
+ * O(rows × cols).
+ *
+ * On the real workbook (1047 × 559 by exceljs's bounds) one `columnCount` access costs ~5 ms,
+ * so as an inner bound it added ~5 seconds of pure overhead on top of the actual cell reads.
+ * Combined with the per-cell work this blew the Lambda's timeout, which API Gateway surfaced
+ * to the manager as a bare "503 Service Unavailable" after 31 seconds. Hoisting the two
+ * getters is the entire fix — no S3 upload change or async pipeline was needed.
+ */
 export function gridFromWorksheet(ws: ExcelJS.Worksheet): (string | number | null)[][] {
+  const rowCount = ws.rowCount;
+  const columnCount = ws.columnCount;
   const grid: (string | number | null)[][] = [];
-  for (let r = 1; r <= ws.rowCount; r++) {
+  for (let r = 1; r <= rowCount; r++) {
     const row: (string | number | null)[] = [];
-    for (let c = 1; c <= ws.columnCount; c++) {
+    for (let c = 1; c <= columnCount; c++) {
       row.push(flattenCell(ws.getCell(r, c).value));
     }
     grid.push(row);
