@@ -45,10 +45,11 @@ cp terraform.tfvars.example terraform.tfvars   # set budget_alert_emails; review
    - `.terraform/` is gitignored, so repeat this `-backend-config` on any new machine and on
      any `terraform init -reconfigure`.
    - State locking is S3-native (`use_lockfile = true`); there is no DynamoDB table.
-3. Plan / apply:
+3. Plan / apply. Use the wrapper rather than bare `terraform`: it supplies the Bedrock token
+   from `AWS_BEARER_TOKEN_BEDROCK` in your environment, which `plan` now requires.
    ```bash
-   terraform plan
-   terraform apply
+   ./deploy.sh plan
+   ./deploy.sh apply
    ```
 4. Smoke-test the Data API (this is the architecture's core premise — the Lambdas reach the
    DB over the Data API with no VPC attachment, so confirm it before building on it):
@@ -85,15 +86,28 @@ Run these after the infrastructure `apply` from the first-time setup above.
    `db/migrations/*.sql`.** A stale generated file means the deployed schema silently differs
    from the one local tests run against; `packages/core/test/migrations.test.ts` fails on
    drift, and the build fails on any esbuild warning.
-2. **Supply the Bedrock token.** Add to `terraform.tfvars` (gitignored):
-   ```hcl
-   bedrock_bearer_token = "<Bedrock API key>"
+2. **The Bedrock token comes from your local environment — do not put it in a file.**
+   `AWS_BEARER_TOKEN_BEDROCK` is already exported for local development (the Anthropic SDK
+   reads that name directly), so use the wrapper, which maps it to the `TF_VAR_` name
+   Terraform expects:
+   ```bash
+   ./infra/deploy.sh plan
+   ./infra/deploy.sh apply
    ```
-   Or export `TF_VAR_bedrock_bearer_token`. Without it the extraction Lambda deploys but
-   every Bedrock call fails with an auth error.
+   Equivalent by hand: `export TF_VAR_bedrock_bearer_token="$AWS_BEARER_TOKEN_BEDROCK"`.
+
+   This keeps one copy of a long-lived credential instead of two, with nothing sensitive in
+   plaintext inside the repo directory. `plan` fails with an actionable message if the token
+   is missing — previously the deploy succeeded and every Bedrock call then failed with an
+   auth error only visible in CloudWatch after someone uploaded a document.
+
+   Generate a key with `aws bedrock create-api-key --profile yevhenii`, and **scope the
+   permissions of the identity you generate it under**: a bearer token is authorized against
+   its creating principal, not the Lambda's execution role, so the `anthropic.*` scoping in
+   `iam.tf` does not bound it.
 3. **Apply**, then create the schema — this is a one-time step per database:
    ```bash
-   terraform apply
+   ./infra/deploy.sh apply
    aws lambda invoke --profile yevhenii \
      --function-name "$(terraform output -raw migrate_function_name)" /dev/stdout
    ```

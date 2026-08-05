@@ -62,18 +62,19 @@ subscribed to is worse than none, because it looks like protection.
 ## Before the first real test
 
 ```bash
-# 1. Confirm the cost-critical settings are what you think they are.
-terraform console <<'EOF'
-var.db_min_acu                  # must be 0
-var.db_max_acu                  # 1
-var.monthly_budget_usd          # 10
-var.cloudfront_price_class      # PriceClass_100
-EOF
+# 1. Confirm the cost-critical settings are what you think they are. Read them from the
+#    plan rather than `terraform console`, which needs the backend initialised.
+grep -A3 'variable "db_min_acu"'      variables.tf | grep default   # must be 0
+grep -A3 'variable "db_max_acu"'      variables.tf | grep default   # 1
+grep -A3 'variable "monthly_budget"'  variables.tf | grep default   # 10
+grep -A3 'cloudfront_price_class'     variables.tf | grep default   # PriceClass_100
+# ...and that terraform.tfvars has not overridden them back up:
+grep -E 'db_min_acu|db_max_acu|monthly_budget_usd|price_class' terraform.tfvars
 
 # 2. Review the plan for anything always-on. Expect ZERO of:
 #    aws_nat_gateway, aws_eip, aws_db_instance (non-serverless),
 #    aws_elasticache_*, aws_ec2_*, aws_lb / aws_alb
-terraform plan -out=tfplan
+./infra/deploy.sh plan -out=tfplan
 terraform show -json tfplan | grep -Eo '"type":"aws_(nat_gateway|eip|lb|alb|db_instance|instance)"' | sort -u
 
 # 3. After apply, verify the cluster actually pauses. Leave it idle ~10 minutes, then:
@@ -93,7 +94,7 @@ aws ce get-cost-and-usage --profile yevhenii \
 Idle cost is near zero, so the stack can be left up between tests. To stop *all* charges:
 
 ```bash
-terraform destroy    # skip_final_snapshot = true, so no lingering snapshot cost
+./infra/deploy.sh destroy   # skip_final_snapshot = true, so no lingering snapshot cost
 ```
 
 The bootstrap state bucket (`infra/bootstrap`) is separate and costs pennies; leave it.

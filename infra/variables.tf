@@ -136,13 +136,36 @@ variable "db_seconds_until_auto_pause" {
 
 variable "bedrock_bearer_token" {
   description = <<-EOT
-    Bedrock API key (long-lived bearer token) for the extraction Lambda. Supplied via
-    terraform.tfvars (gitignored) or TF_VAR_bedrock_bearer_token — never committed. The
-    extraction Lambda reads it as AWS_BEARER_TOKEN_BEDROCK.
+    Bedrock API key (long-lived bearer token) for the extraction Lambda, which reads it as
+    AWS_BEARER_TOKEN_BEDROCK.
+
+    Supply it from your LOCAL ENVIRONMENT, not from a file:
+
+        export TF_VAR_bedrock_bearer_token="$AWS_BEARER_TOKEN_BEDROCK"
+        terraform apply
+
+    `./infra/deploy.sh` does that mapping for you. The token is already exported as
+    AWS_BEARER_TOKEN_BEDROCK for local development (the Anthropic SDK reads that name
+    directly), so this reuses the one copy you already have rather than duplicating a
+    long-lived credential into terraform.tfvars, where it would sit in plaintext on disk and
+    be one `git add -f` away from the repo.
+
+    Terraform picks up any TF_VAR_-prefixed environment variable automatically; nothing else
+    is needed. Marked sensitive so it is redacted from plan/apply output — note it is still
+    stored in plaintext in the S3 state (encrypted at rest, versioned) and is visible in the
+    Lambda's configuration to anyone with lambda:GetFunctionConfiguration.
   EOT
   type        = string
   sensitive   = true
   default     = ""
+
+  validation {
+    # Catch the empty default at plan time. Deploying without the token yields an extraction
+    # Lambda that provisions fine and then fails every Bedrock call with an auth error at
+    # runtime — a failure that only shows up in CloudWatch after someone uploads a document.
+    condition     = length(var.bedrock_bearer_token) > 0
+    error_message = "bedrock_bearer_token is empty. Run: export TF_VAR_bedrock_bearer_token=\"$AWS_BEARER_TOKEN_BEDROCK\" (or use ./infra/deploy.sh)."
+  }
 }
 
 variable "log_retention_days" {

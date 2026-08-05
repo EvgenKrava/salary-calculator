@@ -33,9 +33,21 @@ db_seconds_until_auto_pause = 300
 monthly_budget_usd     = 10
 cloudfront_price_class = "PriceClass_100"
 
-# Bedrock API key for the extraction Lambda. NEVER commit the real value —
-# terraform.tfvars is gitignored for this reason. Generate with:
-#   aws bedrock create-api-key --profile yevhenii
-# Scope the permissions of the identity you generate it under: the Lambda's
-# execution-role policy does NOT bound a bearer token (see cost.md / iam.tf).
-# bedrock_bearer_token = "..."
+# ---------------------------------------------------------------------------
+# Bedrock token: deliberately NOT set here.
+#
+# It comes from your local environment instead, via ./infra/deploy.sh:
+#
+#     ./infra/deploy.sh plan
+#     ./infra/deploy.sh apply
+#
+# That maps the AWS_BEARER_TOKEN_BEDROCK you already export for local
+# development to TF_VAR_bedrock_bearer_token. Keeping it out of this file means
+# one copy of a long-lived credential instead of two, and nothing sensitive
+# sitting in plaintext inside the repo directory.
+#
+# Generate one with: aws bedrock create-api-key --profile yevhenii
+# Scope the permissions of the identity you generate it under — a bearer token
+# is authorized against its creating principal, NOT the Lambda's execution
+# role, so the anthropic.* scoping in iam.tf does not bound it.
+# ---------------------------------------------------------------------------
