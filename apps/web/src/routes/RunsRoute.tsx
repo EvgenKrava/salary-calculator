@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
 import { ApiError } from '../lib/api';
+import { t, formatDate } from '../lib/i18n';
 import {
   useCreateSalaryRun,
   useEmployees,
@@ -19,14 +20,14 @@ export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; emp
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? '—';
   const grand = lines.reduce((sum, l) => sum + l.total, 0);
   return (
-    <Table caption="Pay breakdown">
+    <Table caption={t.runs.breakdown}>
       <thead>
         <tr>
-          <Th>Employee</Th>
-          <Th numeric>Hourly</Th>
-          <Th numeric>Revenue share</Th>
-          <Th numeric>Bonus</Th>
-          <Th numeric>Total</Th>
+          <Th>{t.common.employee}</Th>
+          <Th numeric>{t.runs.hourly}</Th>
+          <Th numeric>{t.runs.revenueShare}</Th>
+          <Th numeric>{t.runs.bonusColumn}</Th>
+          <Th numeric>{t.common.total}</Th>
         </tr>
       </thead>
       <tbody>
@@ -42,7 +43,7 @@ export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; emp
       </tbody>
       <tfoot>
         <tr>
-          <Td>All employees</Td>
+          <Td>{t.runs.allEmployees}</Td>
           <NumCell /><NumCell /><NumCell />
           <NumCell money><Money value={grand} /></NumCell>
         </tr>
@@ -79,14 +80,12 @@ export function BlockedRun({
 
   return (
     <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-      <h2 style={{ color: 'var(--stop)', marginBottom: 'var(--s2)' }}>Run blocked — revenue missing</h2>
-      <p style={{ marginTop: 0, color: 'var(--ink-muted)' }}>
-        Add approved revenue for each day below, then run payroll again. Nothing has been saved.
-      </p>
+      <h2 style={{ color: 'var(--stop)', marginBottom: 'var(--s2)' }}>{t.runs.blockedTitle}</h2>
+      <p style={{ marginTop: 0, color: 'var(--ink-muted)' }}>{t.runs.blockedHint}</p>
       <ul className="mono" style={{ margin: 0, paddingLeft: 'var(--s6)' }}>
         {[...byDay.values()].map((g) => (
           <li key={`${g.locationId}-${g.date}`}>
-            {g.date} — location {locOf(g.locationId)} ({g.who.join(', ')})
+            {formatDate(g.date)} — {t.common.location.toLowerCase()} {locOf(g.locationId)} ({g.who.join(', ')})
           </li>
         ))}
       </ul>
@@ -138,17 +137,17 @@ export function RunsRoute() {
     const yearNum = Number(year);
     const monthNum = Number(month);
     if (!Number.isInteger(yearNum) || yearNum < 2000 || yearNum > 2100) {
-      setError('Enter a year between 2000 and 2100.');
+      setError(t.runs.badYear);
       return;
     }
     if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
-      setError('Enter a month between 1 and 12.');
+      setError(t.runs.badMonth);
       return;
     }
     const { bonuses, invalid } = parseBonuses(bonusText);
     if (invalid.length > 0) {
       const names = invalid.map((id) => activeEmployees.find((x) => x.id === id)?.name ?? id);
-      setError(`Fix the bonus amount for: ${names.join(', ')}. Use a number of 0 or more.`);
+      setError(t.runs.badBonus(names.join(', ')));
       return;
     }
 
@@ -173,47 +172,39 @@ export function RunsRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>Salary runs</h1>
+      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.runs.title}</h1>
 
       <form className="panel" style={{ padding: 'var(--s4)', marginBottom: 'var(--s6)' }} onSubmit={run}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>Run payroll</h2>
-        <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
-          A run is final and immediately visible to employees. Periods are the 1st–15th and the
-          16th–end of month.
-        </p>
-        <Field label="Year" name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
-        <Field label="Month" name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
+        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.runs.runTitle}</h2>
+        <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.runs.hint}</p>
+        <Field label={t.runs.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
+        <Field label={t.runs.month} name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
         <div className="field">
-          <label className="field__label" htmlFor="half">Period</label>
+          <label className="field__label" htmlFor="half">{t.runs.period}</label>
           <select id="half" className="field__input" value={half} onChange={(e) => setHalf(e.target.value as '1' | '2')}>
-            <option value="1">1st – 15th</option>
-            <option value="2">16th – end of month</option>
+            <option value="1">{t.runs.firstHalf}</option>
+            <option value="2">{t.runs.secondHalf}</option>
           </select>
         </div>
         <fieldset style={{ border: 0, padding: 0, margin: 'var(--s6) 0 0' }}>
           <legend style={{ font: 'inherit', fontWeight: 600, padding: 0, marginBottom: 'var(--s1)' }}>
-            Personal bonuses
+            {t.runs.bonusesTitle}
           </legend>
-          <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
-            Optional, per person, for this period only. Leave blank for no bonus. A run cannot be
-            edited afterwards, so enter bonuses before running.
-          </p>
+          <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.runs.bonusesHint}</p>
           {employees.isLoading ? (
-            <p className="mono">loading employees…</p>
+            <p className="mono">{t.runs.loadingEmployees}</p>
           ) : employees.error ? (
             // Never render an empty bonus list as if nobody qualified — a manager would run
             // payroll believing there was nothing to enter.
-            <p style={{ color: 'var(--stop)' }}>
-              Could not load employees, so bonuses cannot be entered. Reload before running payroll.
-            </p>
+            <p style={{ color: 'var(--stop)' }}>{t.runs.employeesFailed}</p>
           ) : activeEmployees.length === 0 ? (
-            <p className="mono">No active employees.</p>
+            <p className="mono">{t.runs.noActive}</p>
           ) : (
-            <Table caption="Bonus per employee">
+            <Table caption={t.runs.bonusPerEmployeeCaption}>
               <thead>
                 <tr>
-                  <Th>Employee</Th>
-                  <Th numeric>Bonus</Th>
+                  <Th>{t.common.employee}</Th>
+                  <Th numeric>{t.runs.bonusColumn}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -226,7 +217,7 @@ export function RunsRoute() {
                         style={{ textAlign: 'right', maxWidth: '10ch' }}
                         type="text"
                         inputMode="decimal"
-                        aria-label={`Bonus for ${emp.name}`}
+                        aria-label={t.runs.bonusFor(emp.name)}
                         value={bonusText[emp.id] ?? ''}
                         onChange={(ev) => setBonusText((prev) => ({ ...prev, [emp.id]: ev.target.value }))}
                       />
@@ -244,7 +235,7 @@ export function RunsRoute() {
           disabled={create.isPending || employees.isLoading || Boolean(employees.error)}
           style={{ marginTop: 'var(--s4)' }}
         >
-          {create.isPending ? 'Running…' : 'Run payroll'}
+          {create.isPending ? t.runs.running : t.runs.run}
         </Button>
       </form>
 
@@ -254,24 +245,24 @@ export function RunsRoute() {
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
       {result ? <RunBreakdown lines={result} employees={employees.data ?? []} /> : null}
 
-      <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>Past runs</h2>
+      <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>{t.runs.pastRuns}</h2>
       {(runs.data ?? []).length === 0 ? (
-        <EmptyState title="No payroll has been run yet." action="Use the form above once revenue and shifts are in." />
+        <EmptyState title={t.runs.noRuns} action={t.runs.noRunsAction} />
       ) : (
-        <Table caption="Completed runs">
+        <Table caption={t.runs.completedRunsCaption}>
           <thead>
             <tr>
-              <Th>Period start</Th>
-              <Th>Period end</Th>
-              <Th>Created</Th>
+              <Th>{t.runs.periodStart}</Th>
+              <Th>{t.runs.periodEnd}</Th>
+              <Th>{t.runs.created}</Th>
             </tr>
           </thead>
           <tbody>
             {(runs.data ?? []).map((r) => (
               <tr key={r.id}>
-                <Td><span className="mono">{r.periodStart}</span></Td>
-                <Td><span className="mono">{r.periodEnd}</span></Td>
-                <Td><span className="mono">{String(r.createdAt).slice(0, 10)}</span></Td>
+                <Td><span className="mono">{formatDate(r.periodStart)}</span></Td>
+                <Td><span className="mono">{formatDate(r.periodEnd)}</span></Td>
+                <Td><span className="mono">{formatDate(String(r.createdAt))}</span></Td>
               </tr>
             ))}
           </tbody>

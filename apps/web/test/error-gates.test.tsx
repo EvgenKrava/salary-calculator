@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { anyLoading, firstError } from '../src/ui/QueryGate';
+import { t } from '../src/lib/i18n';
 
 /**
  * A failed query must never degrade into a screen that looks healthy.
@@ -8,7 +9,7 @@ import { anyLoading, firstError } from '../src/ui/QueryGate';
  * Every one of these screens previously gated on `isLoading` alone and then read
  * `.data ?? []`. When a query errored, `data` was `undefined`, the fallback rendered, and the
  * result was indistinguishable from real data: a shifts table with every location showing
- * '—', or a review queue reading "Nothing waiting for review" while its endpoint 404'd. For
+ * '—', or a review queue reading the empty-state copy while its endpoint 404'd. For
  * payroll, a silently-empty screen is worse than an error, because the manager acts on it.
  */
 
@@ -73,7 +74,7 @@ describe('ShiftsRoute', () => {
     locationsQuery.error = new Error('403 forbidden');
     render(<ShiftsRoute />);
 
-    expect(screen.getByText(/could not load shifts/i)).toBeInTheDocument();
+    expect(screen.getByText(t.shifts.couldNotLoad)).toBeInTheDocument();
     expect(screen.getByText('403 forbidden')).toBeInTheDocument();
     // The table must not render at all — a half-populated payroll table invites action.
     expect(screen.queryByText('2026-05-05')).not.toBeInTheDocument();
@@ -83,7 +84,7 @@ describe('ShiftsRoute', () => {
     shiftsQuery.data = SHIFTS;
     employeesQuery.error = new Error('network down');
     render(<ShiftsRoute />);
-    expect(screen.getByText(/could not load shifts/i)).toBeInTheDocument();
+    expect(screen.getByText(t.shifts.couldNotLoad)).toBeInTheDocument();
   });
 
   it('renders normally when every query succeeds', () => {
@@ -92,7 +93,7 @@ describe('ShiftsRoute', () => {
     locationsQuery.data = [{ id: 'l1', name: 'Downtown', opensAt: '08:00', closesAt: '20:00' }];
     render(<ShiftsRoute />);
 
-    expect(screen.queryByText(/could not load/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(t.shifts.couldNotLoad)).not.toBeInTheDocument();
     expect(screen.getByText('Olena')).toBeInTheDocument();
     expect(screen.getByText('Downtown')).toBeInTheDocument();
   });
@@ -103,15 +104,15 @@ describe('ReviewRoute', () => {
     jobsQuery.error = new Error('404 not found');
     render(<ReviewRoute />);
 
-    expect(screen.getByText(/could not load the review queue/i)).toBeInTheDocument();
+    expect(screen.getByText(t.review.failedTitle)).toBeInTheDocument();
     // The dangerous old behaviour: a broken endpoint reading as a healthy empty queue on the
     // one screen whose job is catching bad data before it becomes payroll.
-    expect(screen.queryByText(/nothing waiting for review/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(t.review.empty)).not.toBeInTheDocument();
   });
 
   it('still shows the empty state when the queue is genuinely empty', () => {
     render(<ReviewRoute />);
-    expect(screen.getByText(/nothing waiting for review/i)).toBeInTheDocument();
-    expect(screen.queryByText(/could not load/i)).not.toBeInTheDocument();
+    expect(screen.getByText(t.review.empty)).toBeInTheDocument();
+    expect(screen.queryByText(t.review.failedTitle)).not.toBeInTheDocument();
   });
 });

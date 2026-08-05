@@ -10,6 +10,7 @@ import {
   useLevels,
   useLocations,
 } from '../lib/queries';
+import { t } from '../lib/i18n';
 
 function LocationsPanel() {
   const locations = useLocations();
@@ -38,21 +39,21 @@ function LocationsPanel() {
     }
   }
 
-  if (locations.isLoading) return <p className="mono">loading…</p>;
+  if (locations.isLoading) return <p className="mono">{t.common.loading}</p>;
   const rows = locations.data ?? [];
 
   return (
     <>
-      <h2 style={{ marginBottom: 'var(--s4)' }}>Locations</h2>
+      <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.locations}</h2>
       {rows.length === 0 ? (
-        <EmptyState title="No locations yet." action="Add one below." />
+        <EmptyState title={t.setup.noLocations} action={t.setup.noLocationsAction} />
       ) : (
-        <Table caption="Locations">
+        <Table caption={t.setup.locations}>
           <thead>
             <tr>
-              <Th>Name</Th>
-              <Th>Opens</Th>
-              <Th>Closes</Th>
+              <Th>{t.setup.locationName}</Th>
+              <Th>{t.setup.opensAt}</Th>
+              <Th>{t.setup.closesAt}</Th>
             </tr>
           </thead>
           <tbody>
@@ -68,10 +69,10 @@ function LocationsPanel() {
       )}
 
       <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s4)' }} onSubmit={submit}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>Add a location</h2>
-        <Field label="Name" name="name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.addLocation}</h2>
+        <Field label={t.setup.locationName} name="name" required value={name} onChange={(e) => setName(e.target.value)} />
         <Field
-          label="Opens at"
+          label={t.setup.opensAt}
           name="opensAt"
           type="time"
           numeric
@@ -80,7 +81,7 @@ function LocationsPanel() {
           onChange={(e) => setOpensAt(e.target.value)}
         />
         <Field
-          label="Closes at"
+          label={t.setup.closesAt}
           name="closesAt"
           type="time"
           numeric
@@ -90,7 +91,7 @@ function LocationsPanel() {
           error={error ?? undefined}
         />
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? 'Adding…' : 'Add location'}
+          {busy ? t.setup.adding : t.setup.addLocation}
         </Button>
       </form>
     </>
@@ -121,20 +122,20 @@ function LevelsPanel() {
     }
   }
 
-  if (levels.isLoading) return <p className="mono">loading…</p>;
+  if (levels.isLoading) return <p className="mono">{t.common.loading}</p>;
   const rows = levels.data ?? [];
 
   return (
     <>
-      <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>Levels</h2>
+      <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>{t.setup.levels}</h2>
       {rows.length === 0 ? (
-        <EmptyState title="No levels yet." action="Add one below." />
+        <EmptyState title={t.setup.noLevels} action={t.setup.noLevelsAction} />
       ) : (
-        <Table caption="Levels">
+        <Table caption={t.setup.levels}>
           <thead>
             <tr>
-              <Th>Name</Th>
-              <Th numeric>Rate per hour</Th>
+              <Th>{t.setup.levelName}</Th>
+              <Th numeric>{t.setup.ratePerHour}</Th>
             </tr>
           </thead>
           <tbody>
@@ -149,10 +150,10 @@ function LevelsPanel() {
       )}
 
       <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s4)' }} onSubmit={submit}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>Add a level</h2>
-        <Field label="Name" name="name" required value={name} onChange={(e) => setName(e.target.value)} />
+        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.addLevel}</h2>
+        <Field label={t.setup.levelName} name="name" required value={name} onChange={(e) => setName(e.target.value)} />
         <Field
-          label="Rate per hour"
+          label={t.setup.ratePerHour}
           name="ratePerHour"
           type="number"
           step="0.01"
@@ -164,7 +165,7 @@ function LevelsPanel() {
           error={error ?? undefined}
         />
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? 'Adding…' : 'Add level'}
+          {busy ? t.setup.adding : t.setup.addLevel}
         </Button>
       </form>
     </>
@@ -175,7 +176,7 @@ function LevelsPanel() {
 export function SetupRoute() {
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>Setup</h1>
+      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.setup.title}</h1>
       <LocationsPanel />
       <LevelsPanel />
     </>

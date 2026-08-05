@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RunBreakdown, BlockedRun, parseBonuses } from '../src/routes/RunsRoute';
+import { t, formatDate } from '../src/lib/i18n';
 
 const LINES = [
   { employeeId: 'e1', hourlyPay: 160, revenueShare: 50, bonus: 25, total: 235 },
@@ -50,10 +51,11 @@ describe('blocked run', () => {
         locations={[{ id: 'l1', name: '1', opensAt: '08:00', closesAt: '20:00' }]}
       />,
     );
-    expect(screen.getByText(/2026-05-03/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(formatDate('2026-05-03')))).toBeInTheDocument();
     // "revenue" appears in both the heading and the explanatory copy — assert on the worklist
     // text so this checks the blocker names its cause, not just that the word occurs once.
-    expect(screen.getAllByText(/revenue/i).length).toBeGreaterThan(0);
+    // The heading must say WHY the run is blocked, not just that it is.
+    expect(screen.getByText(t.runs.blockedTitle)).toBeInTheDocument();
   });
 });
 

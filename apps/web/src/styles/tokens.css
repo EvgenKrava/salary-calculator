@@ -25,7 +25,12 @@
   --stop-tint: #fbebeb;
 
   /* Type */
-  --font-ui: 'Instrument Sans', ui-sans-serif, sans-serif;
+  /* IBM Plex Sans, not Instrument Sans: Instrument Sans ships NO Cyrillic subset (verified
+     against Google Fonts — latin and latin-ext only), so every Ukrainian label silently fell
+     back to a system font, breaking the type system on the entire UI. Plex Sans covers
+     Cyrillic and is the sibling of the mono face already in use, so the pairing stays
+     coherent and keeps the utilitarian character the design system locked in. */
+  --font-ui: 'IBM Plex Sans', ui-sans-serif, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;

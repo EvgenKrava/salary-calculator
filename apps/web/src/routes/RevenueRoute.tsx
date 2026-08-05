@@ -5,32 +5,33 @@ import { StatusPill } from '../ui/StatusPill';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
+import { t, formatDate } from '../lib/i18n';
 import { useAddRevenue, useLocations, useRevenue, type Location, type RevenueRow } from '../lib/queries';
 
 export function RevenueTable({ rows, locations }: { rows: RevenueRow[]; locations: Location[] }) {
   if (rows.length === 0) {
-    return <EmptyState title="No revenue recorded for this period." action="Add a day below." />;
+    return <EmptyState title={t.revenue.empty} action={t.revenue.emptyAction} />;
   }
   const nameOf = (id: string) => locations.find((l) => l.id === id)?.name ?? '—';
   return (
-    <Table caption="Daily revenue">
+    <Table caption={t.revenue.title}>
       <thead>
         <tr>
-          <Th>Date</Th>
-          <Th>Location</Th>
-          <Th>Source</Th>
-          <Th>Status</Th>
-          <Th numeric>Amount</Th>
+          <Th>{t.common.date}</Th>
+          <Th>{t.common.location}</Th>
+          <Th>{t.revenue.source}</Th>
+          <Th>{t.common.status}</Th>
+          <Th numeric>{t.common.amount}</Th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.id}>
             <Td>
-              <span className="mono">{r.revenueDate}</span>
+              <span className="mono">{formatDate(r.revenueDate)}</span>
             </Td>
             <Td>{nameOf(r.locationId)}</Td>
-            <Td>{r.source}</Td>
+            <Td>{r.source === 'manual' ? t.revenue.sourceManual : t.revenue.sourceExtracted}</Td>
             <Td>
               <StatusPill status={r.status} />
             </Td>
@@ -73,10 +74,10 @@ export function RevenueForm({
 
   return (
     <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }} onSubmit={submit}>
-      <h2 style={{ marginBottom: 'var(--s4)' }}>Add a day</h2>
+      <h2 style={{ marginBottom: 'var(--s4)' }}>{t.revenue.addTitle}</h2>
       <div className="field">
         <label className="field__label" htmlFor="locationId">
-          Location
+          {t.common.location}
         </label>
         <select
           id="locationId"
@@ -92,7 +93,7 @@ export function RevenueForm({
         </select>
       </div>
       <Field
-        label="Date"
+        label={t.revenue.revenueDate}
         name="revenueDate"
         type="date"
         numeric
@@ -101,7 +102,7 @@ export function RevenueForm({
         onChange={(e) => setRevenueDate(e.target.value)}
       />
       <Field
-        label="Amount"
+        label={t.revenue.amountUah}
         name="amount"
         type="number"
         step="0.01"
@@ -113,7 +114,7 @@ export function RevenueForm({
         error={error ?? undefined}
       />
       <Button type="submit" variant="primary" disabled={busy}>
-        {busy ? 'Adding…' : 'Add'}
+        {busy ? t.revenue.saving : t.common.add}
       </Button>
     </form>
   );
@@ -125,7 +126,7 @@ export function RevenueRoute() {
   const add = useAddRevenue();
 
   if (locations.isLoading || revenue.isLoading) {
-    return <p className="mono">loading…</p>;
+    return <p className="mono">{t.common.loading}</p>;
   }
   if (locations.error || revenue.error) {
     return <p style={{ color: 'var(--stop)' }}>{((locations.error ?? revenue.error) as Error).message}</p>;
@@ -133,7 +134,7 @@ export function RevenueRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>Revenue</h1>
+      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.revenue.title}</h1>
       <RevenueTable rows={revenue.data ?? []} locations={locations.data ?? []} />
       <RevenueForm
         locations={locations.data ?? []}

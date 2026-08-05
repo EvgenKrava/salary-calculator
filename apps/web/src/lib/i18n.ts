@@ -1,0 +1,334 @@
+/**
+ * Ukrainian UI strings and locale formatting — the single source of truth.
+ *
+ * **Ukrainian-only by design, but structured so a second language stays cheap.** Every string
+ * lives in the `t` object below rather than inline in components, so adding English later means
+ * adding a sibling dictionary and a `useLocale()` hook, not hunting strings across 10 route
+ * files. Paying for a full i18n framework now would be paying for a switcher nobody asked for.
+ *
+ * Two things that are easy to get wrong in Ukrainian and matter here:
+ *
+ * 1. **Plurals have three forms**, not two: 1 день / 2 дні / 5 днів. `plural()` implements the
+ *    CLDR rule rather than an `n === 1 ? a : b` check, which would be wrong for most numbers.
+ * 2. **Money is never localised.** `formatMoney` deliberately does NOT use `Intl.NumberFormat`
+ *    with `uk-UA`, because that produces a narrow no-break space as the thousands separator
+ *    and puts the sign after the number ("1 234,50 ₴"). A payroll figure has to be
+ *    copy-pasteable into a spreadsheet and diffable against the bank, so it stays
+ *    `1234.50` with a dot and no grouping. See ui/Money.tsx.
+ */
+
+/** Ukrainian is the only locale; named so call sites read intentionally. */
+export const LOCALE = 'uk-UA';
+
+/**
+ * Pick the right plural form for a Ukrainian count.
+ *
+ * @param one   form for 1, 21, 31… (день)
+ * @param few   form for 2–4, 22–24… (дні)
+ * @param many  form for 0, 5–20, 25–30… (днів)
+ */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const abs = Math.abs(Math.trunc(n));
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/** `5 годин`, `2 години`, `1 година`. */
+export function hoursLabel(n: number): string {
+  return `${n} ${plural(n, 'година', 'години', 'годин')}`;
+}
+
+/** `3 зміни`, `1 зміна`, `7 змін`. */
+export function shiftsLabel(n: number): string {
+  return `${n} ${plural(n, 'зміна', 'зміни', 'змін')}`;
+}
+
+/**
+ * Format an ISO date (`2026-05-05`) as `05.05.2026`, the Ukrainian convention.
+ *
+ * Parsed by splitting the string rather than `new Date(iso)`. `new Date('2026-05-05')` is
+ * parsed as UTC midnight and then rendered in local time, which in any negative-offset timezone
+ * shows the PREVIOUS day — a pay period boundary silently off by one. The API always sends
+ * `YYYY-MM-DD`, so splitting is both safe and timezone-proof.
+ */
+export function formatDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  return `${d}.${mo}.${y}`;
+}
+
+/** Ukrainian month names in the nominative case, for a month picker. */
+export const MONTHS = [
+  'Січень',
+  'Лютий',
+  'Березень',
+  'Квітень',
+  'Травень',
+  'Червень',
+  'Липень',
+  'Серпень',
+  'Вересень',
+  'Жовтень',
+  'Листопад',
+  'Грудень',
+] as const;
+
+/** All UI copy. Grouped by screen; shared words in `common`. */
+export const t = {
+  common: {
+    appName: 'Розрахунок зарплати',
+    loading: 'завантаження…',
+    save: 'Зберегти',
+    cancel: 'Скасувати',
+    edit: 'Редагувати',
+    add: 'Додати',
+    signOut: 'Вийти',
+    employee: 'Працівник',
+    location: 'Локація',
+    date: 'Дата',
+    status: 'Статус',
+    actions: 'Дії',
+    hours: 'Годин',
+    amount: 'Сума',
+    level: 'Рівень',
+    from: 'з',
+    to: 'по',
+    total: 'Разом',
+    reload: 'Оновіть сторінку, перш ніж діяти на основі цих даних.',
+    couldNotLoad: (what: string) => `Не вдалося завантажити ${what}`,
+    saving: 'Зберігаємо…',
+    // Status-pill labels shared across screens (shifts, revenue, extraction jobs) that this
+    // group does not otherwise own a word for.
+    statusNeedsReview: 'потребує перевірки',
+    statusProcessing: 'обробка',
+    statusBlocked: 'заблоковано',
+  },
+
+  nav: {
+    revenue: 'Виручка',
+    shifts: 'Зміни',
+    import: 'Імпорт',
+    runs: 'Розрахунки',
+    review: 'Перевірка',
+    employees: 'Працівники',
+    setup: 'Налаштування',
+    myShifts: 'Мої зміни',
+    myPay: 'Моя зарплата',
+  },
+
+  login: {
+    title: 'Вхід',
+    email: 'Електронна пошта',
+    password: 'Пароль',
+    signIn: 'Увійти',
+    signingIn: 'Вхід…',
+    newPasswordTitle: 'Встановіть новий пароль',
+    newPasswordHint: 'Тимчасовий пароль потрібно змінити при першому вході.',
+    newPassword: 'Новий пароль',
+    setPassword: 'Встановити пароль',
+    failed: 'Не вдалося увійти. Перевірте пошту та пароль.',
+  },
+
+  employees: {
+    title: 'Працівники',
+    addTitle: 'Додати працівника',
+    name: "Ім'я",
+    levelWithRate: 'Рівень (визначає ставку за годину)',
+    chooseLevel: 'Виберіть рівень…',
+    revenuePercent: 'Відсоток від виручки (0–100)',
+    /** Short form for a table header, where the long label would not fit. */
+    revenuePercentShort: '% виручки',
+    cognitoSub: 'Cognito sub (необов’язково — прив’язує вхід)',
+    adding: 'Додаємо…',
+    addButton: 'Додати працівника',
+    noLevels:
+      'Ще немає жодного рівня. Адміністратор має спочатку створити рівень із погодинною ставкою.',
+    empty: 'Ще немає працівників.',
+    emptyAction: 'Додайте першого вище.',
+    login: 'Вхід',
+    canSignIn: 'може входити',
+    noLogin: 'немає входу',
+    invite: 'Запросити',
+    inviteEmail: 'Пошта для входу',
+    role: 'Роль',
+    roleEmployee: 'працівник — власні зміни та зарплата',
+    roleManager: 'менеджер — усі операції з зарплатою',
+    roleAdmin: 'адміністратор — налаштування та акаунти',
+    sendInvite: 'Надіслати запрошення',
+    inviting: 'Надсилаємо…',
+    inviteHint:
+      'Cognito надішле тимчасовий пароль; працівник встановить власний при першому вході.',
+    active: 'активний',
+    inactive: 'неактивний',
+    deactivate: 'Деактивувати',
+    reactivate: 'Активувати',
+    badPercent: 'Відсоток від виручки має бути числом від 0 до 100.',
+    chooseLevelFirst: 'Виберіть рівень — він визначає ставку за годину.',
+    loginEmailFor: (name: string) => `Пошта для входу для ${name}`,
+    roleFor: (name: string) => `Роль для ${name}`,
+    levelFor: (name: string) => `Рівень для ${name}`,
+    revenuePercentFor: (name: string) => `Відсоток від виручки для ${name}`,
+    cognitoSubFor: (name: string) => `Cognito sub для ${name}`,
+  },
+
+  revenue: {
+    title: 'Виручка за день',
+    addTitle: 'Додати виручку',
+    revenueDate: 'Дата',
+    amountUah: 'Сума, ₴',
+    saving: 'Зберігаємо…',
+    empty: 'Ще немає записів про виручку.',
+    emptyAction: 'Додайте перший запис вище.',
+    source: 'Джерело',
+    sourceManual: 'вручну',
+    sourceExtracted: 'з документа',
+  },
+
+  shifts: {
+    title: 'Зміни',
+    empty: 'Немає запланованих змін.',
+    emptyAction: 'Імпортуйте графік або дочекайтеся заявок.',
+    window: 'Час',
+    approve: 'Підтвердити',
+    reject: 'Відхилити',
+    delete: 'Видалити',
+    requested: 'заявка',
+    approved: 'підтверджено',
+    rejected: 'відхилено',
+    source: 'Джерело',
+    decision: 'Рішення',
+    couldNotLoad: 'Не вдалося завантажити зміни',
+    sourceNative: 'вручну',
+    sourceExtracted: 'з документа',
+    sourceImported: 'з імпорту',
+  },
+
+  myShifts: {
+    title: 'Мої зміни',
+    empty: 'У вас ще немає змін.',
+    emptyAction: 'Підтверджені зміни з’являться тут.',
+  },
+
+  myPay: {
+    title: 'Моя зарплата',
+    empty: 'Розрахунків ще не було.',
+    emptyAction: 'Ваша зарплата з’явиться тут після розрахунку.',
+    period: 'Період',
+    hourlyPay: 'За години',
+    revenueShare: 'Від виручки',
+    bonus: 'Премія',
+  },
+
+  runs: {
+    title: 'Розрахунки зарплати',
+    runTitle: 'Розрахувати зарплату',
+    hint:
+      'Розрахунок остаточний і одразу видимий працівникам. Періоди — з 1 по 15 і з 16 до кінця місяця.',
+    year: 'Рік',
+    month: 'Місяць',
+    period: 'Період',
+    firstHalf: '1 – 15 число',
+    secondHalf: '16 – кінець місяця',
+    run: 'Розрахувати',
+    running: 'Розраховуємо…',
+    bonusesTitle: 'Персональні премії',
+    bonusesHint:
+      'Необов’язково, для кожного окремо, лише за цей період. Залиште порожнім, якщо премії немає. Розрахунок не можна змінити після створення, тому вносьте премії до запуску.',
+    bonusFor: (name: string) => `Премія для ${name}`,
+    bonusColumn: 'Премія',
+    bonusPerEmployeeCaption: 'Премія за працівника',
+    loadingEmployees: 'завантаження працівників…',
+    employeesFailed:
+      'Не вдалося завантажити працівників, тому премії внести неможливо. Оновіть сторінку перед розрахунком.',
+    noActive: 'Немає активних працівників.',
+    breakdown: 'Розбір зарплати',
+    hourly: 'За години',
+    revenueShare: 'Від виручки',
+    allEmployees: 'Усі працівники',
+    pastRuns: 'Попередні розрахунки',
+    completedRunsCaption: 'Завершені розрахунки',
+    noRuns: 'Зарплату ще не розраховували.',
+    noRunsAction: 'Скористайтеся формою вище, коли будуть внесені виручка та зміни.',
+    periodStart: 'Початок періоду',
+    periodEnd: 'Кінець періоду',
+    created: 'Створено',
+    blockedTitle: 'Розрахунок заблоковано — немає виручки',
+    blockedHint:
+      'Додайте підтверджену виручку за кожен день нижче, потім запустіть розрахунок знову. Нічого не збережено.',
+    badYear: 'Введіть рік від 2000 до 2100.',
+    badMonth: 'Введіть місяць від 1 до 12.',
+    badBonus: (names: string) =>
+      `Виправте суму премії для: ${names}. Використовуйте число 0 або більше.`,
+  },
+
+  review: {
+    title: 'Черга перевірки',
+    caption: 'Розпізнавання, що очікують перевірки',
+    empty: 'Немає нічого на перевірку.',
+    emptyAction: 'Завантажені документи з’являться тут, якщо розпізнавання неточне.',
+    failedTitle: 'Не вдалося завантажити чергу перевірки',
+    failedHint: 'Це не те саме, що порожня черга — можливо, документи очікують.',
+    document: 'Документ',
+    type: 'Тип',
+    confidence: 'Впевненість',
+    extracted: 'Розпізнано',
+    decision: 'Рішення',
+    typeRevenue: 'виручка',
+    typeSchedule: 'графік',
+    confirm: 'Підтвердити',
+    approve: 'Підтвердити',
+    reject: 'Відхилити',
+    rejectReason: 'Причина відхилення',
+  },
+
+  setup: {
+    title: 'Налаштування',
+    locations: 'Локації',
+    addLocation: 'Додати локацію',
+    locationName: 'Назва',
+    opensAt: 'Відкриття',
+    closesAt: 'Закриття',
+    levels: 'Рівні',
+    addLevel: 'Додати рівень',
+    levelName: 'Назва рівня',
+    ratePerHour: 'Ставка за годину, ₴',
+    noLocations: 'Ще немає локацій.',
+    noLocationsAction: 'Додайте одну нижче.',
+    noLevels: 'Ще немає рівнів.',
+    noLevelsAction: 'Додайте один нижче.',
+    adding: 'Додаємо…',
+  },
+
+  importScreen: {
+    title: 'Імпорт графіка',
+    hint: 'Завантажте файл .xlsx з графіком. Нічого не зберігається, доки ви не підтвердите.',
+    choose: 'Виберіть файл',
+    parse: 'Розпізнати',
+    parsing: 'Розпізнаємо…',
+    commit: 'Зберегти зміни',
+    committing: 'Зберігаємо…',
+    anomalies: 'Аномалії',
+    empty: 'Файл ще не вибрано.',
+    workbook: 'Файл графіка',
+    preview: 'Попередній перегляд',
+    previewResult: 'Результат розпізнавання',
+    commitHeading: 'Зберегти',
+    commitResult: 'Результат збереження',
+    year: 'Рік',
+    month: 'Місяць',
+    // Each of these lists a thing the manager must resolve before the import is trustworthy,
+    // so the headings say what is wrong rather than naming an internal field.
+    unmappedNames: 'Не розпізнані імена',
+    unknownLocations: 'Невідомі локації',
+    missingSlots: 'Немає налаштованої зміни',
+    inactiveEmployees: 'Неактивні працівники',
+    conflicts: 'Конфлікти',
+    created: 'створено',
+    skipped: 'пропущено',
+    windowChanged: 'Змінено час зміни',
+  },
+} as const;

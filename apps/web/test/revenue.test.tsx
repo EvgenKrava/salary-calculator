@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RevenueTable, RevenueForm } from '../src/routes/RevenueRoute';
+import { t } from '../src/lib/i18n';
 
 const LOCATIONS = [
   { id: 'l1', name: '1', opensAt: '08:00', closesAt: '20:00' },
@@ -31,7 +32,7 @@ describe('revenue table', () => {
 
   it('tells the manager what to do when there is no revenue yet', () => {
     render(<RevenueTable rows={[]} locations={LOCATIONS} />);
-    expect(screen.getByText(/add a day/i)).toBeInTheDocument();
+    expect(screen.getByText(t.revenue.emptyAction)).toBeInTheDocument();
   });
 });
 
@@ -39,10 +40,10 @@ describe('revenue form', () => {
   it('submits location, date and amount', async () => {
     const onSubmit = vi.fn(async () => {});
     render(<RevenueForm locations={LOCATIONS} onSubmit={onSubmit} />);
-    await userEvent.selectOptions(screen.getByLabelText(/location/i), 'l2');
-    await userEvent.type(screen.getByLabelText(/date/i), '2026-05-06');
-    await userEvent.type(screen.getByLabelText(/amount/i), '987.65');
-    await userEvent.click(screen.getByRole('button', { name: /add/i }));
+    await userEvent.selectOptions(screen.getByLabelText(t.common.location), 'l2');
+    await userEvent.type(screen.getByLabelText(t.revenue.revenueDate), '2026-05-06');
+    await userEvent.type(screen.getByLabelText(t.revenue.amountUah), '987.65');
+    await userEvent.click(screen.getByRole('button', { name: t.common.add }));
     expect(onSubmit).toHaveBeenCalledWith({ locationId: 'l2', revenueDate: '2026-05-06', amount: 987.65 });
   });
 
@@ -53,9 +54,9 @@ describe('revenue form', () => {
       throw new Error('revenue already recorded for that location and day');
     });
     render(<RevenueForm locations={LOCATIONS} onSubmit={onSubmit} />);
-    await userEvent.type(screen.getByLabelText(/date/i), '2026-05-06');
-    await userEvent.type(screen.getByLabelText(/amount/i), '1');
-    await userEvent.click(screen.getByRole('button', { name: /add/i }));
+    await userEvent.type(screen.getByLabelText(t.revenue.revenueDate), '2026-05-06');
+    await userEvent.type(screen.getByLabelText(t.revenue.amountUah), '1');
+    await userEvent.click(screen.getByRole('button', { name: t.common.add }));
     expect(await screen.findByText(/already recorded/i)).toBeInTheDocument();
   });
 

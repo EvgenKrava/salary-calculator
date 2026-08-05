@@ -38,17 +38,22 @@ screen, and columns of figures align digit-for-digit down the page.
 
 | Role | Family | Why |
 |---|---|---|
-| UI / prose | **Instrument Sans** (400/500/600) | Humanist, slightly condensed, characterful without being decorative. Not Inter, not a system stack. |
+| UI / prose | **IBM Plex Sans** (400/500/600) | Utilitarian, slightly technical, characterful without being decorative. Not Inter, not a system stack. Sibling of the mono face, so the pairing is coherent by construction. |
 | Numbers, money, IDs, times, dates | **IBM Plex Mono** (400/500) | True tabular figures, unambiguous `0/O` and `1/l` — the whole point. |
 
 Rules:
 
 - **Every** numeral a user might compare or verify is IBM Plex Mono: money, hours, dates,
-  times, percentages, counts, UUID fragments. Prose numerals stay in Instrument Sans.
+  times, percentages, counts, UUID fragments. Prose numerals stay in IBM Plex Sans.
 - `font-variant-numeric: tabular-nums` on all numeric cells so digits align in columns.
 - No serif display face. Utilitarian is the point.
 - Scale (rem): `0.75 / 0.8125 / 0.875 / 1 / 1.25 / 1.75`. Tight and few.
-- Cyrillic is first-class — both families cover it. Never letter-space Cyrillic.
+- **Cyrillic is first-class, and this constrains the type choice.** The entire UI is Ukrainian,
+  so any candidate face must ship a Cyrillic subset — verify it before adopting one rather than
+  assuming. This rule previously named **Instrument Sans**, which ships **latin and latin-ext
+  only**: every Ukrainian label fell back to a system font, silently defeating the type system
+  on every screen. IBM Plex Sans and IBM Plex Mono both cover Cyrillic (confirmed against the
+  Google Fonts CSS response). Never letter-space Cyrillic.
 
 ## Color
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Money } from '../src/ui/Money';
+import { t } from '../src/lib/i18n';
 import { StatusPill } from '../src/ui/StatusPill';
 import { Table, Th, Td, NumCell } from '../src/ui/Table';
 import { EmptyState } from '../src/ui/EmptyState';
@@ -38,7 +39,7 @@ describe('StatusPill', () => {
   it('renders the status word, never colour alone', () => {
     render(<StatusPill status="needs_review" />);
     // Colour is never the only signal — accessibility, and managers print these.
-    expect(screen.getByText(/needs review/i)).toBeInTheDocument();
+    expect(screen.getByText(t.common.statusNeedsReview)).toBeInTheDocument();
   });
 });
 

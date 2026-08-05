@@ -1,3 +1,5 @@
+import { t } from '../lib/i18n';
+
 /**
  * Loading/error gate for screens that read several queries at once.
  *
@@ -38,15 +40,15 @@ export function QueryGate({
   /** What the screen was trying to load, named in the error so the message is actionable. */
   what: string;
 }) {
-  if (anyLoading(...queries)) return <p className="mono">loading…</p>;
+  if (anyLoading(...queries)) return <p className="mono">{t.common.loading}</p>;
   const err = firstError(...queries);
   if (err) {
     return (
       <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>Could not load {what}</h2>
+        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>{t.common.couldNotLoad(what)}</h2>
         <p className="mono" style={{ margin: 0 }}>{err.message}</p>
         <p style={{ marginBottom: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
-          Nothing below is showing current data. Reload before acting on it.
+          {t.common.reload}
         </p>
       </div>
     );

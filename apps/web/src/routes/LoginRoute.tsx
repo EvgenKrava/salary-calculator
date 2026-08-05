@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { useAuth } from '../lib/auth';
+import { t } from '../lib/i18n';
 
 /** Exported separately from the route so it can be tested without the router or Cognito. */
 export function LoginForm({
   onSubmit,
-  title = 'Sign in',
-  submitLabel = 'Sign in',
-  passwordLabel = 'Password',
+  title = t.login.title,
+  submitLabel = t.login.signIn,
+  passwordLabel = t.login.password,
   emailOnly = true,
 }: {
   onSubmit: (email: string, password: string) => Promise<void>;
@@ -42,7 +43,7 @@ export function LoginForm({
       <h1 style={{ marginBottom: 'var(--s6)' }}>{title}</h1>
       {emailOnly ? (
         <Field
-          label="Email"
+          label={t.login.email}
           name="email"
           type="email"
           autoComplete="username"
@@ -66,7 +67,7 @@ export function LoginForm({
         </p>
       ) : null}
       <Button type="submit" variant="primary" disabled={busy}>
-        {busy ? 'Signing in…' : submitLabel}
+        {busy ? t.login.signingIn : submitLabel}
       </Button>
     </form>
   );
@@ -79,9 +80,9 @@ export function LoginRoute() {
     return (
       <div className="login-page">
         <LoginForm
-          title="Set a new password"
-          submitLabel="Set password"
-          passwordLabel="New password"
+          title={t.login.newPasswordTitle}
+          submitLabel={t.login.setPassword}
+          passwordLabel={t.login.newPassword}
           emailOnly={false}
           onSubmit={(_e, password) => completeNewPassword(password)}
         />

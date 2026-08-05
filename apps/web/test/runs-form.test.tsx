@@ -24,6 +24,7 @@ vi.mock('../src/lib/queries', () => ({
 }));
 
 const { RunsRoute } = await import('../src/routes/RunsRoute');
+const { t } = await import('../src/lib/i18n');
 
 const EMPLOYEES = [
   { id: 'e1', name: 'Olena', levelId: 'l', revenuePercent: 0.05, cognitoSub: null, active: true },
@@ -46,17 +47,17 @@ beforeEach(() => {
 describe('salary run form — bonuses', () => {
   it('offers a bonus field for every ACTIVE employee, and not for inactive ones', () => {
     render(<RunsRoute />);
-    expect(screen.getByLabelText('Bonus for Olena')).toBeInTheDocument();
-    expect(screen.getByLabelText('Bonus for Taras')).toBeInTheDocument();
+    expect(screen.getByLabelText(t.runs.bonusFor('Olena'))).toBeInTheDocument();
+    expect(screen.getByLabelText(t.runs.bonusFor('Taras'))).toBeInTheDocument();
     // Paying someone who no longer works here should not even be offered.
-    expect(screen.queryByLabelText('Bonus for Former Staff')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t.runs.bonusFor('Former Staff'))).not.toBeInTheDocument();
   });
 
   it('sends the entered bonuses with the run', async () => {
     const user = userEvent.setup();
     render(<RunsRoute />);
-    await user.type(screen.getByLabelText('Bonus for Olena'), '500');
-    await user.click(screen.getByRole('button', { name: /run payroll/i }));
+    await user.type(screen.getByLabelText(t.runs.bonusFor('Olena')), '500');
+    await user.click(screen.getByRole('button', { name: t.runs.run }));
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     expect(mutateAsync.mock.calls[0][0]).toMatchObject({ bonuses: { e1: 500 } });
@@ -65,7 +66,7 @@ describe('salary run form — bonuses', () => {
   it('sends an empty bonuses object when none are entered, never omitting the field', async () => {
     const user = userEvent.setup();
     render(<RunsRoute />);
-    await user.click(screen.getByRole('button', { name: /run payroll/i }));
+    await user.click(screen.getByRole('button', { name: t.runs.run }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     expect(mutateAsync.mock.calls[0][0].bonuses).toEqual({});
   });
@@ -73,10 +74,10 @@ describe('salary run form — bonuses', () => {
   it('refuses to run and names the employee when a bonus is not a valid amount', async () => {
     const user = userEvent.setup();
     render(<RunsRoute />);
-    await user.type(screen.getByLabelText('Bonus for Taras'), 'abc');
-    await user.click(screen.getByRole('button', { name: /run payroll/i }));
+    await user.type(screen.getByLabelText(t.runs.bonusFor('Taras')), 'abc');
+    await user.click(screen.getByRole('button', { name: t.runs.run }));
 
-    expect(await screen.findByText(/Fix the bonus amount for: Taras/)).toBeInTheDocument();
+    expect(await screen.findByText(t.runs.badBonus('Taras'))).toBeInTheDocument();
     // A run is immutable once created — it must not be sent with a bad bonus silently dropped.
     expect(mutateAsync).not.toHaveBeenCalled();
   });
@@ -84,10 +85,10 @@ describe('salary run form — bonuses', () => {
   it('refuses to run when the year is cleared, instead of sending 0', async () => {
     const user = userEvent.setup();
     render(<RunsRoute />);
-    await user.clear(screen.getByLabelText('Year'));
-    await user.click(screen.getByRole('button', { name: /run payroll/i }));
+    await user.clear(screen.getByLabelText(t.runs.year));
+    await user.click(screen.getByRole('button', { name: t.runs.run }));
 
-    expect(await screen.findByText(/year between 2000 and 2100/i)).toBeInTheDocument();
+    expect(await screen.findByText(t.runs.badYear)).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
@@ -98,7 +99,7 @@ describe('salary run form — bonuses', () => {
     employeesQuery.error = new Error('403 forbidden');
     render(<RunsRoute />);
 
-    expect(screen.getByText(/bonuses cannot be entered/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /run payroll/i })).toBeDisabled();
+    expect(screen.getByText(t.runs.employeesFailed)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.runs.run })).toBeDisabled();
   });
 });

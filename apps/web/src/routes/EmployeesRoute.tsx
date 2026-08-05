@@ -14,6 +14,7 @@ import {
   type Employee,
   type Level,
 } from '../lib/queries';
+import { t } from '../lib/i18n';
 
 /**
  * Manage employees — the screen the nav has always linked to.
@@ -55,12 +56,12 @@ function AddEmployee({ levels }: { levels: Level[] }) {
     e.preventDefault();
     setError(null);
     if (!levelId) {
-      setError('Choose a level — it sets the hourly rate.');
+      setError(t.employees.chooseLevelFirst);
       return;
     }
     const fraction = percentToFraction(percent);
     if (fraction === null) {
-      setError('Revenue % must be a number between 0 and 100.');
+      setError(t.employees.badPercent);
       return;
     }
     try {
@@ -81,17 +82,17 @@ function AddEmployee({ levels }: { levels: Level[] }) {
 
   return (
     <form className="panel" style={{ padding: 'var(--s4)', marginBottom: 'var(--s6)' }} onSubmit={submit}>
-      <h2 style={{ marginBottom: 'var(--s4)' }}>Add an employee</h2>
-      <Field label="Name" name="name" value={name} onChange={(e) => setName(e.target.value)} required />
+      <h2 style={{ marginBottom: 'var(--s4)' }}>{t.employees.addTitle}</h2>
+      <Field label={t.employees.name} name="name" value={name} onChange={(e) => setName(e.target.value)} required />
       <div className="field">
-        <label className="field__label" htmlFor="levelId">Level (sets the hourly rate)</label>
+        <label className="field__label" htmlFor="levelId">{t.employees.levelWithRate}</label>
         <select
           id="levelId"
           className="field__input"
           value={levelId}
           onChange={(e) => setLevelId(e.target.value)}
         >
-          <option value="">Choose a level…</option>
+          <option value="">{t.employees.chooseLevel}</option>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name} — {l.ratePerHour}/h
@@ -100,7 +101,7 @@ function AddEmployee({ levels }: { levels: Level[] }) {
         </select>
       </div>
       <Field
-        label="Revenue % (0–100)"
+        label={t.employees.revenuePercent}
         name="revenuePercent"
         numeric
         inputMode="decimal"
@@ -108,18 +109,18 @@ function AddEmployee({ levels }: { levels: Level[] }) {
         onChange={(e) => setPercent(e.target.value)}
       />
       <Field
-        label="Cognito sub (optional — links their login)"
+        label={t.employees.cognitoSub}
         name="cognitoSub"
         value={cognitoSub}
         onChange={(e) => setCognitoSub(e.target.value)}
       />
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
       <Button type="submit" variant="primary" disabled={add.isPending || levels.length === 0}>
-        {add.isPending ? 'Adding…' : 'Add employee'}
+        {add.isPending ? t.employees.adding : t.employees.addButton}
       </Button>
       {levels.length === 0 ? (
         <p style={{ color: 'var(--warn)', fontSize: 'var(--text-xs)' }}>
-          No levels exist yet. An admin must create at least one level (with its hourly rate) first.
+          {t.employees.noLevels}
         </p>
       ) : null}
     </form>
@@ -160,27 +161,27 @@ function InviteEmployee({ emp, onDone }: { emp: Employee; onDone: () => void }) 
         type="email"
         required
         placeholder="email@example.com"
-        aria-label={`Login email for ${emp.name}`}
+        aria-label={t.employees.loginEmailFor(emp.name)}
         value={email}
         onChange={(ev) => setEmail(ev.target.value)}
       />
       <select
         className="field__input"
-        aria-label={`Role for ${emp.name}`}
+        aria-label={t.employees.roleFor(emp.name)}
         value={role}
         onChange={(ev) => setRole(ev.target.value as 'admin' | 'manager' | 'employee')}
       >
-        <option value="employee">employee — own shifts and pay</option>
-        <option value="manager">manager — all payroll operations</option>
-        <option value="admin">admin — setup and accounts</option>
+        <option value="employee">{t.employees.roleEmployee}</option>
+        <option value="manager">{t.employees.roleManager}</option>
+        <option value="admin">{t.employees.roleAdmin}</option>
       </select>
       <Button type="submit" variant="primary" disabled={invite.isPending}>
-        {invite.isPending ? 'Inviting…' : 'Send invite'}
+        {invite.isPending ? t.employees.inviting : t.employees.sendInvite}
       </Button>
-      <Button type="button" onClick={onDone}>Cancel</Button>
+      <Button type="button" onClick={onDone}>{t.common.cancel}</Button>
       {error ? <p style={{ color: 'var(--stop)', margin: 0, flexBasis: '100%' }}>{error}</p> : null}
       <p style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-xs)', margin: 0, flexBasis: '100%' }}>
-        Cognito emails a temporary password; they set their own on first sign-in.
+        {t.employees.inviteHint}
       </p>
     </form>
   );
@@ -201,7 +202,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
     setError(null);
     const fraction = percentToFraction(percent);
     if (fraction === null) {
-      setError('Revenue % must be between 0 and 100.');
+      setError(t.employees.badPercent);
       return;
     }
     try {
@@ -234,23 +235,23 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
         <NumCell>{fractionToPercent(emp.revenuePercent)}%</NumCell>
         <Td>
           {emp.cognitoSub ? (
-            <span className="mono">can sign in</span>
+            <span className="mono">{t.employees.canSignIn}</span>
           ) : inviting ? (
             <InviteEmployee emp={emp} onDone={() => setInviting(false)} />
           ) : (
             <>
-              <span className="mono" style={{ color: 'var(--warn)' }}>no login</span>{' '}
+              <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>{' '}
               {emp.active ? (
-                <Button onClick={() => setInviting(true)}>Invite</Button>
+                <Button onClick={() => setInviting(true)}>{t.employees.invite}</Button>
               ) : null}
             </>
           )}
         </Td>
         <Td><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
         <Td>
-          <Button onClick={() => setEditing(true)}>Edit</Button>{' '}
+          <Button onClick={() => setEditing(true)}>{t.common.edit}</Button>{' '}
           <Button onClick={toggleActive} disabled={update.isPending}>
-            {emp.active ? 'Deactivate' : 'Reactivate'}
+            {emp.active ? t.employees.deactivate : t.employees.reactivate}
           </Button>
           {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
         </Td>
@@ -262,7 +263,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
     <tr>
       <Td>{emp.name}</Td>
       <Td>
-        <select className="field__input" aria-label={`Level for ${emp.name}`} value={levelId} onChange={(e) => setLevelId(e.target.value)}>
+        <select className="field__input" aria-label={t.employees.levelFor(emp.name)} value={levelId} onChange={(e) => setLevelId(e.target.value)}>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}
@@ -273,7 +274,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
           className="field__input"
           style={{ textAlign: 'right', maxWidth: '8ch' }}
           inputMode="decimal"
-          aria-label={`Revenue percent for ${emp.name}`}
+          aria-label={t.employees.revenuePercentFor(emp.name)}
           value={percent}
           onChange={(e) => setPercent(e.target.value)}
         />
@@ -281,7 +282,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
       <Td>
         <input
           className="field__input"
-          aria-label={`Cognito sub for ${emp.name}`}
+          aria-label={t.employees.cognitoSubFor(emp.name)}
           value={cognitoSub}
           onChange={(e) => setCognitoSub(e.target.value)}
         />
@@ -289,9 +290,9 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
       <Td><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
       <Td>
         <Button variant="primary" onClick={save} disabled={update.isPending}>
-          {update.isPending ? 'Saving…' : 'Save'}
+          {update.isPending ? t.common.saving : t.common.save}
         </Button>{' '}
-        <Button onClick={() => setEditing(false)}>Cancel</Button>
+        <Button onClick={() => setEditing(false)}>{t.common.cancel}</Button>
         {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
       </Td>
     </tr>
@@ -302,12 +303,12 @@ export function EmployeesRoute() {
   const employees = useEmployees();
   const levels = useLevels();
 
-  if (anyLoading(employees, levels)) return <p className="mono">loading…</p>;
+  if (anyLoading(employees, levels)) return <p className="mono">{t.common.loading}</p>;
   const loadError = firstError(employees, levels);
   if (loadError) {
     return (
       <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>Could not load employees</h2>
+        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>{t.common.couldNotLoad(t.employees.title.toLowerCase())}</h2>
         <p className="mono" style={{ margin: 0 }}>{loadError.message}</p>
       </div>
     );
@@ -318,21 +319,21 @@ export function EmployeesRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>Employees</h1>
+      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.employees.title}</h1>
       <AddEmployee levels={levelList} />
 
       {rows.length === 0 ? (
-        <EmptyState title="No employees yet." action="Add the first one above." />
+        <EmptyState title={t.employees.empty} action={t.employees.emptyAction} />
       ) : (
-        <Table caption="Employees">
+        <Table caption={t.employees.title}>
           <thead>
             <tr>
-              <Th>Name</Th>
-              <Th>Level</Th>
-              <Th numeric>Revenue %</Th>
-              <Th>Login</Th>
-              <Th>Status</Th>
-              <Th>Actions</Th>
+              <Th>{t.employees.name}</Th>
+              <Th>{t.common.level}</Th>
+              <Th numeric>{t.employees.revenuePercentShort}</Th>
+              <Th>{t.employees.login}</Th>
+              <Th>{t.common.status}</Th>
+              <Th>{t.common.actions}</Th>
             </tr>
           </thead>
           <tbody>

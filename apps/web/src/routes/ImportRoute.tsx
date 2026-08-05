@@ -3,6 +3,7 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { config } from '../lib/config';
 import { useAuth } from '../lib/auth';
+import { t } from '../lib/i18n';
 
 interface PreviewResult {
   months: number[];
@@ -111,12 +112,12 @@ export function ImportRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>Schedule import</h1>
+      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.importScreen.title}</h1>
 
       <form className="panel" style={{ padding: 'var(--s4)' }} onSubmit={runPreview}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>Preview</h2>
+        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.importScreen.preview}</h2>
         <div className="field">
-          <label className="field__label" htmlFor="file">Workbook</label>
+          <label className="field__label" htmlFor="file">{t.importScreen.workbook}</label>
           <input
             id="file"
             type="file"
@@ -125,7 +126,7 @@ export function ImportRoute() {
             required
           />
         </div>
-        <Field label="Year" name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
+        <Field label={t.importScreen.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
         <Button type="submit" variant="primary" disabled={busy}>
           {busy ? 'Reading…' : 'Preview'}
         </Button>
@@ -135,19 +136,19 @@ export function ImportRoute() {
 
       {preview ? (
         <div className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }}>
-          <h2>Preview result</h2>
+          <h2>{t.importScreen.previewResult}</h2>
           <p className="mono" style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>
             months found: {preview.months.join(', ') || '—'}
           </p>
-          <ReportList title="Unmapped names" items={preview.unmappedNames} />
-          <ReportList title="Unknown locations" items={preview.unknownLocations} />
-          <ReportList title="Missing slots" items={preview.missingSlots} />
-          <ReportList title="Inactive employees" items={preview.inactiveEmployees} />
-          <ReportList title="Anomalies" items={preview.anomalies} />
+          <ReportList title={t.importScreen.unmappedNames} items={preview.unmappedNames} />
+          <ReportList title={t.importScreen.unknownLocations} items={preview.unknownLocations} />
+          <ReportList title={t.importScreen.missingSlots} items={preview.missingSlots} />
+          <ReportList title={t.importScreen.inactiveEmployees} items={preview.inactiveEmployees} />
+          <ReportList title={t.importScreen.anomalies} items={preview.anomalies} />
 
           <div style={{ marginTop: 'var(--s6)' }}>
-            <h3 style={{ marginBottom: 'var(--s2)' }}>Commit</h3>
-            <Field label="Month" name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
+            <h3 style={{ marginBottom: 'var(--s2)' }}>{t.importScreen.commitHeading}</h3>
+            <Field label={t.importScreen.month} name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
             <Button variant="primary" onClick={runCommit} disabled={busy}>
               {busy ? 'Committing…' : 'Commit'}
             </Button>
@@ -157,16 +158,16 @@ export function ImportRoute() {
 
       {commitResult ? (
         <div className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }}>
-          <h2>Commit result</h2>
+          <h2>{t.importScreen.commitResult}</h2>
           <p className="mono" style={{ fontSize: 'var(--text-xs)' }}>
-            created {commitResult.created}, skipped {commitResult.skipped}
+            {t.importScreen.created} {commitResult.created}, {t.importScreen.skipped} {commitResult.skipped}
           </p>
-          <ReportList title="Conflicts" items={commitResult.conflicts} />
-          <ReportList title="Window changed" items={commitResult.windowChanged} />
-          <ReportList title="Unmapped names" items={commitResult.unmappedNames} />
-          <ReportList title="Unknown locations" items={commitResult.unknownLocations} />
-          <ReportList title="Missing slots" items={commitResult.missingSlots} />
-          <ReportList title="Inactive employees" items={commitResult.inactiveEmployees} />
+          <ReportList title={t.importScreen.conflicts} items={commitResult.conflicts} />
+          <ReportList title={t.importScreen.windowChanged} items={commitResult.windowChanged} />
+          <ReportList title={t.importScreen.unmappedNames} items={commitResult.unmappedNames} />
+          <ReportList title={t.importScreen.unknownLocations} items={commitResult.unknownLocations} />
+          <ReportList title={t.importScreen.missingSlots} items={commitResult.missingSlots} />
+          <ReportList title={t.importScreen.inactiveEmployees} items={commitResult.inactiveEmployees} />
         </div>
       ) : null}
     </>
