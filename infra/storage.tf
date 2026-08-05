@@ -35,6 +35,13 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
   comment             = "${var.project_name} SPA"
 
+  # COST CONTROL: the provider default is PriceClass_All, which serves from every edge
+  # location worldwide at the highest per-GB rates. This app's users are all in Ukraine, so
+  # PriceClass_100 (North America + Europe) covers them at the cheapest tier. CloudFront's
+  # perpetual free tier (1 TB out, 10M requests/month) then makes delivery effectively free
+  # for a static SPA of a few hundred KB.
+  price_class = var.cloudfront_price_class
+
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "frontend"

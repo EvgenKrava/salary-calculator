@@ -54,9 +54,23 @@ resource "aws_rds_cluster" "main" {
   # RDS Data API — how the Lambdas reach the DB without being in the VPC.
   enable_http_endpoint = true
 
+  # COST CONTROL — this block is the single biggest line item in the stack.
+  #
+  # At min_capacity = 0.5 the cluster bills ~0.5 ACU x 730 h x $0.12 = ~$44/month whether
+  # anyone uses it or not, which alone blows a $10/month budget. min_capacity = 0 lets
+  # Aurora Serverless v2 pause to zero ACUs after `seconds_until_auto_pause` of no
+  # connections, so an idle month costs storage only (~$0.10/GB-month).
+  #
+  # The trade-off, stated plainly: a paused cluster takes roughly 15 seconds to resume, so
+  # the first request after idle is slow. For a payroll tool used a few times a month by a
+  # handful of managers that is the right trade. The migrate Lambda's 300 s timeout and the
+  # API's already accommodate a resume.
   serverlessv2_scaling_configuration {
     min_capacity = var.db_min_acu
     max_capacity = var.db_max_acu
+
+    # Only meaningful when min_capacity = 0. 300 s is the minimum AWS allows (max 86400).
+    seconds_until_auto_pause = var.db_seconds_until_auto_pause
   }
 
   # Dev-friendly lifecycle. Revisit for production (final snapshot, deletion protection).

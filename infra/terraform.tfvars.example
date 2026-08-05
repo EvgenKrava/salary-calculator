@@ -7,6 +7,35 @@ db_name      = "salary"
 # Major-only pin: AWS resolves the current default minor. See variables.tf.
 db_engine_version = "15"
 
-# Serverless v2 capacity units (multiples of 0.5; min may be 0 to allow auto-pause).
-db_min_acu = 0.5
-db_max_acu = 2
+# ---------------------------------------------------------------------------
+# REQUIRED: who hears about a cost overrun.
+#
+# There is no default and the variable is validated as non-empty, so a plan
+# fails until this is set. A budget nobody is subscribed to looks like
+# protection without being any.
+# ---------------------------------------------------------------------------
+budget_alert_emails = ["you@example.com"]
+
+# ---------------------------------------------------------------------------
+# COST — read infra/cost.md before changing anything below.
+#
+# db_min_acu = 0 is what keeps this stack near $0 when idle: Aurora
+# Serverless v2 pauses to zero ACUs after db_seconds_until_auto_pause.
+# Setting it to 0.5 bills ~$44/MONTH even with nobody using the app — more
+# than four times the entire $10 target, on its own.
+#
+# The trade-off is a ~15 second resume on the first request after idle.
+# ---------------------------------------------------------------------------
+db_min_acu                  = 0
+db_max_acu                  = 1
+db_seconds_until_auto_pause = 300
+
+monthly_budget_usd     = 10
+cloudfront_price_class = "PriceClass_100"
+
+# Bedrock API key for the extraction Lambda. NEVER commit the real value —
+# terraform.tfvars is gitignored for this reason. Generate with:
+#   aws bedrock create-api-key --profile yevhenii
+# Scope the permissions of the identity you generate it under: the Lambda's
+# execution-role policy does NOT bound a bearer token (see cost.md / iam.tf).
+# bedrock_bearer_token = "..."

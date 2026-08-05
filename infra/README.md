@@ -3,6 +3,17 @@
 Terraform for the AWS infrastructure. Uses the `yevhenii` AWS profile and remote
 state in S3 (see `bootstrap/`).
 
+> **Cost: read [`cost.md`](cost.md) before the first `apply`.** The stack is built to run
+> under **$10/month** (~$2–4 expected), but that depends on specific settings — above all
+> `db_min_acu = 0`, which lets Aurora pause to zero when idle. At `0.5` the cluster bills
+> **~$44/month doing nothing**, over four times the whole budget. `cost.md` lists every
+> cost-critical setting, the pre-apply checks, and how to verify real spend after 48 hours.
+>
+> `budget_alert_emails` has **no default** and is validated as non-empty, so `plan` fails
+> until you set it — an AWS Budget with no subscriber looks like protection without being any.
+> Note AWS Budgets **notify; they do not cap**. There is no hard spend limit on an AWS
+> account. Creating the budget needs `budgets:ModifyBudget` on the deploying principal.
+
 ## First-time setup
 
 **Step 0 — decide `project_name` and `region` before you run anything.** Both are baked
@@ -11,7 +22,7 @@ use variables), so changing either after the first `init` means editing `version
 hand and migrating state. The defaults are `salary-calculator` / `us-east-1`.
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars   # edit project_name / region / ACUs here
+cp terraform.tfvars.example terraform.tfvars   # set budget_alert_emails; review the COST block
 ```
 
 1. Apply the bootstrap once (creates the encrypted, versioned state bucket). Pass the same
@@ -118,6 +129,9 @@ Run these after the infrastructure `apply` from the first-time setup above.
 
 ### Cost note
 
-CloudFront and S3 are pennies at this scale; the standing cost is Aurora Serverless v2. At
-`db_min_acu = 0.5` the cluster never scales to zero — setting `db_min_acu = 0` enables
-auto-pause on the resolved 15.10+ engine and is recommended for a dev deployment.
+Full breakdown, the cost-critical settings, and the pre/post-apply checks are in
+[`cost.md`](cost.md). In short: CloudFront and S3 are pennies at this scale, and the only
+line item that can quietly dominate the bill is Aurora Serverless v2. `db_min_acu` now
+defaults to **0**, so the cluster auto-pauses to zero ACUs when idle (~15 s resume on the next
+request) instead of billing ~$44/month to sit there. Expected total is ~$2–4/month, against a
+$10 budget alarm.

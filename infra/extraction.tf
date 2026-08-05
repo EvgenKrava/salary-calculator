@@ -35,6 +35,23 @@ resource "aws_lambda_function" "extraction" {
   }
 }
 
+/**
+ * No automatic retries on this function.
+ *
+ * S3 invokes it asynchronously, where AWS retries twice by default — so a single document
+ * that fails costs THREE paid Bedrock vision calls (the most expensive thing in the stack),
+ * and the handler writes an extraction_jobs row on every attempt.
+ *
+ * Retries add nothing here: the handler already turns every failure (refusal, throttle,
+ * unsupported media, bad key) into a `rejected` queue row explaining itself, and re-uploading
+ * the document is the documented recovery path. A genuinely transient Bedrock throttle is
+ * cheaper to re-drive by re-uploading than to pay for twice automatically.
+ */
+resource "aws_lambda_function_event_invoke_config" "extraction" {
+  function_name          = aws_lambda_function.extraction.function_name
+  maximum_retry_attempts = 0
+}
+
 resource "aws_cloudwatch_log_group" "extraction" {
   name              = "/aws/lambda/${aws_lambda_function.extraction.function_name}"
   retention_in_days = var.log_retention_days
