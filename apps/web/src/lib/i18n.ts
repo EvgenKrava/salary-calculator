@@ -259,6 +259,14 @@ export const t = {
     firstHalf: '1 – 15 число',
     secondHalf: '16 – кінець місяця',
     run: 'Розрахувати',
+    // Preview-then-commit: a run is immutable, so the manager sees the figures first.
+    calculate: 'Порахувати',
+    calculating: 'Рахуємо…',
+    previewTitle: 'Перевірте розрахунок',
+    previewHint: 'Ще не збережено. Перевірте суми та підтвердьте.',
+    confirmRun: 'Підтвердити і зберегти',
+    staleReview: 'Дані змінилися після розрахунку. Натисніть «Порахувати» ще раз.',
+    savedTitle: 'Розрахунок збережено',
     running: 'Розраховуємо…',
     bonusesTitle: 'Персональні премії',
     bonusesHint:

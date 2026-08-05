@@ -6,8 +6,13 @@
 node_modules/
 dist/
 build/
+# infra/build/ holds the deploy SCRIPT and must stay tracked...
 !infra/build/
 !infra/build/**
+# ...but infra/.build/ is where Terraform writes the Lambda zips. Those are rebuilt on every
+# deploy, so tracking them means a churning binary diff in every commit — and the negations
+# above were broad enough to un-ignore them.
+infra/.build/
 *.log
 
 # Env / secrets

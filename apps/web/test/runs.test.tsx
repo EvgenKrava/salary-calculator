@@ -17,9 +17,9 @@ describe('run breakdown', () => {
     render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
     expect(screen.getByText('160.00')).toBeInTheDocument();
     expect(screen.getByText('50.00')).toBeInTheDocument();
-    // '25.00' legitimately appears twice: e1's bonus and e2's revenueShare are both 25 in
-    // this fixture — getAllByText, not getByText, so the duplicate isn't a query failure.
-    expect(screen.getAllByText('25.00')).toHaveLength(2);
+    // '25.00' appears three times in this fixture: e1's bonus, e2's revenueShare, and the
+    // bonus COLUMN TOTAL in the footer (25 + 0). getAllByText, so duplicates aren't failures.
+    expect(screen.getAllByText('25.00')).toHaveLength(3);
     expect(screen.getByText('235.00')).toBeInTheDocument();
   });
 
@@ -84,5 +84,22 @@ describe('bonus parsing', () => {
       bonuses: { e3: 100 },
       invalid: ['e1', 'e2'],
     });
+  });
+});
+
+describe('breakdown column totals', () => {
+  it('totals every component, not just the grand total', () => {
+    // A manager reconciles each column against the bank transfer and the revenue figures.
+    // With only a grand total they have to add a column by hand — the arithmetic this screen
+    // exists to remove.
+    render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
+    expect(screen.getByText('240.00')).toBeInTheDocument(); // hourly: 160 + 80
+    expect(screen.getByText('75.00')).toBeInTheDocument();  // revenue share: 50 + 25
+    expect(screen.getByText('340.00')).toBeInTheDocument(); // grand total: 235 + 105
+  });
+
+  it('names how many people are in the run', () => {
+    render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
+    expect(screen.getByText(`${t.runs.allEmployees} (2)`)).toBeInTheDocument();
   });
 });

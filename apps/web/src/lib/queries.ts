@@ -228,6 +228,27 @@ export function useSalaryRuns() {
   return useQuery({ queryKey: ['salary-runs'], queryFn: () => api.get<SalaryRun[]>('/api/salary-runs') });
 }
 
+/**
+ * Dry-run a salary period: the exact figures a commit would write, persisted nowhere.
+ *
+ * A run is final and immediately visible to employees, so committing blind was the app's
+ * sharpest edge — a mistyped bonus or a missing revenue day could not be undone. This shares
+ * one server code path with the commit, so the previewed number IS the number paid.
+ */
+export function useSalaryRunPreview() {
+  const api = useApi();
+  return useMutation({
+    mutationFn: (body: { year: number; month: number; half: 1 | 2; bonuses?: Record<string, number> }) =>
+      api.post<{
+        periodStart: string;
+        periodEnd: string;
+        lines: SalaryRunLine[];
+        gaps: { employeeId: string; locationId: string; date: string }[];
+        blocked: boolean;
+      }>('/api/salary-runs/preview', body),
+  });
+}
+
 export function useCreateSalaryRun() {
   const api = useApi();
   const qc = useQueryClient();

@@ -73,8 +73,15 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
     return id;
   }
 
-  routes.post('/', async (c) => {
-    const body = await readJson(c, createSchema);
+  /**
+   * Load every input for a period and compute the result — WITHOUT persisting.
+   *
+   * Shared verbatim by the preview and the commit routes. That sharing is the point: a run is
+   * a final, immutable record, so a manager must be able to see the exact figures before
+   * committing them. If preview used its own query or its own mapping, the number on screen
+   * could differ from the number paid, which is worse than having no preview at all.
+   */
+  async function computeRun(body: { year: number; month: number; half: 1 | 2; bonuses?: Record<string, number> }) {
     const [first, second] = payPeriodsForMonth(body.year, body.month);
     const period = body.half === 1 ? first : second;
 
@@ -133,7 +140,32 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
       bonuses: body.bonuses ?? {},
     };
 
-    const result = calculateSalaries(input, period);
+    return { period, result: calculateSalaries(input, period) };
+  }
+
+  /**
+   * Dry run: the same figures the commit would produce, persisted nowhere.
+   *
+   * Returns 200 with the gaps when the period is blocked, rather than 409 — for a preview,
+   * "here is what is missing" is a successful answer, not an error. The commit route still
+   * returns 409, because there refusing to write IS the failure.
+   */
+  routes.post('/preview', async (c) => {
+    const body = await readJson(c, createSchema);
+    const { period, result } = await computeRun(body);
+    return c.json({
+      periodStart: period.start,
+      periodEnd: period.end,
+      lines: result.lines,
+      gaps: result.gaps,
+      blocked: result.blocked,
+    });
+  });
+
+  routes.post('/', async (c) => {
+    const body = await readJson(c, createSchema);
+    const { period, result } = await computeRun(body);
+
     if (result.blocked) {
       return c.json({ error: 'revenue data incomplete for the period', gaps: result.gaps }, 409);
     }

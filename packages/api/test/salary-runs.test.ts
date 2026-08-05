@@ -159,3 +159,73 @@ describe('salary runs', () => {
     expect(bobLine).toMatchObject({ hourlyPay: 10, revenueShare: 25 });
   });
 });
+describe('salary run preview', () => {
+  it('returns the same figures the commit would write, without persisting', async () => {
+    // A run is final and immediately visible to employees, so a manager must see the exact
+    // numbers first. Preview and commit share one code path precisely so the previewed figure
+    // cannot differ from the figure paid.
+    const { app, db, loc, alice } = await seed();
+    await db.insert(shifts).values({
+      employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03',
+      startsAt: '08:00:00', endsAt: '16:00:00', status: 'approved', source: 'native',
+    });
+    await db.insert(dailyRevenue).values({
+      locationId: loc.id, revenueDate: '2026-08-03', amount: '1000.00', source: 'manual', status: 'approved',
+    });
+    const body = JSON.stringify({ year: 2026, month: 8, half: 1, bonuses: {} });
+
+    const pre = await app.request('/api/salary-runs/preview', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body,
+    });
+    expect(pre.status).toBe(200);
+    const preview = (await pre.json()) as { lines: unknown[]; blocked: boolean; periodStart: string };
+    expect(preview.blocked).toBe(false);
+    expect(preview.periodStart).toBe('2026-08-01');
+
+    // Nothing was written.
+    expect(await (await app.request('/api/salary-runs', { headers: MGR })).json()).toHaveLength(0);
+
+    // Committing now yields identical lines.
+    const post = await app.request('/api/salary-runs', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body,
+    });
+    expect(post.status).toBe(201);
+    const committed = (await post.json()) as { lines: unknown[] };
+    expect(committed.lines).toEqual(preview.lines);
+  });
+
+  it('reports gaps as a 200, so a preview can show what is missing', async () => {
+    // The commit route 409s on gaps because refusing to write IS the failure there. For a
+    // preview, "here is what is missing" is a successful answer.
+    // A gap needs a WORKED day with no approved revenue; the seed has neither shifts nor
+    // revenue, so deleting revenue alone would produce nothing to report.
+    const { app, db, loc, alice } = await seed();
+    await db.insert(shifts).values({
+      employeeId: alice.id, locationId: loc.id, workDate: '2026-08-03',
+      startsAt: '08:00:00', endsAt: '16:00:00', status: 'approved', source: 'native',
+    });
+    const res = await app.request('/api/salary-runs/preview', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ year: 2026, month: 8, half: 1 }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { blocked: boolean; gaps: unknown[] };
+    expect(body.blocked).toBe(true);
+    expect(body.gaps.length).toBeGreaterThan(0);
+  });
+
+  it('forbids an employee from previewing the whole payroll (403)', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/salary-runs/preview', {
+      method: 'POST',
+      headers: { ...EMP, ...JSONH },
+      body: JSON.stringify({ year: 2026, month: 8, half: 1 }),
+    });
+    expect(res.status).toBe(403);
+  });
+});

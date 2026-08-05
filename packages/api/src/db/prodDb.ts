@@ -73,8 +73,42 @@ export function readDbEnvConfig(env: Record<string, string | undefined>): DbConf
 }
 
 /** Drizzle database backed by the Aurora Serverless v2 RDS Data API. */
+/**
+ * Wait out an Aurora Serverless v2 resume.
+ *
+ * The cluster runs at `min_capacity = 0` and auto-pauses after 5 idle minutes — that is what
+ * keeps this deployment near $0/month instead of ~$44 (see infra/cost.md). The cost is that the
+ * FIRST request after idle fails with `DatabaseResumingException` while the instance wakes,
+ * roughly 10-20 seconds. Unhandled, that surfaced to the manager as `{"error":"internal"}` — so
+ * the normal experience of opening the app each morning looked like the app was broken.
+ *
+ * Retrying inside the client makes the resume invisible: the request just takes a few seconds.
+ * Only this one exception is retried, and only for a bounded time, so a genuine database error
+ * still fails fast rather than hanging.
+ */
+function retryOnResume<T extends { send: (...args: never[]) => Promise<unknown> }>(client: T): T {
+  const send = client.send.bind(client) as (...args: never[]) => Promise<unknown>;
+  const MAX_WAIT_MS = 25_000; // under the API Gateway 30s ceiling, so we fail before it cuts us off
+  const DELAY_MS = 1_500;
+
+  client.send = (async (...args: never[]) => {
+    const deadline = Date.now() + MAX_WAIT_MS;
+    for (;;) {
+      try {
+        return await send(...args);
+      } catch (err) {
+        const name = (err as { name?: string }).name;
+        if (name !== 'DatabaseResumingException' || Date.now() >= deadline) throw err;
+        await new Promise((r) => setTimeout(r, DELAY_MS));
+      }
+    }
+  }) as T['send'];
+
+  return client;
+}
+
 export function createProdDb(cfg: ApiConfig): Db {
-  const client = new RDSDataClient({ region: cfg.region });
+  const client = retryOnResume(new RDSDataClient({ region: cfg.region }));
   return drizzle(client, {
     database: cfg.dbName,
     resourceArn: cfg.resourceArn,

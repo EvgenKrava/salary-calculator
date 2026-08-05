@@ -9,6 +9,7 @@ import { ApiError } from '../lib/api';
 import { t, formatDate, formatTimestampDate } from '../lib/i18n';
 import {
   useCreateSalaryRun,
+  useSalaryRunPreview,
   useEmployees,
   useLocations,
   useSalaryRuns,
@@ -19,7 +20,25 @@ import {
 
 export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; employees: Employee[] }) {
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? '—';
-  const grand = lines.reduce((sum, l) => sum + l.total, 0);
+  /**
+   * Column totals, not just a grand total.
+   *
+   * A manager reconciles this against the bank transfer and against the revenue figures, so
+   * each component needs its own sum — a single grand total forces them to add a column by
+   * hand, which is exactly the arithmetic this screen exists to remove.
+   *
+   * Summed from the already-rounded line values so the footer equals what is displayed above
+   * it; summing raw values first could differ from the visible column by a cent.
+   */
+  const totals = lines.reduce(
+    (acc, l) => ({
+      hourlyPay: acc.hourlyPay + l.hourlyPay,
+      revenueShare: acc.revenueShare + l.revenueShare,
+      bonus: acc.bonus + l.bonus,
+      total: acc.total + l.total,
+    }),
+    { hourlyPay: 0, revenueShare: 0, bonus: 0, total: 0 },
+  );
   return (
     <Table caption={t.runs.breakdown}>
       <thead>
@@ -44,9 +63,13 @@ export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; emp
       </tbody>
       <tfoot>
         <tr>
-          <Td>{t.runs.allEmployees}</Td>
-          <NumCell /><NumCell /><NumCell />
-          <NumCell money><Money value={grand} /></NumCell>
+          <Td>
+            {t.runs.allEmployees} ({lines.length})
+          </Td>
+          <NumCell><Money value={totals.hourlyPay} /></NumCell>
+          <NumCell><Money value={totals.revenueShare} /></NumCell>
+          <NumCell><Money value={totals.bonus} /></NumCell>
+          <NumCell money><Money value={totals.total} /></NumCell>
         </tr>
       </tfoot>
     </Table>
@@ -115,6 +138,7 @@ export function RunsRoute() {
   const employees = useEmployees();
   const locations = useLocations();
   const create = useCreateSalaryRun();
+  const preview = useSalaryRunPreview();
   const now = new Date();
   const [year, setYear] = useState(String(now.getUTCFullYear()));
   const [month, setMonth] = useState(String(now.getUTCMonth() + 1));
@@ -124,49 +148,97 @@ export function RunsRoute() {
   const [gaps, setGaps] = useState<{ employeeId: string; locationId: string; date: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SalaryRunLine[] | null>(null);
+  /**
+   * The dry run currently on screen, and the exact inputs it was computed from.
+   *
+   * A salary run is final and immediately visible to employees, so the old flow — fill a form,
+   * submit, and find out — put an irreversible action behind a blind guess. Now the manager
+   * previews, reads the actual figures, and only then commits. `inputs` is kept so an edit to
+   * any field invalidates the preview rather than letting someone commit numbers that no
+   * longer match what they are looking at.
+   */
+  const [previewed, setPreviewed] = useState<{
+    periodStart: string;
+    periodEnd: string;
+    lines: SalaryRunLine[];
+    gaps: { employeeId: string; locationId: string; date: string }[];
+    blocked: boolean;
+    inputs: string;
+  } | null>(null);
 
   const activeEmployees = (employees.data ?? []).filter((e) => e.active);
 
-  async function run(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setGaps(null);
-    setResult(null);
-
-    // A run is final and immediately visible to employees, so validate before sending rather
-    // than letting a typo become a permanent line.
+  /**
+   * Validate the form and return the request payload, or null with an error shown.
+   *
+   * Shared by preview and commit so the two cannot disagree about what is valid.
+   */
+  function readForm(): { year: number; month: number; half: 1 | 2; bonuses: Record<string, number> } | null {
     const yearNum = Number(year);
     const monthNum = Number(month);
     if (!Number.isInteger(yearNum) || yearNum < 2000 || yearNum > 2100) {
       setError(t.runs.badYear);
-      return;
+      return null;
     }
     if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
       setError(t.runs.badMonth);
-      return;
+      return null;
     }
     const { bonuses, invalid } = parseBonuses(bonusText);
     if (invalid.length > 0) {
       const names = invalid.map((id) => activeEmployees.find((x) => x.id === id)?.name ?? id);
       setError(t.runs.badBonus(names.join(', ')));
-      return;
+      return null;
     }
+    return { year: yearNum, month: monthNum, half: half === '1' ? 1 : 2, bonuses };
+  }
 
+  /** Fingerprint of the inputs, so editing any field invalidates a stale preview. */
+  function fingerprint(body: { year: number; month: number; half: number; bonuses: Record<string, number> }) {
+    return JSON.stringify([body.year, body.month, body.half, Object.entries(body.bonuses).sort()]);
+  }
+
+  const currentFingerprint = (() => {
+    const yearNum = Number(year);
+    const monthNum = Number(month);
+    const { bonuses } = parseBonuses(bonusText);
+    return fingerprint({ year: yearNum, month: monthNum, half: half === '1' ? 1 : 2, bonuses });
+  })();
+
+  /** True when the preview on screen still matches the form. */
+  const previewIsCurrent = previewed !== null && previewed.inputs === currentFingerprint;
+
+  async function doPreview(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setGaps(null);
+    setResult(null);
+    const body = readForm();
+    if (!body) return;
     try {
-      const created = await create.mutateAsync({
-        year: yearNum,
-        month: monthNum,
-        half: half === '1' ? 1 : 2,
-        bonuses,
-      });
+      const out = await preview.mutateAsync(body);
+      setPreviewed({ ...out, inputs: fingerprint(body) });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function doCommit() {
+    setError(null);
+    setGaps(null);
+    const body = readForm();
+    if (!body) return;
+    try {
+      const created = await create.mutateAsync(body);
       setResult(created.lines);
+      setPreviewed(null);
       setBonusText({});
     } catch (err) {
       // The API returns 409 with { error, gaps } when revenue is incomplete; ApiError.body
       // carries that parsed JSON, so the gaps array is reachable here rather than lost with
       // just the message string.
-      const body = err instanceof ApiError ? (err.body as { gaps?: typeof gaps } | undefined) : undefined;
-      if (body?.gaps?.length) setGaps(body.gaps);
+      const body2 = err instanceof ApiError ? (err.body as { gaps?: typeof gaps } | undefined) : undefined;
+      if (body2?.gaps?.length) setGaps(body2.gaps);
       else setError((err as Error).message);
     }
   }
@@ -175,7 +247,7 @@ export function RunsRoute() {
     <>
       <h1 style={{ marginBottom: 'var(--s4)' }}>{t.runs.title}</h1>
 
-      <form className="panel" style={{ padding: 'var(--s4)', marginBottom: 'var(--s6)' }} onSubmit={run}>
+      <form className="panel" style={{ padding: 'var(--s4)', marginBottom: 'var(--s6)' }} onSubmit={doPreview}>
         <h2 style={{ marginBottom: 'var(--s4)' }}>{t.runs.runTitle}</h2>
         <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.runs.hint}</p>
         <Field label={t.runs.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
@@ -233,21 +305,64 @@ export function RunsRoute() {
           )}
         </fieldset>
 
+        {/* Preview is the primary action; committing is deliberately the SECOND step, and only
+            becomes available once the manager has seen the figures for the current inputs. */}
         <Button
           type="submit"
           variant="primary"
-          disabled={create.isPending || employees.isLoading || Boolean(employees.error)}
+          disabled={preview.isPending || employees.isLoading || Boolean(employees.error)}
           style={{ marginTop: 'var(--s4)' }}
         >
-          {create.isPending ? t.runs.running : t.runs.run}
+          {preview.isPending ? t.runs.calculating : t.runs.calculate}
         </Button>
       </form>
+
+      {previewed ? (
+        <div style={{ marginBottom: 'var(--s6)' }}>
+          <h2 style={{ marginBottom: 'var(--s1)' }}>{t.runs.previewTitle}</h2>
+          <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
+            {formatDate(previewed.periodStart)} — {formatDate(previewed.periodEnd)} · {t.runs.previewHint}
+          </p>
+
+          {previewed.blocked ? (
+            <BlockedRun
+              gaps={previewed.gaps}
+              employees={employees.data ?? []}
+              locations={locations.data ?? []}
+            />
+          ) : (
+            <>
+              <RunBreakdown lines={previewed.lines} employees={employees.data ?? []} />
+              {previewIsCurrent ? (
+                <Button
+                  variant="primary"
+                  onClick={doCommit}
+                  disabled={create.isPending}
+                  style={{ marginTop: 'var(--s4)' }}
+                >
+                  {create.isPending ? t.runs.running : t.runs.confirmRun}
+                </Button>
+              ) : (
+                /* Inputs changed after the preview: committing now would write figures that
+                   differ from the ones on screen, which is exactly the mistake this flow
+                   exists to prevent. */
+                <p style={{ color: 'var(--warn)', marginTop: 'var(--s4)' }}>{t.runs.staleReview}</p>
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
 
       {gaps ? (
         <BlockedRun gaps={gaps} employees={employees.data ?? []} locations={locations.data ?? []} />
       ) : null}
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
-      {result ? <RunBreakdown lines={result} employees={employees.data ?? []} /> : null}
+      {result ? (
+        <>
+          <h2 style={{ marginBottom: 'var(--s2)' }}>{t.runs.savedTitle}</h2>
+          <RunBreakdown lines={result} employees={employees.data ?? []} />
+        </>
+      ) : null}
 
       <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>{t.runs.pastRuns}</h2>
       {(runs.data ?? []).length === 0 ? (
