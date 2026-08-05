@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored.
+project_name = "salary-calculator"
+region       = "us-east-1"
+aws_profile  = "yevhenii"
+db_name      = "salary"
+
+# Major-only pin: AWS resolves the current default minor. See variables.tf.
+db_engine_version = "15"
+
+# Serverless v2 capacity units (multiples of 0.5; min may be 0 to allow auto-pause).
+db_min_acu = 0.5
+db_max_acu = 2
