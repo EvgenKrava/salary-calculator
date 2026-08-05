@@ -11,6 +11,14 @@ const SUPPORTED_MEDIA = new Set([
 /** Bedrock model IDs carry the `anthropic.` prefix; the bare ID 400s here. */
 export const MODEL_ID = 'anthropic.claude-opus-5';
 
+/**
+ * Request size limit. The API caps a single request at 32 MB; the payload is measured as
+ * base64 because that is what actually travels, and base64 inflates bytes by ~4/3. A little
+ * headroom is left for the prompt and JSON envelope.
+ */
+export const MAX_REQUEST_MB = 31;
+const MAX_REQUEST_BYTES = MAX_REQUEST_MB * 1_048_576;
+
 export interface ExtractionMedia {
   mediaType: string;
   base64: string;
@@ -60,6 +68,15 @@ export function buildExtractionRequest(input: {
   }
   if (/[\r\n]/.test(media.base64)) {
     throw new Error('base64 payload must not contain a newline — the API rejects it');
+  }
+  // The API caps a request at 32 MB. Checking here turns an opaque Bedrock 400 into a reason
+  // the manager can act on ("photograph it in two halves") instead of "api error 400".
+  if (media.base64.length > MAX_REQUEST_BYTES) {
+    const mb = (media.base64.length / 1_048_576).toFixed(1);
+    throw new Error(
+      `document is too large to extract (${mb} MB base64, limit ${MAX_REQUEST_MB} MB) — ` +
+        `re-upload it at a lower resolution or split it into parts`,
+    );
   }
 
   const mediaBlock =

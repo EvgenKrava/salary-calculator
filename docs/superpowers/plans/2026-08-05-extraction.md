@@ -19,7 +19,11 @@
   - Structured output via **`output_config.format`** with a `json_schema`; the deprecated top-level `output_format` must not be used. Assistant-turn prefills also 400.
   - Images: `{type:'image', source:{type:'base64', media_type, data}}`. PDFs: `{type:'document', source:{type:'base64', media_type:'application/pdf', data}}` placed **before** the text block. Base64 must contain **no newlines**.
   - A refusal returns **HTTP 200** with `stop_reason: 'refusal'` and possibly **empty `content`** — check `stop_reason` before indexing `content[0]`, or a scanned document that trips a classifier crashes the Lambda.
-- **Never invent data.** A document the model cannot read produces a `needs_review` job with the raw response recorded, never a guessed number. Payroll data is only ever *staged* by this pipeline; a human confirms it.
+- **Never invent data.** A document the model cannot read never produces a guessed number. Payroll data is only ever *staged* by this pipeline; a human confirms it.
+  - **Two distinct outcomes, resolved during implementation** (this bullet originally said `needs_review` for both, which contradicted the plan's own Task 3 code):
+    - **Read, but not confidently** (low document or row confidence) → `needs_review`. There is something for a human to check, so it belongs in the queue.
+    - **Not read at all** (refusal, truncation, malformed JSON, schema violation, unsupported or oversized media) → `rejected`, carrying the reason *and the raw response text*. There are no rows to review; the document needs re-uploading, not correcting. Putting these in `needs_review` would fill the manager's queue with items that cannot be acted on.
+  - Both record the model's `notes` and, for unusable outcomes, the raw response, so the reason is always visible in the UI.
 - **Every invocation writes an `extraction_jobs` row**, including failures and refusals, so nothing is silently dropped.
 - **No real client documents in the repo.** `docs/*.xlsx` is gitignored; tests use small synthetic fixtures generated in-process. Never commit a real photo or scan.
 

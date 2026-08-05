@@ -75,3 +75,20 @@ describe('buildExtractionRequest', () => {
     expect(prompt.toLowerCase()).toMatch(/do not guess|never guess/);
   });
 });
+
+describe('request size guard', () => {
+  it('rejects an oversized document with an actionable message, not an opaque 400', () => {
+    // 32 MB is the API's request cap; without this check the manager sees "api error 400".
+    const tooBig = 'A'.repeat(32 * 1_048_576);
+    expect(() =>
+      buildExtractionRequest({ docType: 'revenue', media: { mediaType: 'image/jpeg', base64: tooBig } }),
+    ).toThrow(/too large/i);
+  });
+
+  it('accepts a document just under the limit', () => {
+    const ok = 'A'.repeat(1_048_576);
+    expect(() =>
+      buildExtractionRequest({ docType: 'revenue', media: { mediaType: 'image/jpeg', base64: ok } }),
+    ).not.toThrow();
+  });
+});

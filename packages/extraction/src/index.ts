@@ -1,5 +1,10 @@
 export { buildExtractionRequest, MODEL_ID } from './buildRequest';
 export { parseExtractionResponse } from './parseResponse';
 export { REVENUE_SCHEMA, SCHEDULE_SCHEMA, schemaFor } from './schemas';
+export { createHandler, handler, readThreshold } from './handler';
+export { createJobRecorder } from './db';
+export { resolveMediaType, sniffMediaType, mediaTypeFromKey } from './mediaType';
 export type { DocType } from './schemas';
 export type { ExtractionOutcome } from './parseResponse';
+export type { HandlerDeps } from './handler';
+export type { JobRecord } from './db';
