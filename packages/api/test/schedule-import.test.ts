@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
 import { levels, locations, employees, locationShiftSlots, scheduleNameMap, shifts } from '../src/schema';
@@ -23,6 +23,7 @@ interface PreviewResponse {
   unmappedNames: string[];
   unknownLocations: number[];
   missingSlots: string[];
+  inactiveEmployees: string[];
 }
 
 interface CommitResponse {
@@ -30,9 +31,11 @@ interface CommitResponse {
   created: number;
   skipped: number;
   conflicts: string[];
+  windowChanged: string[];
   unmappedNames: string[];
   unknownLocations: number[];
   missingSlots: string[];
+  inactiveEmployees: string[];
 }
 
 /** Build the multipart body the endpoints expect. */
@@ -175,6 +178,121 @@ describe('schedule import', () => {
     const onDay = await db.select().from(shifts).where(eq(shifts.workDate, '2026-05-01'));
     expect(onDay).toHaveLength(1);
     expect(onDay[0].source).toBe('native');
+  });
+
+  it('reports an inactive employee mapping in inactiveEmployees and writes no shift for them (FIX 4)', async () => {
+    const { db, app } = await seed();
+    // Марта is unmapped by default in seed(); map her to a deactivated employee instead.
+    const [level] = await db.select().from(levels);
+    const [departed] = await db
+      .insert(employees)
+      .values({ name: 'Departed', levelId: level.id, active: false })
+      .returning();
+    await db.insert(scheduleNameMap).values({ sourceName: 'Марта', employeeId: departed.id });
+
+    const preview = await app.request('/api/schedule-imports/preview', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026' }),
+    });
+    const previewBody = (await preview.json()) as PreviewResponse;
+    expect(previewBody.inactiveEmployees).toEqual(expect.arrayContaining(['Марта']));
+    expect(previewBody.unmappedNames).not.toContain('Марта');
+
+    const commit = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026', month: '5' }),
+    });
+    const commitBody = (await commit.json()) as CommitResponse;
+    expect(commitBody.inactiveEmployees).toEqual(expect.arrayContaining(['Марта']));
+
+    const rows = await db.select().from(shifts).where(eq(shifts.employeeId, departed.id));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('reports a narrowed slot window as windowChanged instead of silently skipping (FIX 5)', async () => {
+    const { db, app, loc1 } = await seed();
+    const first = (await (
+      await app.request('/api/schedule-imports/commit', {
+        method: 'POST',
+        headers: MGR,
+        body: await form({ year: '2026', month: '5' }),
+      })
+    ).json()) as CommitResponse;
+    expect(first.created).toBeGreaterThan(0);
+    expect(first.windowChanged).toHaveLength(0);
+
+    // An admin narrows location 1's slot-1 window (startsAt unchanged, endsAt earlier) after
+    // the first commit — the exact scenario the idempotency probe used to miss because it
+    // only compared startsAt.
+    await db
+      .update(locationShiftSlots)
+      .set({ endsAt: '12:00' })
+      .where(and(eq(locationShiftSlots.locationId, loc1.id), eq(locationShiftSlots.slotNumber, 1)));
+
+    const second = (await (
+      await app.request('/api/schedule-imports/commit', {
+        method: 'POST',
+        headers: MGR,
+        body: await form({ year: '2026', month: '5' }),
+      })
+    ).json()) as CommitResponse;
+    expect(second.created).toBe(0);
+    expect(second.windowChanged.length).toBeGreaterThan(0);
+
+    // The stale row was NOT silently folded into `skipped`, and its old (longer) window is
+    // untouched rather than being overpaid on a phantom rewrite.
+    const untouched = await db
+      .select()
+      .from(shifts)
+      .where(and(eq(shifts.locationId, loc1.id), eq(shifts.startsAt, '08:00')));
+    expect(untouched.length).toBeGreaterThan(0);
+    for (const row of untouched) expect(row.endsAt.slice(0, 5)).toBe('14:00');
+  });
+
+  it('reports missingSlots when a (location, slot) has no configured window', async () => {
+    const { db, app } = await seed();
+    // The fixture schedules "Тарас" at location 3, slot 2. Create location "3" (so it is no
+    // longer unknown) but do not configure its slot-2 window, and map Тарас to a real
+    // employee so the cell reaches the slot check.
+    const [level] = await db.select().from(levels);
+    const [taras] = await db.insert(employees).values({ name: 'Taras', levelId: level.id }).returning();
+    await db.insert(locations).values({ name: '3', opensAt: '08:00', closesAt: '20:00' });
+    await db.insert(scheduleNameMap).values({ sourceName: 'Тарас', employeeId: taras.id });
+
+    const res = await app.request('/api/schedule-imports/preview', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026' }),
+    });
+    const body = (await res.json()) as PreviewResponse;
+    expect(body.missingSlots).toEqual(expect.arrayContaining(['3:2']));
+    expect(body.unknownLocations).not.toEqual(expect.arrayContaining([3]));
+  });
+
+  it('skips an ignored mapping silently: no shift, and not reported as unmapped', async () => {
+    const { db, app } = await seed();
+    // "Бариста 1" is a placeholder row in the fixture; mark it ignored rather than mapped.
+    await db.insert(scheduleNameMap).values({ sourceName: 'Бариста 1', ignored: true });
+
+    const res = await app.request('/api/schedule-imports/preview', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026' }),
+    });
+    const body = (await res.json()) as PreviewResponse;
+    expect(body.unmappedNames).not.toContain('Бариста 1');
+    // Still unresolved for real people.
+    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Тарас']));
+
+    const commit = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026', month: '5' }),
+    });
+    const commitBody = (await commit.json()) as CommitResponse;
+    expect(commitBody.unmappedNames).not.toContain('Бариста 1');
   });
 
   it('400s a missing file or invalid year', async () => {

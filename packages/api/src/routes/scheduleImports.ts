@@ -8,7 +8,8 @@ import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
 import { isUniqueViolation } from '../http/dbErrors';
-import { locations, locationShiftSlots, scheduleNameMap, shifts } from '../schema';
+import { gridFromWorksheet } from '../http/excelGrid';
+import { locations, locationShiftSlots, scheduleNameMap, shifts, employees } from '../schema';
 
 const SHEET_NAME = 'Графік роботи';
 
@@ -47,39 +48,35 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
     }
     const ws = wb.getWorksheet(SHEET_NAME);
     if (!ws) throw new HTTPException(400, { message: `sheet "${SHEET_NAME}" not found` });
-    const grid: (string | number | null)[][] = [];
-    for (let r = 1; r <= ws.rowCount; r++) {
-      const row: (string | number | null)[] = [];
-      for (let col = 1; col <= ws.columnCount; col++) {
-        const v = ws.getCell(r, col).value;
-        row.push(v === null || v === undefined ? null : (v as string | number));
-      }
-      grid.push(row);
-    }
+    const grid = gridFromWorksheet(ws);
     return { grid, year, body };
   }
 
   /**
    * Turn parsed cells into concrete shifts, reporting everything that could not be
    * resolved instead of guessing. A name with no mapping, a location number with no
-   * location, or a (location, slot) with no window is reported, never invented.
+   * location, a (location, slot) with no window, or a mapping that points at a
+   * deactivated employee is reported, never invented.
    */
   async function resolve(cells: ParsedShiftCell[]) {
-    const [locs, slots, mappings] = await Promise.all([
+    const [locs, slots, mappings, emps] = await Promise.all([
       db.select().from(locations),
       db.select().from(locationShiftSlots),
       db.select().from(scheduleNameMap),
+      db.select().from(employees),
     ]);
     // Locations are matched by name, which is how the sheet refers to them (a number).
     const locationByName = new Map(locs.map((l) => [l.name.trim(), l]));
     const slotKey = (locationId: string, slot: number) => `${locationId}|${slot}`;
     const slotByKey = new Map(slots.map((s) => [slotKey(s.locationId, s.slotNumber), s]));
     const mapByName = new Map(mappings.map((m) => [m.sourceName, m]));
+    const employeeById = new Map(emps.map((e) => [e.id, e]));
 
     const resolved: ResolvedShift[] = [];
     const unmappedNames = new Set<string>();
     const unknownLocations = new Set<number>();
     const missingSlots = new Set<string>();
+    const inactiveEmployees = new Set<string>();
 
     for (const cell of cells) {
       const mapping = mapByName.get(cell.sourceName);
@@ -87,6 +84,18 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
       // entirely, without reporting its location/slot as problems to fix.
       if (mapping?.ignored) continue;
       if (!mapping) unmappedNames.add(cell.sourceName);
+
+      // `calculateSalaries` skips inactive employees for payment but still counts their
+      // shifts in the pass-1 proration denominator — importing shifts for a departed
+      // employee would silently dilute every active coworker's revenue share on those
+      // location-days. Report it instead of resolving to a shift.
+      if (mapping?.employeeId) {
+        const employee = employeeById.get(mapping.employeeId);
+        if (employee && !employee.active) {
+          inactiveEmployees.add(cell.sourceName);
+          continue;
+        }
+      }
 
       // Location/slot resolution is checked independently of the name mapping so an
       // unmapped name and an unknown location on the same cell are both reported,
@@ -120,6 +129,7 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
       unmappedNames: [...unmappedNames],
       unknownLocations: [...unknownLocations],
       missingSlots: [...missingSlots],
+      inactiveEmployees: [...inactiveEmployees],
     };
   }
 
@@ -169,14 +179,23 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
     }
     const parsed = parseScheduleGrid(grid, { year });
     const inMonth = parsed.cells.filter((cell) => cell.month === month);
-    const { resolved, unmappedNames, unknownLocations, missingSlots } = await resolve(inMonth);
+    const { resolved, unmappedNames, unknownLocations, missingSlots, inactiveEmployees } =
+      await resolve(inMonth);
 
     let created = 0;
     let skipped = 0;
     const conflicts: string[] = [];
+    const windowChanged: string[] = [];
 
     for (const shift of resolved) {
-      // Already imported (or otherwise present) for this employee/date/location/window.
+      // Already imported (or otherwise present) for this employee/date/location, matched
+      // on the same key the DB's unique constraint uses (employeeId+workDate+locationId+
+      // startsAt). A match on those four fields alone is not enough: if an admin later
+      // narrows the slot window and the manager re-imports, the stale row still matches on
+      // startsAt and would be silently counted `skipped`, leaving the OLD (longer) window in
+      // place — overpaying that employee and diluting coworkers' revenue share. So `endsAt`
+      // is checked too: only an exact match on all five fields counts as `skipped`; a
+      // startsAt match with a different endsAt is reported in `windowChanged` instead.
       const existing = await db
         .select()
         .from(shifts)
@@ -189,6 +208,15 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
           ),
         );
       if (existing.length > 0) {
+        const stale = existing.find((row) => row.endsAt.slice(0, 5) !== shift.endsAt);
+        if (stale) {
+          windowChanged.push(
+            `${shift.sourceName} ${shift.workDate} slot ${shift.slot}: existing window ` +
+              `${stale.startsAt.slice(0, 5)}-${stale.endsAt.slice(0, 5)} vs resolved ` +
+              `${shift.startsAt}-${shift.endsAt}`,
+          );
+          continue;
+        }
         skipped += 1;
         continue;
       }
@@ -223,9 +251,11 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
       created,
       skipped,
       conflicts,
+      windowChanged,
       unmappedNames,
       unknownLocations,
       missingSlots,
+      inactiveEmployees,
     });
   });
 

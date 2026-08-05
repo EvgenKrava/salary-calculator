@@ -41,22 +41,60 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function asNumber(value: string | number): number | null {
+/**
+ * Total: never throws regardless of what reaches it. `value` is typed `unknown` (not
+ * `string | number`) so the parser cannot be made to crash by a caller that fails to
+ * flatten its cell values before handing them over — a formatted cell (rich text, a
+ * formula result, a Date, a boolean) must fall through to `null`, not reach `.trim()`.
+ */
+function asNumber(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (trimmed === '') return null;
   const n = Number(trimmed);
   return Number.isFinite(n) ? n : null;
 }
 
-/** A row is a name row if its name cell holds text that is not a month or slot marker. */
-function nameFromRow(value: string | number | null): string | null {
-  if (typeof value !== 'string') return null;
-  const name = value.trim();
+/**
+ * The real length of `month` in `year`, for validating a day-of-month cell. A block
+ * copy-pasted from a 31-day month into a 30-day (or 28/29-day) month leaves a stale
+ * day-31 (or day-30) column; the day-of-month row still says "31", but no such date
+ * exists. `Date.UTC(year, month, 0)` is the last day of the PRECEDING month index, i.e.
+ * the last day of `month` (1-based) itself.
+ */
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * A row is a name row if its name cell holds non-blank content that is not a month or
+ * slot marker. `value` is `unknown` so a caller that hands over an unflattened cell
+ * (rich text, a number, anything) still gets a coerced, non-null name back rather than
+ * `null` — the previous `typeof value !== 'string'` guard turned a formatted name cell
+ * into `null` while the cell was plainly non-blank, and every location number on that
+ * row was then filed as a nameless `substitute` anomaly, silently dropping the person
+ * from `sourceNames` so the manager was never prompted to map them.
+ */
+function nameFromRow(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = typeof value === 'string' ? value : String(value);
+  const name = raw.trim();
   if (name === '') return null;
   if (monthFromHeader(name) !== null) return null;
   if (name.toLowerCase().startsWith('зміни')) return null;
   return name;
+}
+
+/**
+ * True if `value` has no real content — null/undefined, or a string that is blank once
+ * trimmed. `unknown`-typed and used by both the name-row check and the anomaly
+ * classification below so a non-string value (see `nameFromRow`) is judged the same way.
+ */
+function isBlank(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  const s = typeof value === 'string' ? value : String(value);
+  return s.trim() === '';
 }
 
 const NAME_COL = 2; // 0-based: spreadsheet column 3
@@ -102,15 +140,27 @@ export function parseScheduleGrid(
     // Day columns are those whose weekday label is a known abbreviation AND whose day-row
     // value is a number. This excludes the trailing shift-count total column, which has a
     // number but no weekday label above it.
+    //
+    // A day that is syntactically 1-31 but does not exist in the month it's attributed to
+    // (a stale day-31 column left over from a copy-pasted 31-day block, in a 30- or 28/29-day
+    // month) is kept separate in `invalidDayCols`: it must never produce a dated cell — Postgres
+    // would reject the resulting date, and because that isn't a unique violation it would be
+    // misreported to the manager as an overlap conflict — so it is routed to an `unparsed`
+    // anomaly per populated cell instead.
     const dayCols: { col: number; day: number; month: number }[] = [];
+    const invalidDayCols: { col: number; day: number; month: number }[] = [];
     for (let c = 0; c < Math.max(weekdayRow.length, dayRow.length); c++) {
       const weekday = typeof weekdayRow[c] === 'string' ? String(weekdayRow[c]).trim().toLowerCase() : '';
       if (!WEEKDAYS.has(weekday)) continue;
-      const day = asNumber((dayRow[c] ?? '') as string | number);
+      const day = asNumber(dayRow[c] ?? '');
       if (day === null || day < 1 || day > 31) continue;
       // Attribute the column to the right-most month header at or before it.
       let month = monthCols[0].month;
       for (const mc of monthCols) if (c >= mc.startCol) month = mc.month;
+      if (day > daysInMonth(opts.year, month)) {
+        invalidDayCols.push({ col: c, day, month });
+        continue;
+      }
       dayCols.push({ col: c, day, month });
     }
 
@@ -127,8 +177,7 @@ export function parseScheduleGrid(
       if (bodyRow.some((v) => monthFromHeader(v) !== null)) break;
 
       const rawNameCell = bodyRow[NAME_COL] ?? null;
-      const nameCellBlank =
-        rawNameCell === null || (typeof rawNameCell === 'string' && rawNameCell.trim() === '');
+      const nameCellBlank = isBlank(rawNameCell);
       const name = nameFromRow(rawNameCell);
 
       for (const dc of dayCols) {
@@ -149,7 +198,7 @@ export function parseScheduleGrid(
           continue;
         }
 
-        const locationNumber = asNumber(raw as string | number);
+        const locationNumber = asNumber(raw);
         if (locationNumber === null) {
           // A name instead of a number means someone covered the shift.
           anomalies.push({ kind: 'substitute', sourceName: name, slot, date, raw: String(raw) });
@@ -164,6 +213,17 @@ export function parseScheduleGrid(
           date,
           locationNumber,
         });
+      }
+
+      // A day column that doesn't exist in its attributed month (stale day-31/30 from a
+      // copy-pasted block) must produce no cell — but only report it where the sheet
+      // actually has content; an empty cell under an invalid day column is not worth
+      // flagging on every single employee row.
+      for (const dc of invalidDayCols) {
+        const raw = bodyRow[dc.col];
+        if (isBlank(raw)) continue;
+        const date = `${opts.year}-${pad(dc.month)}-${pad(dc.day)}`;
+        anomalies.push({ kind: 'unparsed', sourceName: name, slot, date, raw: String(raw) });
       }
 
       if (name !== null) sourceNames.add(name);
