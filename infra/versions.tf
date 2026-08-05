@@ -1,5 +1,10 @@
 terraform {
-  required_version = "~> 1.9"
+  # >= 1.10 is required, not merely preferred: the backend below uses
+  # `use_lockfile` (S3-native state locking), which Terraform only understands
+  # from 1.10.0. A 1.9.x runner would fail at `terraform init` — and the offline
+  # validation step cannot catch it, because `init -backend=false` does not
+  # check backend argument names at all.
+  required_version = ">= 1.10, < 2.0"
 
   required_providers {
     aws = {

@@ -20,11 +20,13 @@ variable "db_name" {
 
 variable "db_engine_version" {
   description = <<-EOT
-    Aurora PostgreSQL version. Prefer a MAJOR-only value (e.g. "15") so AWS picks the
-    current default minor — pinning a specific minor breaks once AWS retires it, and
-    fights auto minor upgrades. Must be a version that supports Serverless v2 and the
-    RDS Data API (PostgreSQL 13.6+ for Serverless v2; the Data API needs a current
-    minor, so major-only pinning is the safe choice).
+    Aurora PostgreSQL version. Prefer a MAJOR-only value (e.g. "15"): the AWS provider
+    prefix-matches, so AWS resolves the current default minor. Two concrete reasons this
+    beats pinning a minor: AWS retires minors (the previously pinned "15.4" no longer
+    exists — the lowest available 15.x is now 15.10), and a pinned minor fights
+    auto_minor_version_upgrade, producing a perpetual "downgrade" diff that RDS refuses.
+    Serverless v2 requires PostgreSQL 13.6+. Confirm Data API support for the resolved
+    version with the smoke test in README.md step 4 rather than assuming it.
   EOT
   type        = string
   default     = "15"
@@ -51,5 +53,11 @@ variable "db_max_acu" {
   validation {
     condition     = var.db_max_acu >= 0.5 && var.db_max_acu <= 256 && var.db_max_acu % 0.5 == 0
     error_message = "db_max_acu must be between 0.5 and 256 and a multiple of 0.5."
+  }
+
+  validation {
+    # An inverted range is otherwise only caught by an opaque RDS error at apply time.
+    condition     = var.db_max_acu >= var.db_min_acu
+    error_message = "db_max_acu must be greater than or equal to db_min_acu."
   }
 }
