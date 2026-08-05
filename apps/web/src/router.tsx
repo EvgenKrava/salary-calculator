@@ -6,6 +6,9 @@ import {
 } from '@tanstack/react-router';
 import { AppShell } from './shell/AppShell';
 import { LoginRoute } from './routes/LoginRoute';
+import { RevenueRoute } from './routes/RevenueRoute';
+import { ShiftsRoute } from './routes/ShiftsRoute';
+import { ReviewRoute } from './routes/ReviewRoute';
 
 /**
  * The route tree. Auth is enforced in `beforeLoad` against the router context rather than
@@ -52,9 +55,27 @@ const indexRoute = createRoute({
   },
 });
 
+const revenueRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/revenue',
+  component: RevenueRoute,
+});
+
+const shiftsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/shifts',
+  component: ShiftsRoute,
+});
+
+const reviewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/review',
+  component: ReviewRoute,
+});
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
-  appRoute.addChildren([indexRoute]),
+  appRoute.addChildren([indexRoute, revenueRoute, shiftsRoute, reviewRoute]),
 ]);
 
 export function makeRouter(context: RouterContext) {
