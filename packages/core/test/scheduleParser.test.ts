@@ -4,33 +4,31 @@ import { parseScheduleGrid } from '../src/scheduleParser';
 import { makeScheduleWorkbookBuffer } from './fixtures/makeScheduleFixture';
 
 /**
- * Minimal inline flatten, mirroring `packages/api/src/http/excelGrid.ts`'s `flattenCell`.
- * `@salary/core` cannot depend on `@salary/api` (wrong direction), so this is duplicated
- * rather than imported — but it exercises the SAME reduction the API applies before
- * handing exceljs's `CellValue` to the pure parser, instead of the misleading
- * `(v as string | number)` cast the fixture-reading loop used before this fix (that cast
- * lied to the compiler: exceljs's `CellValue` union has richText/formula/Date/boolean
- * variants no cast makes into a `string | number`).
+ * FIX G decision: a prior version of this file duplicated `packages/api/src/http/
+ * excelGrid.ts`'s full `flattenCell` verbatim, claiming to "mirror" it. That duplicate was
+ * dead-code cosplay: `makeScheduleWorkbookBuffer` (below) only ever writes plain strings and
+ * numbers to cells — it never produces rich text, a formula, a hyperlink, a boolean, or a
+ * `Date`. The elaborate branches existed only to look like parity while never actually
+ * running, which is exactly the drift risk the reviewer flagged (a change to the real
+ * `flattenCell` would not be caught here either way, since these branches are unreachable
+ * with this fixture).
+ *
+ * `@salary/core` cannot depend on `@salary/api` (wrong dependency direction), so this stays
+ * a separate, LOCAL helper — but it is now scoped to only what this fixture can actually
+ * produce (`string | number | null`), so there is nothing here to drift out of sync with.
+ * The real hostile-`CellValue` coverage (rich text, hyperlink, formula, error, boolean, and
+ * both valid and invalid `Date`) lives in `packages/api/test/excel-grid.test.ts`, which
+ * calls the genuine `flattenCell` directly — change that file, not this one, if `flattenCell`
+ * changes.
  */
 function flattenCell(v: ExcelJS.CellValue): string | number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === 'number' || typeof v === 'string') return v;
-  if (typeof v === 'boolean') return String(v);
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'object') {
-    if ('richText' in v && Array.isArray(v.richText)) {
-      return v.richText.map((t) => t.text).join('');
-    }
-    if ('text' in v && typeof v.text === 'string') return v.text;
-    if ('error' in v) return null;
-    if ('result' in v) {
-      const r = (v as { result?: unknown }).result;
-      if (r === null || r === undefined) return null;
-      if (typeof r === 'number' || typeof r === 'string') return r;
-      return null;
-    }
-  }
-  return null;
+  throw new Error(
+    `fixtureGrid() received a cell value this fixture never writes: ${JSON.stringify(v)}. ` +
+      'If makeScheduleFixture.ts started writing richText/formula/Date/boolean cells, this ' +
+      'local flatten would need those branches back — see excel-grid.test.ts for the real ones.',
+  );
 }
 
 /** Read the fixture's schedule sheet into the row-major grid the parser expects. */
@@ -134,12 +132,16 @@ describe('parseScheduleGrid', () => {
 });
 
 /**
- * Direct unit tests of `parseScheduleGrid` against hand-written plain-array grids —
- * exercising the "hostile" `CellValue` shapes exceljs's *reader* produces (rich text, a
- * formula result, a `Date`, a boolean) that the fixture generator can never emit, because
- * the fixture only writes the plain values exceljs *writes*. This is the structural gap a
- * prior review found: the fixture proves the parser handles the layout, not that it
- * survives every hostile cell type a real, hand-formatted workbook can contain.
+ * Direct unit tests of `parseScheduleGrid` against hand-written plain-array grids, feeding
+ * the ALREADY-FLATTENED `string | number | null` values that `excelGrid.ts`'s `flattenCell`
+ * would have produced from various raw exceljs `CellValue` shapes (rich text, a formula
+ * result, a `Date`, a boolean). Because the values here are pre-flattened plain strings and
+ * numbers, these tests exercise `parseScheduleGrid`'s own tolerance of those values — they do
+ * NOT exercise `flattenCell` itself, and they prove nothing about a crash occurring inside
+ * the flattening step (a raw, unflattened `CellValue` — e.g. an actual `Date` object or a
+ * `{richText:[...]}` object — is never constructed here). A real regression guard for the
+ * flattening step lives in `packages/api/test/excel-grid.test.ts`, which calls `flattenCell`/
+ * `gridFromWorksheet` with genuine raw exceljs shapes.
  *
  * Grid layout (0-based rows/cols), one slot block, one month, matching the real sheet's
  * column positions (name at col 2 — `NAME_COL` in the parser is hardcoded — days from
@@ -183,11 +185,11 @@ function oneMonthGrid(
   return rows;
 }
 
-describe('parseScheduleGrid: hostile flattened cell values', () => {
-  it('a rich-text-flattened day cell does not throw and yields a substitute anomaly', () => {
-    // Rich text ('Сві') has already been flattened to a plain string by the caller (as
-    // excelGrid.ts's flattenCell does) before it ever reaches the parser — this proves the
-    // parser's own handling of a substitute string, independent of the flattening step.
+describe('parseScheduleGrid: tolerance of already-flattened values (does NOT cover flattenCell itself)', () => {
+  it('a value shaped like a flattened rich-text day cell does not throw and yields a substitute anomaly', () => {
+    // 'Сві' is the plain string flattenCell would produce from rich text — it is written
+    // here directly as a string, so this exercises only the parser's handling of an
+    // arbitrary non-numeric string in a day cell, not the flattening of rich text itself.
     const grid = oneMonthGrid(1, [{ name: 'Олег', cells: { 1: 'Сві' } }]);
     expect(() => parseScheduleGrid(grid, { year: 2026 })).not.toThrow();
     const result = parseScheduleGrid(grid, { year: 2026 });
@@ -197,9 +199,9 @@ describe('parseScheduleGrid: hostile flattened cell values', () => {
     ]);
   });
 
-  it('a boolean-flattened day cell does not throw and is treated as non-numeric', () => {
-    // A boolean cell flattens to the string 'true'/'false' (see excelGrid.ts), which is not
-    // a valid location number.
+  it('a value shaped like a flattened boolean day cell does not throw and is treated as non-numeric', () => {
+    // 'true' is the plain string flattenCell would produce from a boolean cell — written
+    // directly as a string; no boolean is ever constructed in this test.
     const grid = oneMonthGrid(1, [{ name: 'Олег', cells: { 1: 'true' } }]);
     expect(() => parseScheduleGrid(grid, { year: 2026 })).not.toThrow();
     const result = parseScheduleGrid(grid, { year: 2026 });
@@ -207,8 +209,10 @@ describe('parseScheduleGrid: hostile flattened cell values', () => {
     expect(result.anomalies[0]).toMatchObject({ kind: 'substitute', raw: 'true' });
   });
 
-  it('a Date-flattened day cell does not throw and is treated as non-numeric', () => {
-    // A Date cell flattens to an ISO date string ('2026-05-01'), not a location number.
+  it('a value shaped like a flattened Date day cell does not throw and is treated as non-numeric', () => {
+    // '2026-05-01' is an arbitrary non-numeric string here; no Date object is constructed,
+    // so this does not exercise flattenCell's actual Date handling (see FIX A / excel-grid
+    // test for that — a real Date in a day cell must flatten to a day NUMBER, not this).
     const grid = oneMonthGrid(1, [{ name: 'Олег', cells: { 1: '2026-05-01' } }]);
     expect(() => parseScheduleGrid(grid, { year: 2026 })).not.toThrow();
     const result = parseScheduleGrid(grid, { year: 2026 });
@@ -216,8 +220,9 @@ describe('parseScheduleGrid: hostile flattened cell values', () => {
     expect(result.anomalies[0]).toMatchObject({ kind: 'substitute', raw: '2026-05-01' });
   });
 
-  it('a formula-result-flattened numeric day cell parses as a normal location number', () => {
-    // A formula whose result is a plain number (e.g. `=1+0`) flattens to that number.
+  it('a plain numeric day cell (as a flattened formula result would be) parses as a normal location number', () => {
+    // A formula whose result is a plain number (e.g. `=1+0`) flattens to that number; written
+    // directly as a number here.
     const grid = oneMonthGrid(1, [{ name: 'Олег', cells: { 1: 2 } }]);
     expect(() => parseScheduleGrid(grid, { year: 2026 })).not.toThrow();
     const result = parseScheduleGrid(grid, { year: 2026 });
@@ -227,7 +232,7 @@ describe('parseScheduleGrid: hostile flattened cell values', () => {
     expect(result.anomalies).toHaveLength(0);
   });
 
-  it('an error-flattened day cell (null) does not throw and produces no cell or anomaly', () => {
+  it('a null cell (as a flattened error cell would be) does not throw and produces no cell or anomaly', () => {
     // A #REF!/#N/A cell flattens to null; a blank cell is simply skipped by the parser.
     const grid = oneMonthGrid(1, [{ name: 'Олег', cells: { 1: null } }]);
     expect(() => parseScheduleGrid(grid, { year: 2026 })).not.toThrow();
@@ -236,14 +241,13 @@ describe('parseScheduleGrid: hostile flattened cell values', () => {
     expect(result.anomalies).toHaveLength(0);
   });
 
-  it('a rich-text-flattened NAME cell still yields a usable sourceNames entry, not a nameless substitute for the whole row', () => {
-    // Before this fix, `nameFromRow`/`nameCellBlank` both guarded on
+  it('a plain-string NAME cell (as a flattened rich-text name would be) still yields a usable sourceNames entry, not a nameless substitute for the whole row', () => {
+    // Before an earlier fix, `nameFromRow`/`nameCellBlank` both guarded on
     // `typeof value !== 'string'`, so an unflattened rich-text object in the name column
     // produced `name = null` AND `nameCellBlank = false` — every location number on the row
-    // became a nameless `substitute` anomaly and the name never reached `sourceNames`. Here
-    // the name cell is already flattened to a plain string (as the API's flattenCell would
-    // produce from `{richText:[{text:'Марта'}]}`), proving the parser treats it as a normal
-    // name row rather than losing the person.
+    // became a nameless `substitute` anomaly and the name never reached `sourceNames`. This
+    // test writes the name cell as an already-flattened plain string, so it proves the
+    // parser's own name-row handling, not that a raw rich-text object flattens correctly.
     const grid = oneMonthGrid(1, [{ name: 'Марта', cells: { 1: 1 } }]);
     const result = parseScheduleGrid(grid, { year: 2026 });
     expect(result.sourceNames).toContain('Марта');
@@ -251,6 +255,19 @@ describe('parseScheduleGrid: hostile flattened cell values', () => {
       expect.objectContaining({ sourceName: 'Марта', locationNumber: 1 }),
     ]);
     expect(result.anomalies).toHaveLength(0);
+  });
+
+  it('a purely numeric name cell is not treated as a person name (FIX E)', () => {
+    // A stray total or other numeric artifact in the name column must not be coerced into
+    // a fake person "5" offered for mapping; it should fall through to the nameless-row
+    // anomaly path like any other non-name content.
+    const grid = oneMonthGrid(1, [{ name: 5, cells: { 1: 1 } }]);
+    const result = parseScheduleGrid(grid, { year: 2026 });
+    expect(result.sourceNames).not.toContain('5');
+    expect(result.cells).toHaveLength(0);
+    expect(result.anomalies).toEqual([
+      expect.objectContaining({ kind: 'substitute', sourceName: null, raw: '1' }),
+    ]);
   });
 });
 
@@ -281,6 +298,31 @@ describe('parseScheduleGrid: invalid day-of-month guard (FIX 2)', () => {
     });
   });
 
+  it('a non-integer day-of-month value (e.g. "15.5") is rejected, not silently truncated into a dated cell (FIX C)', () => {
+    // A day row value of '15.5' is syntactically in range (1-31) but not a whole day number.
+    // Before FIX C, `asNumber` accepted it and the parser built the date string
+    // '2026-05-15.5' — a clean cell, zero anomalies — which Postgres would reject at insert
+    // time; because that rejection is not a unique-constraint violation, the commit route
+    // would misreport it to the manager as an overlap *conflict* rather than a data problem.
+    // A second, ordinary day-1 column is included alongside the "15.5" day-2 column so this
+    // block has at least one resolved day column — isolating the FIX C assertion from the
+    // separate FIX A "no day columns resolved" defence-in-depth anomaly.
+    const grid: (string | number | null)[][] = [
+      [null, null, 'Травень', null, null],
+      [null, null, null, 'чт', 'пт'],
+      [null, null, null, 1, '15.5'],
+      [null, null, 'Олег', 3, 1],
+    ];
+    const result = parseScheduleGrid(grid, { year: 2026 });
+    expect(result.cells.some((c) => c.date.includes('15.5'))).toBe(false);
+    expect(result.cells).toEqual([
+      expect.objectContaining({ date: '2026-05-01', locationNumber: 3 }),
+    ]);
+    const unparsed = result.anomalies.filter((a) => a.kind === 'unparsed');
+    expect(unparsed).toHaveLength(1);
+    expect(unparsed[0]).toMatchObject({ sourceName: 'Олег', raw: '1' });
+  });
+
   it('does not report an unparsed anomaly for an empty cell under an invalid day column', () => {
     // Only populated cells under an invalid day column are worth flagging — an empty cell
     // there is not an error on the manager's part. Day 31 is left unset (blank) here.
@@ -296,5 +338,59 @@ describe('parseScheduleGrid: invalid day-of-month guard (FIX 2)', () => {
     expect(result.cells).toEqual([
       expect.objectContaining({ date: '2026-05-31', locationNumber: 3 }),
     ]);
+  });
+
+  it('leap year: 2024-02-29 is accepted', () => {
+    const grid = oneMonthGrid(29, [{ name: 'Олег', cells: { 29: 1 } }], { month: 'Лютий' });
+    const result = parseScheduleGrid(grid, { year: 2024 }); // 2024 is a leap year
+    expect(result.anomalies.filter((a) => a.kind === 'unparsed')).toHaveLength(0);
+    expect(result.cells).toEqual([
+      expect.objectContaining({ date: '2024-02-29', locationNumber: 1 }),
+    ]);
+  });
+
+  it('leap year: 2025-02-29 is rejected with exactly one unparsed anomaly', () => {
+    const grid = oneMonthGrid(29, [{ name: 'Олег', cells: { 29: 1 } }], { month: 'Лютий' });
+    const result = parseScheduleGrid(grid, { year: 2025 }); // 2025 is not a leap year
+    expect(result.cells.some((c) => c.date === '2025-02-29')).toBe(false);
+    const unparsed = result.anomalies.filter((a) => a.kind === 'unparsed');
+    expect(unparsed).toHaveLength(1);
+    expect(unparsed[0]).toMatchObject({ sourceName: 'Олег', date: '2025-02-29', raw: '1' });
+  });
+
+  it('day validation uses the ATTRIBUTED month, not the leftmost: a May-31 column parses while a June-31 column in the same row is rejected', () => {
+    // A single row carries two month headers, mirroring the real sheet's side-by-side
+    // month blocks. Column attribution is "right-most month header at or before" the
+    // column, so the June columns (to the right of the June header) must be validated
+    // against June's day count (30), not May's (31), even though May is the leftmost —
+    // and thus first-seen — month in the row.
+    const grid: (string | number | null)[][] = [
+      // row 0: month headers — 'Травень' (May) at col 2, 'Червень' (June) at col 5
+      [null, null, 'Травень', null, null, 'Червень', null, null],
+      // row 1: weekday labels for May day1 (col3), May day31 (col4), June day1 (col6), June day31 (col7)
+      [null, null, null, 'чт', 'чт', null, 'чт', 'чт'],
+      // row 2: day-of-month numbers
+      [null, null, null, 1, 31, null, 1, 31],
+      // row 3: employee row — May day1=1, May day31=3, June day1=1, June day31=2
+      [null, null, 'Олег', 1, 3, null, 1, 2],
+    ];
+    const result = parseScheduleGrid(grid, { year: 2026 });
+
+    // May has 31 days: the May-31 column parses normally.
+    expect(result.cells).toEqual(
+      expect.arrayContaining([expect.objectContaining({ date: '2026-05-31', locationNumber: 3 })]),
+    );
+    // June has 30 days: the June-31 column is rejected, not silently misattributed to May.
+    expect(result.cells.some((c) => c.date === '2026-06-31')).toBe(false);
+    const unparsed = result.anomalies.filter((a) => a.kind === 'unparsed');
+    expect(unparsed).toHaveLength(1);
+    expect(unparsed[0]).toMatchObject({ sourceName: 'Олег', date: '2026-06-31', raw: '2' });
+    // Both months' day-1 columns parse fine.
+    expect(result.cells).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ date: '2026-05-01', locationNumber: 1 }),
+        expect.objectContaining({ date: '2026-06-01', locationNumber: 1 }),
+      ]),
+    );
   });
 });

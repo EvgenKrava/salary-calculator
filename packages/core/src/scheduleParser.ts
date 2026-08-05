@@ -83,6 +83,11 @@ function nameFromRow(value: unknown): string | null {
   if (name === '') return null;
   if (monthFromHeader(name) !== null) return null;
   if (name.toLowerCase().startsWith('зміни')) return null;
+  // A purely numeric name cell (e.g. a stray total mistakenly left in the name column) is
+  // not a person's name. Coercing it to a string name would offer "5" to the manager as
+  // someone to map; instead fall through to the existing nameless-row anomaly path, same
+  // as before string coercion was introduced for rich-text/formatted name cells.
+  if (typeof value === 'number' || /^-?\d+(\.\d+)?$/.test(name)) return null;
   return name;
 }
 
@@ -157,11 +162,28 @@ export function parseScheduleGrid(
       // Attribute the column to the right-most month header at or before it.
       let month = monthCols[0].month;
       for (const mc of monthCols) if (c >= mc.startCol) month = mc.month;
-      if (day > daysInMonth(opts.year, month)) {
+      // A non-integer day (e.g. '15.5', a fat-fingered or corrupted cell) must never reach a
+      // dated cell: it would build a date string like '2026-05-15.5', which Postgres rejects
+      // at insert time — and because that rejection is not a unique-constraint violation, the
+      // commit route misreports it to the manager as an overlap *conflict* instead of a data
+      // problem. Route it through the same invalid-day path as an out-of-range day.
+      if (!Number.isInteger(day) || day > daysInMonth(opts.year, month)) {
         invalidDayCols.push({ col: c, day, month });
         continue;
       }
       dayCols.push({ col: c, day, month });
+    }
+
+    if (dayCols.length === 0) {
+      // A month header with no usable day columns means the layout was not understood.
+      // Never report success silently — an import that yields nothing must say why.
+      anomalies.push({
+        kind: 'unparsed',
+        sourceName: null,
+        slot,
+        date: null,
+        raw: `no day columns resolved for month ${monthCols.map((m) => m.month).join(',')}`,
+      });
     }
 
     for (const mc of monthCols) {

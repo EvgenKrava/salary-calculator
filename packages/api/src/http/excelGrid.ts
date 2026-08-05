@@ -11,7 +11,14 @@ export function flattenCell(v: ExcelJS.CellValue): string | number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === 'number' || typeof v === 'string') return v;
   if (typeof v === 'boolean') return String(v);
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  // A date-formatted cell (spreadsheet auto-fill produces these for day-of-month rows)
+  // must yield the DAY NUMBER: returning an ISO string made asNumber() return null, which
+  // silently dropped the entire day column and produced an import with zero shifts and
+  // zero anomalies. Guard the invalid-date case, which otherwise throws a RangeError that
+  // escapes as an opaque 500.
+  if (v instanceof Date) {
+    return Number.isNaN(v.getTime()) ? null : v.getUTCDate();
+  }
   if (typeof v === 'object') {
     if ('richText' in v && Array.isArray(v.richText)) {
       return v.richText.map((t) => t.text).join('');

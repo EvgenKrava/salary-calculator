@@ -211,6 +211,29 @@ describe('schedule import', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('still reports an unknown location for an inactive-employee cell instead of suppressing it (FIX F)', async () => {
+    const { db, app } = await seed();
+    // Тарас is scheduled at location "3" in the fixture, which does not exist in seed()
+    // (only "1" and "2" do). Map him to a deactivated employee so the cell is BOTH
+    // inactive-employee AND unknown-location — the ordering bug this fix addresses.
+    const [level] = await db.select().from(levels);
+    const [departed] = await db
+      .insert(employees)
+      .values({ name: 'Departed Taras', levelId: level.id, active: false })
+      .returning();
+    await db.insert(scheduleNameMap).values({ sourceName: 'Тарас', employeeId: departed.id });
+
+    const preview = await app.request('/api/schedule-imports/preview', {
+      method: 'POST',
+      headers: MGR,
+      body: await form({ year: '2026' }),
+    });
+    const previewBody = (await preview.json()) as PreviewResponse;
+    expect(previewBody.inactiveEmployees).toEqual(expect.arrayContaining(['Тарас']));
+    // Before FIX F, the inactive-employee `continue` ran first and this would be empty.
+    expect(previewBody.unknownLocations).toEqual(expect.arrayContaining([3]));
+  });
+
   it('reports a narrowed slot window as windowChanged instead of silently skipping (FIX 5)', async () => {
     const { db, app, loc1 } = await seed();
     const first = (await (

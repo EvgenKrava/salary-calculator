@@ -38,17 +38,22 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
       throw new HTTPException(400, { message: 'year must be an integer between 2000 and 2100' });
     }
     const wb = new ExcelJS.Workbook();
+    let grid: (string | number | null)[][];
     try {
       // exceljs's bundled .d.ts declares its own module-local `Buffer` (extends `ArrayBuffer`),
       // which no longer structurally matches @types/node's `Buffer<ArrayBufferLike>` — a stale
       // type declaration, not a runtime incompatibility. Cast to satisfy the declared signature.
       await wb.xlsx.load((await file.arrayBuffer()) as unknown as ArrayBuffer);
-    } catch {
-      throw new HTTPException(400, { message: 'could not read the workbook' });
+      const ws = wb.getWorksheet(SHEET_NAME);
+      if (!ws) throw new HTTPException(400, { message: `sheet "${SHEET_NAME}" not found` });
+      // gridFromWorksheet/flattenCell walk every cell in the workbook and can throw on a
+      // malformed cell (e.g. an unparseable Date) — that must become a 400, not an opaque
+      // 500, so it stays inside this try/catch alongside the load itself.
+      grid = gridFromWorksheet(ws);
+    } catch (err) {
+      if (err instanceof HTTPException) throw err;
+      throw new HTTPException(400, { message: 'could not read the schedule sheet' });
     }
-    const ws = wb.getWorksheet(SHEET_NAME);
-    if (!ws) throw new HTTPException(400, { message: `sheet "${SHEET_NAME}" not found` });
-    const grid = gridFromWorksheet(ws);
     return { grid, year, body };
   }
 
@@ -88,12 +93,17 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
       // `calculateSalaries` skips inactive employees for payment but still counts their
       // shifts in the pass-1 proration denominator — importing shifts for a departed
       // employee would silently dilute every active coworker's revenue share on those
-      // location-days. Report it instead of resolving to a shift.
+      // location-days. Report it instead of resolving to a shift. This flag is recorded
+      // rather than acted on immediately (via `continue`) so a cell that is BOTH an
+      // inactive-employee mapping AND has an unknown location/missing slot still surfaces
+      // that second problem too — unlike the deliberate `ignored` case above, an inactive
+      // employee's bad location/slot is still a real data problem worth reporting.
+      let isInactiveEmployee = false;
       if (mapping?.employeeId) {
         const employee = employeeById.get(mapping.employeeId);
         if (employee && !employee.active) {
           inactiveEmployees.add(cell.sourceName);
-          continue;
+          isInactiveEmployee = true;
         }
       }
 
@@ -110,6 +120,7 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
         missingSlots.add(`${location.name}:${cell.slot}`);
         continue;
       }
+      if (isInactiveEmployee) continue;
       if (!mapping || mapping.employeeId === null) continue;
 
       resolved.push({
