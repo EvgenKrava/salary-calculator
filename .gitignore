@@ -26,3 +26,5 @@ build/
 # parser tests use the synthetic fixture in packages/core/test/fixtures instead.
 docs/*.xlsx
 docs/*.xls
+# Parallel-development git worktrees live here; each is its own checkout.
+.worktrees/
