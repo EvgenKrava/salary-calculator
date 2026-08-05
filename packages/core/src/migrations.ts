@@ -14,5 +14,8 @@ export const INIT_SQL = read('0001_init.sql');
 /** The hours-based model migration. Node-only. */
 export const HOURS_MODEL_SQL = read('0002_hours_model.sql');
 
+/** The schedule-import migration. Node-only. */
+export const SCHEDULE_IMPORT_SQL = read('0003_schedule_import.sql');
+
 /** All migrations in apply order. Node-only. */
-export const MIGRATIONS: string[] = [INIT_SQL, HOURS_MODEL_SQL];
+export const MIGRATIONS: string[] = [INIT_SQL, HOURS_MODEL_SQL, SCHEDULE_IMPORT_SQL];

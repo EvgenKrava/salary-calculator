@@ -113,7 +113,7 @@ export async function makeScheduleWorkbookBuffer(): Promise<Buffer> {
   writeBlockHeader(14);
   ws.getCell(17, 3).value = 'Марта'; // name repeated ACROSS blocks
   ws.getCell(17, 4).value = 1;
-  ws.getCell(18, 3).value = 'Ігор';
+  ws.getCell(18, 3).value = 'Тарас';
   ws.getCell(18, 6).value = 3;
   ws.getCell(19, 4).value = 'Інвентура'; // annotation
 
@@ -229,8 +229,8 @@ describe('parseScheduleGrid', () => {
   });
 
   it('assigns rows in the second block to slot 2', () => {
-    const igor = result.cells.find((c) => c.sourceName === 'Ігор');
-    expect(igor).toMatchObject({ slot: 2, locationNumber: 3 });
+    const taras = result.cells.find((c) => c.sourceName === 'Тарас');
+    expect(taras).toMatchObject({ slot: 2, locationNumber: 3 });
   });
 
   it('parses the second month with the correct dates', () => {
@@ -255,7 +255,7 @@ describe('parseScheduleGrid', () => {
   });
 
   it('lists every distinct source name for the mapping step', () => {
-    expect(result.sourceNames).toEqual(expect.arrayContaining(['Олег', 'Марта', 'Бариста 1', 'Ігор']));
+    expect(result.sourceNames).toEqual(expect.arrayContaining(['Олег', 'Марта', 'Бариста 1', 'Тарас']));
   });
 
   it('excludes the slot marker row from source names', () => {
@@ -734,6 +734,29 @@ describe('location shift slots', () => {
     expect(malformed.status).toBe(400);
   });
 
+  it('rejects a slot window outside the location hours (400)', async () => {
+    const { app, loc } = await seed(); // location A opens 08:00, closes 20:00
+    const tooEarly = await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '06:00', endsAt: '07:00' }),
+    });
+    expect(tooEarly.status).toBe(400);
+    const tooLate = await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '19:00', endsAt: '23:00' }),
+    });
+    expect(tooLate.status).toBe(400);
+    // Exactly matching the location hours is allowed.
+    const exact = await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '08:00', endsAt: '20:00' }),
+    });
+    expect(exact.status).toBe(200);
+  });
+
   it('400s an unknown location and 404s a bad slot number', async () => {
     const { app, loc } = await seed();
     const badLoc = await app.request('/api/locations/00000000-0000-0000-0000-000000000000/slots/1', {
@@ -945,12 +968,34 @@ export function createShiftSlotRoutes(db: Db): Hono<AppEnv> {
     return c.json(rows.map(toDto));
   });
 
+  /**
+   * A slot window must fall inside the location's own working hours — otherwise the
+   * importer would happily produce shifts for hours the shop is shut. The DB constrains
+   * the window's shape (ordered, whole minutes, < 24:00) but cannot compare it to the
+   * parent location's hours, so it is enforced here.
+   */
+  async function assertWithinLocationHours(
+    locationId: string,
+    startsAt: string,
+    endsAt: string,
+  ): Promise<void> {
+    const [location] = await db.select().from(locations).where(eq(locations.id, locationId));
+    const opensAt = location.opensAt.slice(0, 5);
+    const closesAt = location.closesAt.slice(0, 5);
+    if (startsAt < opensAt || endsAt > closesAt) {
+      throw new HTTPException(400, {
+        message: `slot window must fall within the location hours ${opensAt}-${closesAt}`,
+      });
+    }
+  }
+
   // PUT is an upsert so re-configuring a slot is idempotent.
   routes.put('/:slotNumber', async (c) => {
     const locationId = c.req.param('locationId')!;
     await requireLocation(locationId);
     const slotNumber = slotNumberParam(c.req.param('slotNumber')!);
     const body = await readJson(c, windowSchema);
+    await assertWithinLocationHours(locationId, body.startsAt, body.endsAt);
     const [row] = await db
       .insert(locationShiftSlots)
       .values({ locationId, slotNumber, startsAt: body.startsAt, endsAt: body.endsAt })
@@ -1182,8 +1227,8 @@ describe('schedule import', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.months).toEqual(expect.arrayContaining([{ year: 2026, month: 5 }]));
-    // Олег is mapped; Марта/Ігор/Бариста 1 are not.
-    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Ігор', 'Бариста 1']));
+    // Олег is mapped; Марта/Тарас/Бариста 1 are not.
+    expect(body.unmappedNames).toEqual(expect.arrayContaining(['Марта', 'Тарас', 'Бариста 1']));
     expect(body.resolved.length).toBeGreaterThan(0);
     expect(body.anomalies.length).toBeGreaterThan(0);
     // Nothing persisted.
@@ -1641,3 +1686,50 @@ can never produce an unstorable shift.
 `locations.name` (the sheet calls them `1`–`5`). If the business renames a location to
 something non-numeric, imports report it under `unknownLocations` rather than failing
 silently — visible and fixable, and cheaper than adding a separate mapping table now.
+
+---
+
+## Post-Review Fixes (final review returned "No — with fixes")
+
+Two Critical defects, both verified by running the parser, both reachable on the first real
+upload, and both originating in this plan's own reference code:
+
+1. **CRITICAL — a formatted cell crashes the parser (opaque 500).** The `(v as string | number)`
+   cast when reading the worksheet lets 4 of exceljs's 10 `CellValue` variants (rich text,
+   formula, `Date`, boolean) reach `asNumber`'s `.trim()`, which throws a `TypeError` — not an
+   `HTTPException`, so it surfaces as `{error:'internal'}` 500 with no indication of which cell
+   broke. Hand-edited cells are the ones that pick up bold/colour formatting, so the substitute
+   names (`Сві`, `Хри`, `Вла`) are the most likely to hit it. Fix: a `flatten(v: ExcelJS.CellValue)`
+   boundary helper that reduces every variant to `string | number | null`, plus making
+   `asNumber` total (`value: unknown`, return `null` for non-strings) so the parser cannot throw
+   regardless of caller.
+2. **CRITICAL — day 31 in a 30-day month emits an invalid date.** The day guard was the purely
+   syntactic `day >= 1 && day <= 31`, so a stale day-31 column in a 30-day month block (common
+   when a block is copy-pasted) produced `'2026-06-31'` as a clean shift with ZERO anomalies.
+   Postgres then rejects it, and because that is not a unique violation it lands in the generic
+   catch and is reported to the manager as an *overlap conflict* — a misleading diagnosis for a
+   malformed source cell. February hits this every import. Fix: validate the day against the
+   real length of its attributed month in the parser and report an `unparsed` anomaly instead of
+   emitting a cell. This also gives the `'unparsed'` anomaly kind its first use — it was declared
+   and never emitted.
+3. **IMPORTANT — a rich-text NAME cell silently deletes that person's month** (same root cause as
+   #1): `nameFromRow` returns null and `nameCellBlank` is false, so every location number on the
+   row is filed as a nameless `substitute` and the name never reaches `sourceNames`, so the
+   manager is never prompted to map it. Fixed by the same `flatten` helper.
+4. **IMPORTANT — an inactive employee's imported hours dilute coworkers' pay.** `resolve()` never
+   consulted `employees.active`. `calculateSalaries` skips inactive employees for *payment* but
+   still counts their shifts in the pass-1 proration denominator, so importing shifts for a
+   departed employee silently reduces every active coworker's revenue share on those
+   location-days. Fix: report such mappings in an `inactiveEmployees` array instead of resolving
+   them.
+5. **IMPORTANT — idempotency probe ignored `endsAt`.** If an admin narrows a slot window and the
+   manager re-imports, the probe matched the stale row on `startsAt` alone, counted it `skipped`,
+   and left the OLD longer window in place — overpaying that employee and diluting coworkers.
+   Fix: include `endsAt` in the probe and report a mismatch in a distinct `windowChanged` array
+   rather than folding it into `skipped`.
+6. **MINOR — a dead assertion.** `expect(...locationNumber === Number.NaN).toBe(false)` is
+   vacuous (`NaN === NaN` is always false); use `Number.isNaN`.
+
+**Structural lesson (why the tests missed all of this):** the fixture can only emit the cell
+types exceljs *writes*, never the hostile types it *reads*. Adversarial inputs belong in direct
+unit tests of `parseScheduleGrid`, which takes a plain array and needs no workbook at all.
