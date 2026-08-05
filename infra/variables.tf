@@ -61,3 +61,20 @@ variable "db_max_acu" {
     error_message = "db_max_acu must be greater than or equal to db_min_acu."
   }
 }
+
+variable "bedrock_bearer_token" {
+  description = <<-EOT
+    Bedrock API key (long-lived bearer token) for the extraction Lambda. Supplied via
+    terraform.tfvars (gitignored) or TF_VAR_bedrock_bearer_token — never committed. The
+    extraction Lambda reads it as AWS_BEARER_TOKEN_BEDROCK.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch log retention for the Lambdas. 0 keeps logs forever."
+  type        = number
+  default     = 14
+}
