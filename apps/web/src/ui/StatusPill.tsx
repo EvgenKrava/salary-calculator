@@ -7,6 +7,10 @@ const LABEL: Record<string, string> = {
   needs_review: 'needs review',
   processing: 'processing',
   blocked: 'blocked',
+  // Employee record state. Distinct from approved/rejected on purpose: an inactive employee
+  // is not a rejected one, and reusing those styles would read as a decision about them.
+  active: 'active',
+  inactive: 'inactive',
 };
 
 /**

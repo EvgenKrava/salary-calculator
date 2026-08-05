@@ -3,6 +3,7 @@ import { StatusPill } from '../ui/StatusPill';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { useExtractionJobs, useJobDecision } from '../lib/queries';
+import { anyLoading, firstError } from '../ui/QueryGate';
 
 /**
  * The human half of the human-in-the-loop. The extracted payload is shown verbatim so a
@@ -18,7 +19,21 @@ export function ReviewRoute() {
   const jobs = useExtractionJobs('needs_review');
   const decide = useJobDecision();
 
-  if (jobs.isLoading) return <p className="mono">loading…</p>;
+  if (anyLoading(jobs)) return <p className="mono">loading…</p>;
+  // A failing endpoint previously rendered "Nothing waiting for review" — indistinguishable
+  // from a healthy empty queue, on the one screen whose job is catching bad data.
+  const loadError = firstError(jobs);
+  if (loadError) {
+    return (
+      <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
+        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>Could not load the review queue</h2>
+        <p className="mono" style={{ margin: 0 }}>{loadError.message}</p>
+        <p style={{ marginBottom: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
+          This is not the same as an empty queue — documents may be waiting.
+        </p>
+      </div>
+    );
+  }
   const rows = jobs.data ?? [];
 
   return (

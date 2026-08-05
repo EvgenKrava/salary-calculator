@@ -20,10 +20,27 @@ async function makeApp() {
 }
 
 describe('levels routes', () => {
-  it('forbids a non-admin', async () => {
+  it('lets a manager READ levels, so the employees screen can name them', async () => {
     const app = await makeApp();
     const res = await app.request('/api/levels', { headers: MGR });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+  });
+
+  it('forbids a manager from WRITING levels (rates stay admin-only)', async () => {
+    const app = await makeApp();
+    const created = await app.request('/api/levels', {
+      method: 'POST',
+      headers: { ...MGR, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Sneaky', ratePerHour: 999 }),
+    });
+    expect(created.status).toBe(403);
+
+    const patched = await app.request('/api/levels/00000000-0000-0000-0000-000000000001', {
+      method: 'PATCH',
+      headers: { ...MGR, 'content-type': 'application/json' },
+      body: JSON.stringify({ ratePerHour: 999 }),
+    });
+    expect(patched.status).toBe(403);
   });
 
   it('creates and lists a level', async () => {

@@ -107,6 +107,40 @@ export function useEmployees() {
   return useQuery({ queryKey: ['employees'], queryFn: () => api.get<Employee[]>('/api/employees') });
 }
 
+export function useAddEmployee() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      levelId: string;
+      revenuePercent: number;
+      cognitoSub?: string | null;
+      active?: boolean;
+    }) => api.post<Employee>('/api/employees', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
+}
+
+export function useUpdateEmployee() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      name?: string;
+      levelId?: string;
+      revenuePercent?: number;
+      cognitoSub?: string | null;
+      active?: boolean;
+    }) => api.patch<Employee>(`/api/employees/${id}`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
+}
+
 export function useRevenue(params: { from?: string; to?: string } = {}) {
   const api = useApi();
   const qs = new URLSearchParams();

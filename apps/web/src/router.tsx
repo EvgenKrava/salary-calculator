@@ -13,6 +13,7 @@ import { RunsRoute } from './routes/RunsRoute';
 import { MyShiftsRoute } from './routes/MyShiftsRoute';
 import { MyPayRoute } from './routes/MyPayRoute';
 import { SetupRoute } from './routes/SetupRoute';
+import { EmployeesRoute } from './routes/EmployeesRoute';
 import { ImportRoute } from './routes/ImportRoute';
 
 /**
@@ -90,6 +91,12 @@ const importRoute = createRoute({
   component: ImportRoute,
 });
 
+const employeesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/employees',
+  component: EmployeesRoute,
+});
+
 const setupRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/setup',
@@ -117,6 +124,7 @@ export const routeTree = rootRoute.addChildren([
     reviewRoute,
     runsRoute,
     importRoute,
+    employeesRoute,
     setupRoute,
     myShiftsRoute,
     myPayRoute,

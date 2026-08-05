@@ -7,11 +7,13 @@ const verifier: TokenVerifier = {
   async verify(token) {
     if (token === 'admin') return { sub: 'u-admin', groups: ['admin'] };
     if (token === 'mgr') return { sub: 'u-mgr', groups: ['manager'] };
+    if (token === 'emp') return { sub: 'u-emp', groups: ['employee'] };
     throw new Error('bad');
   },
 };
 const ADMIN = { Authorization: 'Bearer admin' };
 const MGR = { Authorization: 'Bearer mgr' };
+const EMP = { Authorization: 'Bearer emp' };
 const JSONH = { 'content-type': 'application/json' };
 
 async function makeApp() {
@@ -20,9 +22,42 @@ async function makeApp() {
 }
 
 describe('locations routes', () => {
-  it('forbids a non-admin', async () => {
+  it('lets a manager READ locations, so shift/revenue tables can name them', async () => {
+    // Admin-only reads made every location render as '—' on the manager screens: data that
+    // looks present but anonymous, which reads as correct and is worse than an error.
     const app = await makeApp();
-    expect((await app.request('/api/locations', { headers: MGR })).status).toBe(403);
+    const res = await app.request('/api/locations', { headers: MGR });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it('forbids a manager from WRITING locations (setup stays admin-only)', async () => {
+    const app = await makeApp();
+    const created = await app.request('/api/locations', {
+      method: 'POST',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ name: 'Sneaky', opensAt: '08:00', closesAt: '16:00' }),
+    });
+    expect(created.status).toBe(403);
+
+    // And the loosened GET must not have loosened the id-scoped mutations either.
+    const patched = await app.request('/api/locations/00000000-0000-0000-0000-000000000001', {
+      method: 'PATCH',
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ name: 'Renamed' }),
+    });
+    expect(patched.status).toBe(403);
+
+    const deleted = await app.request('/api/locations/00000000-0000-0000-0000-000000000001', {
+      method: 'DELETE',
+      headers: MGR,
+    });
+    expect(deleted.status).toBe(403);
+  });
+
+  it('forbids an employee entirely', async () => {
+    const app = await makeApp();
+    expect((await app.request('/api/locations', { headers: EMP })).status).toBe(403);
   });
 
   it('creates, lists, gets, updates a location', async () => {

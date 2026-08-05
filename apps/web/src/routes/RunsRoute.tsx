@@ -94,6 +94,22 @@ export function BlockedRun({
   );
 }
 
+/** Parse a bonus field. Blank means no bonus; anything unparseable is rejected, not zeroed. */
+export function parseBonuses(raw: Record<string, string>): { bonuses: Record<string, number>; invalid: string[] } {
+  const bonuses: Record<string, number> = {};
+  const invalid: string[] = [];
+  for (const [employeeId, text] of Object.entries(raw)) {
+    const trimmed = text.trim();
+    if (trimmed === '') continue; // blank = no bonus, not a zero to send
+    const value = Number(trimmed);
+    // The API requires a non-negative number. Catching it here names the employee whose
+    // field is wrong, instead of surfacing a generic 400 with no indication of which row.
+    if (!Number.isFinite(value) || value < 0) invalid.push(employeeId);
+    else if (value > 0) bonuses[employeeId] = value;
+  }
+  return { bonuses, invalid };
+}
+
 export function RunsRoute() {
   const runs = useSalaryRuns();
   const employees = useEmployees();
@@ -103,22 +119,48 @@ export function RunsRoute() {
   const [year, setYear] = useState(String(now.getUTCFullYear()));
   const [month, setMonth] = useState(String(now.getUTCMonth() + 1));
   const [half, setHalf] = useState<'1' | '2'>('1');
+  // Keyed by employee id, held as strings so a half-typed value is not coerced to a number.
+  const [bonusText, setBonusText] = useState<Record<string, string>>({});
   const [gaps, setGaps] = useState<{ employeeId: string; locationId: string; date: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SalaryRunLine[] | null>(null);
+
+  const activeEmployees = (employees.data ?? []).filter((e) => e.active);
 
   async function run(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setGaps(null);
     setResult(null);
+
+    // A run is final and immediately visible to employees, so validate before sending rather
+    // than letting a typo become a permanent line.
+    const yearNum = Number(year);
+    const monthNum = Number(month);
+    if (!Number.isInteger(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      setError('Enter a year between 2000 and 2100.');
+      return;
+    }
+    if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
+      setError('Enter a month between 1 and 12.');
+      return;
+    }
+    const { bonuses, invalid } = parseBonuses(bonusText);
+    if (invalid.length > 0) {
+      const names = invalid.map((id) => activeEmployees.find((x) => x.id === id)?.name ?? id);
+      setError(`Fix the bonus amount for: ${names.join(', ')}. Use a number of 0 or more.`);
+      return;
+    }
+
     try {
       const created = await create.mutateAsync({
-        year: Number(year),
-        month: Number(month),
+        year: yearNum,
+        month: monthNum,
         half: half === '1' ? 1 : 2,
+        bonuses,
       });
       setResult(created.lines);
+      setBonusText({});
     } catch (err) {
       // The API returns 409 with { error, gaps } when revenue is incomplete; ApiError.body
       // carries that parsed JSON, so the gaps array is reachable here rather than lost with
@@ -148,7 +190,60 @@ export function RunsRoute() {
             <option value="2">16th – end of month</option>
           </select>
         </div>
-        <Button type="submit" variant="primary" disabled={create.isPending}>
+        <fieldset style={{ border: 0, padding: 0, margin: 'var(--s6) 0 0' }}>
+          <legend style={{ font: 'inherit', fontWeight: 600, padding: 0, marginBottom: 'var(--s1)' }}>
+            Personal bonuses
+          </legend>
+          <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
+            Optional, per person, for this period only. Leave blank for no bonus. A run cannot be
+            edited afterwards, so enter bonuses before running.
+          </p>
+          {employees.isLoading ? (
+            <p className="mono">loading employees…</p>
+          ) : employees.error ? (
+            // Never render an empty bonus list as if nobody qualified — a manager would run
+            // payroll believing there was nothing to enter.
+            <p style={{ color: 'var(--stop)' }}>
+              Could not load employees, so bonuses cannot be entered. Reload before running payroll.
+            </p>
+          ) : activeEmployees.length === 0 ? (
+            <p className="mono">No active employees.</p>
+          ) : (
+            <Table caption="Bonus per employee">
+              <thead>
+                <tr>
+                  <Th>Employee</Th>
+                  <Th numeric>Bonus</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeEmployees.map((emp) => (
+                  <tr key={emp.id}>
+                    <Td>{emp.name}</Td>
+                    <NumCell>
+                      <input
+                        className="field__input"
+                        style={{ textAlign: 'right', maxWidth: '10ch' }}
+                        type="text"
+                        inputMode="decimal"
+                        aria-label={`Bonus for ${emp.name}`}
+                        value={bonusText[emp.id] ?? ''}
+                        onChange={(ev) => setBonusText((prev) => ({ ...prev, [emp.id]: ev.target.value }))}
+                      />
+                    </NumCell>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </fieldset>
+
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={create.isPending || employees.isLoading || Boolean(employees.error)}
+          style={{ marginTop: 'var(--s4)' }}
+        >
           {create.isPending ? 'Running…' : 'Run payroll'}
         </Button>
       </form>

@@ -6,6 +6,7 @@ import {
   CognitoUserPool,
   type CognitoUserSession,
 } from 'amazon-cognito-identity-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { config } from './config';
 
 type Status = 'loading' | 'signed-out' | 'signed-in' | 'new-password-required';
@@ -58,6 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     groups: [],
   });
   const [pendingUser, setPendingUser] = useState<CognitoUser | null>(null);
+  // Used by signOut to drop cached payroll data on a session switch. Safe because
+  // QueryClientProvider wraps AuthProvider in main.tsx.
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const user = pool.getCurrentUser();
@@ -118,7 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pool.getCurrentUser()?.signOut();
     setIdentity({ sub: null, email: null, groups: [] });
     setStatus('signed-out');
-  }, []);
+    // Drop every cached response. The QueryClient is a module-scoped singleton and the query
+    // keys are not scoped by user identity, so without this the next person to sign in on the
+    // same device — these are shared shop tablets and phones — can be served the previous
+    // user's cached shifts, revenue, and pay data. The API still authorizes every request, so
+    // nothing new can be written this way; the leak is what stays on screen.
+    queryClient.clear();
+  }, [queryClient]);
 
   const getToken = useCallback(async () => {
     const user = pool.getCurrentUser();

@@ -2,12 +2,7 @@ import { Table, Th, Td, NumCell } from '../ui/Table';
 import { StatusPill } from '../ui/StatusPill';
 import { EmptyState } from '../ui/EmptyState';
 import { useMyShifts } from '../lib/queries';
-
-function hours(startsAt: string, endsAt: string): string {
-  const [sh, sm] = startsAt.split(':').map(Number);
-  const [eh, em] = endsAt.split(':').map(Number);
-  return (((eh * 60 + em) - (sh * 60 + sm)) / 60).toFixed(2);
-}
+import { shiftHours } from '../lib/hours';
 
 /** An employee's own shifts — date, window, hours, status. Read-only: approving is a
  * manager action, done on the Shifts screen. */
@@ -39,7 +34,7 @@ export function MyShiftsRoute() {
               <tr key={s.id}>
                 <Td><span className="mono">{s.workDate}</span></Td>
                 <Td><span className="mono">{s.startsAt}–{s.endsAt}</span></Td>
-                <NumCell>{hours(s.startsAt, s.endsAt)}</NumCell>
+                <NumCell>{shiftHours(s.startsAt, s.endsAt)}</NumCell>
                 <Td><StatusPill status={s.status} /></Td>
               </tr>
             ))}

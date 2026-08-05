@@ -7,12 +7,15 @@
   border: 1px solid transparent;
 }
 
-.pill--approved {
+.pill--approved,
+.pill--active {
   color: var(--ok);
   border-color: var(--ok);
 }
+/* Inactive is neutral, not a failure: the person simply no longer works here. */
 .pill--requested,
-.pill--processing {
+.pill--processing,
+.pill--inactive {
   color: var(--ink-muted);
   border-color: var(--rule-strong);
 }

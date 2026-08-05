@@ -2,13 +2,9 @@ import { Table, Th, Td, NumCell } from '../ui/Table';
 import { StatusPill } from '../ui/StatusPill';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
+import { anyLoading, firstError } from '../ui/QueryGate';
 import { useEmployees, useLocations, useShiftDecision, useShifts } from '../lib/queries';
-
-function hours(startsAt: string, endsAt: string): string {
-  const [sh, sm] = startsAt.split(':').map(Number);
-  const [eh, em] = endsAt.split(':').map(Number);
-  return (((eh * 60 + em) - (sh * 60 + sm)) / 60).toFixed(2);
-}
+import { shiftHours } from '../lib/hours';
 
 export function ShiftsRoute() {
   const shifts = useShifts();
@@ -16,7 +12,18 @@ export function ShiftsRoute() {
   const locations = useLocations();
   const decide = useShiftDecision();
 
-  if (shifts.isLoading || employees.isLoading || locations.isLoading) return <p className="mono">loading…</p>;
+  if (anyLoading(shifts, employees, locations)) return <p className="mono">loading…</p>;
+  // Without this, a failed employees/locations query left every name and location reading '—'
+  // in a table that otherwise looked fine.
+  const loadError = firstError(shifts, employees, locations);
+  if (loadError) {
+    return (
+      <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
+        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>Could not load shifts</h2>
+        <p className="mono" style={{ margin: 0 }}>{loadError.message}</p>
+      </div>
+    );
+  }
 
   const rows = shifts.data ?? [];
   const nameOf = (id: string) => employees.data?.find((e) => e.id === id)?.name ?? '—';
@@ -48,7 +55,7 @@ export function ShiftsRoute() {
                 <Td>{nameOf(s.employeeId)}</Td>
                 <Td>{locOf(s.locationId)}</Td>
                 <Td><span className="mono">{s.startsAt}–{s.endsAt}</span></Td>
-                <NumCell>{hours(s.startsAt, s.endsAt)}</NumCell>
+                <NumCell>{shiftHours(s.startsAt, s.endsAt)}</NumCell>
                 <Td><StatusPill status={s.status} /></Td>
                 <Td>{s.source}</Td>
                 <Td>
