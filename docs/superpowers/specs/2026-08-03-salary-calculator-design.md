@@ -152,17 +152,36 @@ levels, revenue percentages, and bonuses are entered directly in the app, not ex
 1. A manager uploads a photo/PDF. The API returns a presigned URL and the file lands in
    the **documents S3 bucket**.
 2. An S3 put event triggers the **extraction Lambda**, which calls **Bedrock via the
-   Anthropic SDK** — `AnthropicBedrockMantle`, model `anthropic.claude-opus-4-8`, vision
-   input, bearer token from `AWS_BEARER_TOKEN_BEDROCK` — with a structured-output schema,
+   Anthropic SDK** — `AnthropicBedrockMantle` from `@anthropic-ai/bedrock-sdk`, model
+   `anthropic.claude-opus-5` (Bedrock IDs carry the `anthropic.` prefix), vision input,
+   bearer token from `AWS_BEARER_TOKEN_BEDROCK` — with a structured-output schema,
    returning extracted rows plus a confidence signal.
 3. **High-confidence** extractions are staged as approved data automatically.
    **Low-confidence / poor-quality** extractions go to a `needs_review` queue.
 4. The manager reviews the queue in the UI, edits/confirms, and the data is committed as
    `daily_revenue` rows or `shifts`.
 
-When implementing the Bedrock call, invoke the `claude-api` skill first (per user's
-standing rule) to confirm current model IDs and client usage. Adaptive thinking
-(`thinking: {type: "adaptive"}`) and `output_config.effort`, not `budget_tokens`.
+API details confirmed against the `claude-api` skill (invoke it again before writing the
+SDK call — it carries the current corrections):
+
+- **Model:** `anthropic.claude-opus-5`. Two notes carried over from the skill: Claude
+  Opus 5 has **thinking on by default** (omitting `thinking` runs adaptive), and
+  `max_tokens` caps thinking *plus* response text — so size it with headroom or responses
+  truncate mid-answer. Use `thinking: {type: "adaptive"}` and `output_config.effort`;
+  `budget_tokens`, `temperature`, `top_p`, and `top_k` all return **400**.
+- **Structured output:** `output_config.format` with a `json_schema`. The deprecated
+  top-level `output_format` parameter must not be used. Assistant-turn prefills also 400.
+- **Input:** images as `{type: 'image', source: {type: 'base64', media_type, data}}`;
+  PDFs as `{type: 'document', source: {type: 'base64', media_type: 'application/pdf', …}}`
+  placed **before** the text block. Base64 must contain no newlines. PDF limits: 32 MB
+  request, 600 pages.
+- **Not available on Bedrock** (per the skill's platform-availability table): task
+  budgets, the Files API, Message Batches, and server-side web search/fetch/code
+  execution. The extraction Lambda needs none of them — it reads the object from S3 and
+  passes base64 inline.
+- **Refusals** return HTTP 200 with `stop_reason: 'refusal'` and possibly empty `content`
+  — check `stop_reason` before indexing `content[0]`, or a scanned document that trips a
+  classifier crashes the Lambda.
 
 ## 7. Architecture & components
 
