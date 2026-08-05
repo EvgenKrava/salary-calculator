@@ -44,11 +44,15 @@ export function flattenCell(v: ExcelJS.CellValue): string | number | null {
  * bound therefore re-scanned the whole sheet once per row — O(rows² × cols) instead of
  * O(rows × cols).
  *
- * On the real workbook (1047 × 559 by exceljs's bounds) one `columnCount` access costs ~5 ms,
- * so as an inner bound it added ~5 seconds of pure overhead on top of the actual cell reads.
- * Combined with the per-cell work this blew the Lambda's timeout, which API Gateway surfaced
- * to the manager as a bare "503 Service Unavailable" after 31 seconds. Hoisting the two
- * getters is the entire fix — no S3 upload change or async pipeline was needed.
+ * Measured on the real workbook (1047 × 559 by exceljs's bounds, 585,273 cells): the buggy
+ * pattern took 828,957 ms to complete a *capped* 200k iterations; hoisting the bounds reads the
+ * FULL grid in ~110 ms. API Gateway surfaced the resulting Lambda timeout to the manager as a
+ * bare "503 Service Unavailable" after 31 seconds.
+ *
+ * Hoisting the two getters is the entire fix. Post-deploy, the real workbook imports in ~4.5 s
+ * of Lambda time (477 MB peak) — well inside API Gateway's hard 30 s integration ceiling. No S3
+ * upload change and no async pipeline were needed; both were investigated and ruled out.
+ * `readFile` itself is only ~470-520 ms, so the parser was never the slow part.
  */
 export function gridFromWorksheet(ws: ExcelJS.Worksheet): (string | number | null)[][] {
   const rowCount = ws.rowCount;
