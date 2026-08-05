@@ -152,7 +152,10 @@ levels, revenue percentages, and bonuses are entered directly in the app, not ex
 1. A manager uploads a photo/PDF. The API returns a presigned URL and the file lands in
    the **documents S3 bucket**.
 2. An S3 put event triggers the **extraction Lambda**, which calls **Bedrock via the
-   Anthropic SDK** — `AnthropicBedrockMantle` from `@anthropic-ai/bedrock-sdk`, model
+   Anthropic SDK** — `AnthropicBedrockMantle` from `@anthropic-ai/bedrock-sdk`
+   (**>= 0.28.0**; the `Mantle` client does not exist in earlier versions, which ship only
+   the legacy `AnthropicBedrock` InvokeModel client — verified: 0 references in 0.24.0),
+   model
    `anthropic.claude-opus-5` (Bedrock IDs carry the `anthropic.` prefix), vision input,
    bearer token from `AWS_BEARER_TOKEN_BEDROCK` — with a structured-output schema,
    returning extracted rows plus a confidence signal.
