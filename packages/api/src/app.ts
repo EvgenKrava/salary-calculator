@@ -35,6 +35,20 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
 
+  /**
+   * CORS preflight, BEFORE the auth middleware.
+   *
+   * Browsers send `OPTIONS` with no `Authorization` header — that is the spec — so running
+   * authMiddleware on it returns 401 and the browser surfaces only a bare "NetworkError when
+   * attempting to fetch resource", hiding the status entirely. Every non-GET call from the SPA
+   * failed this way while the API itself was healthy: the app looked completely broken.
+   *
+   * API Gateway's own `cors_configuration` adds the response headers, so this only has to end
+   * the request without authenticating it. Returning 204 with no body is the correct preflight
+   * response.
+   */
+  app.options('/api/*', (c) => c.body(null, 204));
+
   app.use('/api/*', authMiddleware(deps.verifier));
   app.get('/api/me', (c) => c.json(c.get('principal')));
 

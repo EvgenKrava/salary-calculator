@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, eq } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
-import { parseScheduleGrid, type ParsedShiftCell } from '@salary/core';
+import { parseScheduleGrid, type ParsedShiftCell, toSqlTime } from '@salary/core';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
@@ -242,8 +242,9 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
           employeeId: shift.employeeId,
           locationId: shift.locationId,
           workDate: shift.workDate,
-          startsAt: shift.startsAt,
-          endsAt: shift.endsAt,
+          // A Postgres TIME column needs HH:MM:SS — the Data API rejects HH:MM.
+          startsAt: toSqlTime(shift.startsAt),
+          endsAt: toSqlTime(shift.endsAt),
           status: 'approved',
           source: 'imported',
         });

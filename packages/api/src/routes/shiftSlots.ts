@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
+import { toSqlTime } from '@salary/core';
 import { requireRole } from '../auth/middleware';
 import { readJson } from '../http/validation';
 import { locationShiftSlots, locations } from '../schema';
@@ -83,10 +84,10 @@ export function createShiftSlotRoutes(db: Db): Hono<AppEnv> {
     await assertWithinLocationHours(locationId, body.startsAt, body.endsAt);
     const [row] = await db
       .insert(locationShiftSlots)
-      .values({ locationId, slotNumber, startsAt: body.startsAt, endsAt: body.endsAt })
+      .values({ locationId, slotNumber, startsAt: toSqlTime(body.startsAt), endsAt: toSqlTime(body.endsAt) })
       .onConflictDoUpdate({
         target: [locationShiftSlots.locationId, locationShiftSlots.slotNumber],
-        set: { startsAt: body.startsAt, endsAt: body.endsAt },
+        set: { startsAt: toSqlTime(body.startsAt), endsAt: toSqlTime(body.endsAt) },
       })
       .returning();
     return c.json(toDto(row));

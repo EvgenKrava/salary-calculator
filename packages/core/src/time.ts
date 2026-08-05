@@ -24,3 +24,25 @@ export function hoursBetween(startsAt: string, endsAt: string): number {
   }
   return (end - start) / 60;
 }
+
+/**
+ * Widen an `HH:MM` API time to the `HH:MM:SS` a Postgres `TIME` column needs.
+ *
+ * **Why this is required, not cosmetic:** the RDS Data API parses parameter values strictly and
+ * rejects `'09:00'` for a TIME column with `Parse Error for Time: premature end of input`. PGlite
+ * — what every test uses — accepts the short form, so writing a location, shift slot, or shift
+ * passed the entire suite and then failed with an opaque 500 against the real database.
+ *
+ * The API contract stays `HH:MM` in both directions; this widens only on the way into the DB, and
+ * routes slice back to `HH:MM` on the way out. Already-widened values pass through unchanged so
+ * it is safe to apply twice.
+ */
+export function toSqlTime(value: string): string {
+  // Reject anything that is not a time rather than passing junk to the database, where the
+  // failure surfaces as a 500 with no indication of which field was wrong.
+  if (/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(value)) return value;
+  if (!isTimeString(value)) {
+    throw new Error(`invalid time '${value}': expected HH:MM`);
+  }
+  return `${value}:00`;
+}

@@ -65,3 +65,22 @@ describe('createApp', () => {
     expect(JSON.stringify(body)).not.toContain('secret db ARN leak');
   });
 });
+describe('CORS preflight', () => {
+  it('answers OPTIONS without a token, so the browser can preflight', async () => {
+    // The bug this guards: authMiddleware ran on OPTIONS too, so the preflight 401'd and the
+    // browser reported an opaque NetworkError — every POST/PATCH/DELETE from the SPA failed
+    // while the API was healthy.
+    const { db } = await createTestDb();
+    const app = createApp({ db, verifier });
+    const res = await app.request('/api/locations', { method: 'OPTIONS' });
+    expect(res.status).toBe(204);
+  });
+
+  it('still rejects a real request without a token', async () => {
+    // The preflight exemption must not become an auth hole.
+    const { db } = await createTestDb();
+    const app = createApp({ db, verifier });
+    expect((await app.request('/api/locations', { method: 'POST' })).status).toBe(401);
+    expect((await app.request('/api/locations')).status).toBe(401);
+  });
+});

@@ -24,6 +24,17 @@ terraform {
     key    = "infra/terraform.tfstate"
     region = "us-east-1"
 
+    # The backend does NOT inherit the provider's `profile`, and it does not read
+    # var.aws_profile — it has its own credential resolution. Without this line it falls
+    # back to the default chain, which on this machine is an SSO role in a DIFFERENT
+    # account (039885961427), producing a confusing 403 on HeadObject against a state
+    # bucket that the `yevhenii` profile can read perfectly well.
+    #
+    # Hardcoded rather than parameterised because backends cannot use variables. If the
+    # profile name ever changes, override at init time:
+    #   terraform init -reconfigure -backend-config="profile=<name>"
+    profile = "yevhenii"
+
     # S3-native state locking (conditional writes). Replaces the old
     # `dynamodb_table` argument, which Terraform now reports as deprecated and
     # which also hardcoded a `project_name`-derived table name that no variable

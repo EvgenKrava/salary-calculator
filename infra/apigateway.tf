@@ -43,6 +43,26 @@ resource "aws_apigatewayv2_route" "any" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
+/**
+ * CORS preflight must be UNAUTHENTICATED.
+ *
+ * Browsers send `OPTIONS` with no `Authorization` header — that is the spec, not a bug — so a
+ * preflight against the JWT-authorized catch-all returns 401 and the browser reports a bare
+ * "NetworkError when attempting to fetch resource", never showing the real status. Every
+ * non-GET call from the SPA failed this way: the app looked completely broken while the API
+ * was healthy.
+ *
+ * `httpMethod = OPTIONS` is more specific than `ANY`, so API Gateway matches it first. It
+ * returns only the CORS headers from `cors_configuration`; the Lambda is never invoked, so
+ * there is nothing to protect here.
+ */
+resource "aws_apigatewayv2_route" "options_preflight" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "OPTIONS /{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.api.id}"
+  authorization_type = "NONE"
+}
+
 # /health must be reachable unauthenticated — it is the deploy smoke test.
 resource "aws_apigatewayv2_route" "health" {
   api_id             = aws_apigatewayv2_api.main.id

@@ -1,5 +1,6 @@
 import { RDSDataClient, ExecuteStatementCommand } from '@aws-sdk/client-rds-data';
 import { MIGRATIONS } from '@salary/core/migrations';
+import { splitSqlStatements } from '@salary/core';
 import { readDbEnvConfig } from './db/prodDb';
 
 /**
@@ -20,15 +21,30 @@ export async function handler(): Promise<{ applied: number; errors: string[] }> 
   let applied = 0;
 
   for (const [index, sql] of MIGRATIONS.entries()) {
+    // The Data API's ExecuteStatement takes exactly ONE statement and rejects a script with
+    // "Multistatements aren't supported." PGlite's client.exec() — what the tests use —
+    // accepts a whole file, which is why this passed every test and then applied 0 migrations
+    // against the real cluster. Split and send one statement at a time.
+    const statements = splitSqlStatements(sql);
     try {
-      await client.send(
-        new ExecuteStatementCommand({
-          resourceArn: config.resourceArn,
-          secretArn: config.secretArn,
-          database: config.dbName,
-          sql,
-        }),
-      );
+      for (const [stmtIndex, statement] of statements.entries()) {
+        try {
+          await client.send(
+            new ExecuteStatementCommand({
+              resourceArn: config.resourceArn,
+              secretArn: config.secretArn,
+              database: config.dbName,
+              sql: statement,
+            }),
+          );
+        } catch (err) {
+          // Name the statement, not just the file: a migration is dozens of statements and
+          // "migration 2 failed" is not enough to find the problem.
+          throw new Error(
+            `statement ${stmtIndex + 1}/${statements.length} (${statement.slice(0, 80).replace(/\s+/g, ' ')}…): ${(err as Error).message}`,
+          );
+        }
+      }
       applied += 1;
     } catch (err) {
       errors.push(`migration ${index + 1}: ${(err as Error).message}`);

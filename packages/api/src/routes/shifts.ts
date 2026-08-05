@@ -5,6 +5,7 @@ import { and, eq, gte, lte, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
+import { toSqlTime } from '@salary/core';
 import { requireRole } from '../auth/middleware';
 import { readJson } from '../http/validation';
 import { currentEmployee } from '../http/employeeContext';
@@ -120,8 +121,9 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
           employeeId: employee.id,
           locationId: body.locationId,
           workDate: body.workDate,
-          startsAt: window.startsAt,
-          endsAt: window.endsAt,
+          // A Postgres TIME column needs HH:MM:SS — the Data API rejects HH:MM.
+          startsAt: toSqlTime(window.startsAt),
+          endsAt: toSqlTime(window.endsAt),
           status: 'requested',
           source: 'native',
         })
@@ -175,8 +177,9 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
           employeeId: body.employeeId,
           locationId: body.locationId,
           workDate: body.workDate,
-          startsAt: window.startsAt,
-          endsAt: window.endsAt,
+          // A Postgres TIME column needs HH:MM:SS — the Data API rejects HH:MM.
+          startsAt: toSqlTime(window.startsAt),
+          endsAt: toSqlTime(window.endsAt),
           status: body.status,
           source: 'native',
         })

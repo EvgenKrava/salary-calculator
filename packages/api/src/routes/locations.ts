@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
+import { toSqlTime } from '@salary/core';
 import { requireRole } from '../auth/middleware';
 import { readJson, getOr404 } from '../http/validation';
 import { locations } from '../schema';
@@ -59,7 +60,7 @@ export function createLocationRoutes(db: Db): Hono<AppEnv> {
     if (existing.length > 0) throw new HTTPException(409, { message: 'location name already exists' });
     const [row] = await db
       .insert(locations)
-      .values({ name: body.name, opensAt: body.opensAt, closesAt: body.closesAt })
+      .values({ name: body.name, opensAt: toSqlTime(body.opensAt), closesAt: toSqlTime(body.closesAt) })
       .returning();
     return c.json(toDto(row), 201);
   });
@@ -69,13 +70,13 @@ export function createLocationRoutes(db: Db): Hono<AppEnv> {
     const body = await readJson(c, updateSchema);
     const patch: Partial<typeof locations.$inferInsert> = {};
     if (body.name !== undefined) patch.name = body.name;
-    if (body.opensAt !== undefined) patch.opensAt = body.opensAt;
-    if (body.closesAt !== undefined) patch.closesAt = body.closesAt;
+    if (body.opensAt !== undefined) patch.opensAt = toSqlTime(body.opensAt);
+    if (body.closesAt !== undefined) patch.closesAt = toSqlTime(body.closesAt);
 
     const current = await db.select().from(locations).where(eq(locations.id, id));
     const existing = getOr404(current, 'location not found');
-    const opensAt = patch.opensAt ?? existing.opensAt.slice(0, 5);
-    const closesAt = patch.closesAt ?? existing.closesAt.slice(0, 5);
+    const opensAt = (patch.opensAt ?? existing.opensAt).slice(0, 5);
+    const closesAt = (patch.closesAt ?? existing.closesAt).slice(0, 5);
     if (closesAt <= opensAt) throw new HTTPException(400, { message: 'closesAt must be after opensAt' });
 
     const [row] = await db.update(locations).set(patch).where(eq(locations.id, id)).returning();

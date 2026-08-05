@@ -128,7 +128,7 @@ export function ImportRoute() {
         </div>
         <Field label={t.importScreen.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? t.importScreen.parsing : t.importScreen.preview}
+          {busy ? t.importScreen.parsing : t.importScreen.parse}
         </Button>
       </form>
 
@@ -150,7 +150,7 @@ export function ImportRoute() {
             <h3 style={{ marginBottom: 'var(--s2)' }}>{t.importScreen.commitHeading}</h3>
             <Field label={t.importScreen.month} name="month" type="number" min="1" max="12" numeric value={month} onChange={(e) => setMonth(e.target.value)} />
             <Button variant="primary" onClick={runCommit} disabled={busy}>
-              {busy ? 'Committing…' : 'Commit'}
+              {busy ? t.importScreen.committing : t.importScreen.commit}
             </Button>
           </div>
         </div>

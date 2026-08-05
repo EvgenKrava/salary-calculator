@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { useAuth } from '../lib/auth';
@@ -75,6 +76,20 @@ export function LoginForm({
 
 export function LoginRoute() {
   const { status, signIn, completeNewPassword } = useAuth();
+  const navigate = useNavigate();
+
+  /**
+   * Leave /login once signed in.
+   *
+   * Nothing did this before: `signIn` updated auth state and the user stayed staring at the
+   * login form, with no error, as though the password had been silently rejected. The redirect
+   * lives in an effect rather than after `await signIn(...)` because the sign-in helper resolves
+   * for BOTH outcomes — success and the newPasswordRequired challenge — so navigating on resolve
+   * would skip the password-change step.
+   */
+  useEffect(() => {
+    if (status === 'signed-in') void navigate({ to: '/', replace: true });
+  }, [status, navigate]);
 
   if (status === 'new-password-required') {
     return (
