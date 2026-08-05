@@ -82,32 +82,21 @@ data "aws_iam_policy_document" "extraction_extra" {
     resources = ["${aws_s3_bucket.documents.arn}/*"]
   }
 
-  # NOTE: this statement is defence-in-depth, NOT the operative control for how the extraction
-  # Lambda actually calls Claude today.
+  # There is deliberately NO bedrock:* statement here.
   #
-  # `AnthropicBedrockMantle` authenticates with the `AWS_BEARER_TOKEN_BEDROCK` API key. A bearer
-  # token carries its own identity, so authorization is evaluated against the principal that
-  # *generated the key* (`aws bedrock create-api-key`, run by a human per infra/README.md) —
-  # this execution role is not consulted on that path. Removing this statement would therefore
-  # not reduce what the Lambda can invoke, and keeping it does not restrict the token to
-  # Anthropic models.
+  # Bedrock is consumed CROSS-ACCOUNT: the bearer token belongs to a principal in a different
+  # AWS account (see `bedrock_bearer_token` in variables.tf), and a bearer token is authorized
+  # against the principal that created it — not against this execution role, and not against
+  # this account. Verified by calling the endpoint directly with the token and getting HTTP 200.
   #
-  # It is kept deliberately: it costs nothing, and it becomes the real control if the handler
-  # ever moves to SigV4 (the `bedrock-runtime` InvokeModel API), which is the failure mode where
-  # a missing grant is a confusing runtime 403 rather than an obvious one.
+  # A `bedrock:InvokeModel` grant scoped to `arn:aws:bedrock:<region>::foundation-model/...`
+  # was removed because it named foundation models in THIS account, which the Lambda never
+  # invokes. It granted nothing, denied nothing, and read as a least-privilege boundary that
+  # did not exist — the worst property a policy can have.
   #
-  # If a genuine `anthropic.*` boundary is wanted, scope the permissions of the IAM identity
-  # used to create the API key. An execution-role policy cannot enforce it. Blast radius if the
-  # token leaks (it is a long-lived credential in a Lambda env var) is bounded by that
-  # principal's Bedrock permissions, not by the scoping below.
-  statement {
-    sid = "InvokeClaudeOnBedrock"
-    actions = [
-      "bedrock:InvokeModel",
-      "bedrock:InvokeModelWithResponseStream",
-    ]
-    resources = ["arn:aws:bedrock:${var.region}::foundation-model/anthropic.*"]
-  }
+  # The real control is the permissions of the token-generating principal in the Bedrock
+  # account. See infra/cost.md and the note on rotation in infra/README.md. If the handler ever
+  # switches to SigV4 against `bedrock-runtime` in this account, a grant has to be added back.
 }
 
 resource "aws_iam_role_policy" "extraction_extra" {

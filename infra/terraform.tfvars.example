@@ -46,8 +46,13 @@ cloudfront_price_class = "PriceClass_100"
 # one copy of a long-lived credential instead of two, and nothing sensitive
 # sitting in plaintext inside the repo directory.
 #
-# Generate one with: aws bedrock create-api-key --profile yevhenii
-# Scope the permissions of the identity you generate it under — a bearer token
-# is authorized against its creating principal, NOT the Lambda's execution
-# role, so the anthropic.* scoping in iam.tf does not bound it.
+# Bedrock is CROSS-ACCOUNT: the app runs in 898836755334, Claude is billed to
+# 677276119483 via that account's bearer token. No IAM wiring is needed — a
+# bearer token is authorized against its creating principal, not the caller's
+# account or role. The identity you generate the key under is therefore the
+# whole blast radius; scope it.
+#
+# bedrock_region defaults to var.region. Only set it if the Bedrock account
+# serves Claude from a different region than this stack runs in.
+# bedrock_region = "us-east-1"
 # ---------------------------------------------------------------------------

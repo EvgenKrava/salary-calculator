@@ -3,8 +3,10 @@
 Terraform for the AWS infrastructure. Uses the `yevhenii` AWS profile and remote
 state in S3 (see `bootstrap/`).
 
-> **Cost: read [`cost.md`](cost.md) before the first `apply`.** The stack is built to run
-> under **$10/month** (~$2–4 expected), but that depends on specific settings — above all
+> **Cost: read [`cost.md`](cost.md) before the first `apply`.** This account is expected to
+> run at **well under $1/month** — Bedrock is billed to a separate account (see step 2 of
+> *Deploying the application*), so Claude usage never lands here. The $10 budget alarm is
+> headroom, not a forecast. That estimate depends on specific settings — above all
 > `db_min_acu = 0`, which lets Aurora pause to zero when idle. At `0.5` the cluster bills
 > **~$44/month doing nothing**, over four times the whole budget. `cost.md` lists every
 > cost-critical setting, the pre-apply checks, and how to verify real spend after 48 hours.
@@ -87,6 +89,23 @@ Run these after the infrastructure `apply` from the first-time setup above.
    from the one local tests run against; `packages/core/test/migrations.test.ts` fails on
    drift, and the build fails on any esbuild warning.
 2. **The Bedrock token comes from your local environment — do not put it in a file.**
+
+   **Bedrock is cross-account by design.** The app deploys to account `898836755334`, but
+   Claude is billed to `677276119483` via a bearer token belonging to a principal there
+   (`bedrock-api-user-at-677276119483`). This needs **no IAM wiring at all** — no role to
+   assume, no trust policy, no resource policy — because a bearer token is authorized against
+   the principal that created it, not against the caller's account or execution role. Verified
+   by calling `https://bedrock-mantle.us-east-1.api.aws/anthropic/v1/messages` directly with
+   the token and getting HTTP 200 from `anthropic.claude-opus-5`.
+
+   The consequence for cost: Claude usage never appears on this account's bill, which is why
+   this account runs at well under $1/month (see [`cost.md`](cost.md)).
+
+   The Bedrock account currently serves `us-east-1`, the same region as the app, so
+   `bedrock_region` can stay empty. Set it if that ever diverges — otherwise the Lambda calls
+   its own region's endpoint and fails with an auth/model-not-found error that looks nothing
+   like a region mismatch.
+
    `AWS_BEARER_TOKEN_BEDROCK` is already exported for local development (the Anthropic SDK
    reads that name directly), so use the wrapper, which maps it to the `TF_VAR_` name
    Terraform expects:
@@ -101,10 +120,21 @@ Run these after the infrastructure `apply` from the first-time setup above.
    is missing — previously the deploy succeeded and every Bedrock call then failed with an
    auth error only visible in CloudWatch after someone uploaded a document.
 
-   Generate a key with `aws bedrock create-api-key --profile yevhenii`, and **scope the
-   permissions of the identity you generate it under**: a bearer token is authorized against
-   its creating principal, not the Lambda's execution role, so the `anthropic.*` scoping in
-   `iam.tf` does not bound it.
+   Generate a key with `aws bedrock create-api-key` **in the Bedrock account**, and **scope
+   the permissions of the identity you generate it under** — that principal's Bedrock
+   permissions are the entire blast radius if the token leaks. There is deliberately no
+   `bedrock:*` statement in `iam.tf`: a grant naming foundation models in *this* account would
+   have granted nothing while reading as a least-privilege boundary that does not exist.
+
+   **Rotate the token if it has ever been pasted into a chat, ticket, or terminal transcript.**
+   It is a long-lived credential with no expiry, and it is stored in plaintext in the Terraform
+   S3 state and readable from the Lambda's configuration by anyone holding
+   `lambda:GetFunctionConfiguration`. Rotating is one command in the Bedrock account:
+   ```bash
+   aws bedrock create-api-key   # in account 677276119483
+   aws bedrock delete-api-key --api-key-id <old>
+   ```
+   Then re-export `AWS_BEARER_TOKEN_BEDROCK` and re-run `./infra/deploy.sh apply`.
 3. **Apply**, then create the schema — this is a one-time step per database:
    ```bash
    ./infra/deploy.sh apply

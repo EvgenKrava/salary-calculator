@@ -134,6 +134,52 @@ variable "db_seconds_until_auto_pause" {
   }
 }
 
+variable "bedrock_model_id" {
+  description = <<-EOT
+    Bedrock model id for extraction. Bedrock ids carry the `anthropic.` prefix; the bare id
+    returns a 400. A variable rather than a literal so a model can be rolled back without a
+    code change.
+  EOT
+  type        = string
+  default     = "anthropic.claude-opus-5"
+
+  validation {
+    condition     = startswith(var.bedrock_model_id, "anthropic.")
+    error_message = "bedrock_model_id must start with 'anthropic.' — Bedrock rejects the bare model id with a 400."
+  }
+}
+
+variable "confidence_threshold" {
+  description = <<-EOT
+    Extractions at or above this confidence are staged as approved; below it they go to the
+    manager's review queue. Must be in (0, 1] — the extraction Lambda throws at cold start on
+    anything else, because a 0 would silently auto-approve every document and switch off human
+    review entirely.
+  EOT
+  type        = number
+  default     = 0.85
+
+  validation {
+    condition     = var.confidence_threshold > 0 && var.confidence_threshold <= 1
+    error_message = "confidence_threshold must be greater than 0 and at most 1."
+  }
+}
+
+variable "bedrock_region" {
+  description = <<-EOT
+    Region whose Bedrock endpoint the extraction Lambda calls. Empty means "same as
+    var.region".
+
+    This is separate from var.region because Bedrock can live in a DIFFERENT AWS ACCOUNT
+    from the rest of the stack: the bearer token carries its own identity, so the Lambda's
+    account and role are irrelevant to the Bedrock call. If that account serves Claude from
+    another region, set it here — otherwise the Lambda would call its own region's endpoint
+    and fail with a model-not-found or auth error that looks nothing like a region mismatch.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "bedrock_bearer_token" {
   description = <<-EOT
     Bedrock API key (long-lived bearer token) for the extraction Lambda, which reads it as

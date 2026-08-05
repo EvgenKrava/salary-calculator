@@ -29,8 +29,11 @@ resource "aws_lambda_function" "extraction" {
     variables = merge(local.db_env, {
       DOCUMENTS_BUCKET         = aws_s3_bucket.documents.id
       AWS_BEARER_TOKEN_BEDROCK = var.bedrock_bearer_token
-      BEDROCK_MODEL_ID         = "anthropic.claude-opus-5"
-      CONFIDENCE_THRESHOLD     = "0.85"
+      BEDROCK_MODEL_ID         = var.bedrock_model_id
+      # Explicit, and separate from AWS_REGION_NAME: the Bedrock account may serve Claude
+      # from a different region than the one this stack runs in.
+      BEDROCK_REGION       = local.bedrock_region
+      CONFIDENCE_THRESHOLD = tostring(var.confidence_threshold)
     })
   }
 }

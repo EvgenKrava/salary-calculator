@@ -1,5 +1,10 @@
 locals {
   # Shared Data API wiring. Every Lambda reads the DB this way, so none is VPC-attached.
+  # Bedrock may live in a different AWS account/region than this stack; empty means "same
+  # region as the app". The bearer token carries its own identity, so the account boundary
+  # needs no IAM wiring — only the correct endpoint region.
+  bedrock_region = var.bedrock_region != "" ? var.bedrock_region : var.region
+
   db_env = {
     AWS_REGION_NAME = var.region # AWS_REGION is reserved by the Lambda runtime
     DB_RESOURCE_ARN = aws_rds_cluster.main.arn

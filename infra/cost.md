@@ -18,10 +18,16 @@ dozen document uploads, a static SPA of ~400 KB.
 | **Cognito** | no advanced security | **$0** (free tier: 50k MAU) |
 | **Secrets Manager** | 1 secret (DB master password) | **$0.40** |
 | **CloudWatch Logs** | 14-day retention | **~$0.10** |
-| **Bedrock** (Claude Opus 5 vision) | ~30 documents/month | **~$1–3** |
-| **Total** | | **~$2–4** |
+| **Total (this account)** | | **~$0.60–1.60** |
 
-The two variable line items are Bedrock and Aurora. Everything else is fixed and small.
+**Bedrock is billed to a different AWS account** (`677276119483`) and does not appear on this
+account's bill at all. The extraction Lambda authenticates with a bearer token belonging to a
+principal there, so the ~$1–3/month of Claude vision calls lands on that account, not this one.
+
+That is why the total above is well under the $5 threshold that made the split worthwhile:
+this account (`898836755334`) carries only fixed infrastructure — Secrets Manager $0.40,
+CloudWatch Logs ~$0.10–1.00, S3 ~$0.02, and Aurora storage ~$0.10. Aurora ACU cost is ~$0
+because the cluster auto-pauses. Everything else sits inside a free tier.
 
 ## What keeps it there — do not undo these without re-checking the budget
 
