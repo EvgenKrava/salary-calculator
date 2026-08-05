@@ -6,6 +6,8 @@
 node_modules/
 dist/
 build/
+!infra/build/
+!infra/build/**
 *.log
 
 # Env / secrets
