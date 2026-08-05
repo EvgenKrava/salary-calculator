@@ -68,6 +68,12 @@ Run these after the infrastructure `apply` from the first-time setup above.
    ```bash
    ./infra/build/build.sh
    ```
+   Each Lambda ships as one self-contained `.js`; nothing is read from disk at runtime. The
+   migration SQL is inlined via `packages/core/src/migrations.generated.ts` — **committed,
+   and regenerated with `pnpm --filter @salary/core generate:migrations` after editing any
+   `db/migrations/*.sql`.** A stale generated file means the deployed schema silently differs
+   from the one local tests run against; `packages/core/test/migrations.test.ts` fails on
+   drift, and the build fails on any esbuild warning.
 2. **Supply the Bedrock token.** Add to `terraform.tfvars` (gitignored):
    ```hcl
    bedrock_bearer_token = "<Bedrock API key>"

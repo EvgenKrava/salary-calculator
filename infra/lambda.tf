@@ -8,6 +8,18 @@ locals {
   }
 }
 
+# Both zips ship a SINGLE self-contained file, which only works because `pnpm --filter
+# @salary/api bundle` inlines everything the handler needs — including the migration SQL,
+# via packages/core/src/migrations.generated.ts. Nothing is read from disk at runtime.
+#
+# If a handler ever needs a real sibling file, switch to `source_dir` here AND drop the
+# runtime filesystem read; do not add `source_file` entries one at a time. The migration
+# Lambda previously shipped as a lone .js that tried to `readFileSync` its .sql files, which
+# were not in the zip — it failed at cold start, after a clean `terraform apply`.
+# Guarded by packages/api/test/bundle.test.ts.
+#
+# Note the zips are NOT reproducible across machines (archive_file stores mtimes), so a
+# rebuild can show a Lambda update in the plan even with identical source.
 data "archive_file" "api" {
   type        = "zip"
   source_file = "${path.module}/../packages/api/dist/api.js"

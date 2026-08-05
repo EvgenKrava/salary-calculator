@@ -9,7 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "bundle": "esbuild src/handler.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/api.js --external:@aws-sdk/* && esbuild src/migrationHandler.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/migrate.js --external:@aws-sdk/*"
+    "bundle": "node build.mjs"
   },
   "dependencies": {
     "@salary/core": "workspace:*",
