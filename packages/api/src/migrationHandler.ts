@@ -1,6 +1,6 @@
 import { RDSDataClient, ExecuteStatementCommand } from '@aws-sdk/client-rds-data';
 import { MIGRATIONS } from '@salary/core/migrations';
-import { readEnvConfig } from './db/prodDb';
+import { readDbEnvConfig } from './db/prodDb';
 
 /**
  * Apply every migration in order over the RDS Data API.
@@ -12,7 +12,9 @@ import { readEnvConfig } from './db/prodDb';
  * for now — a journal table is a follow-up, not a silent re-run.
  */
 export async function handler(): Promise<{ applied: number; errors: string[] }> {
-  const config = readEnvConfig(process.env);
+  // Database settings only — this handler has no notion of auth, and validating the API's
+  // Cognito variables here made every invocation throw after a clean apply.
+  const config = readDbEnvConfig(process.env);
   const client = new RDSDataClient({ region: config.region });
   const errors: string[] = [];
   let applied = 0;

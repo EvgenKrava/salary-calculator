@@ -54,11 +54,59 @@ function requireBundle(file: string, extra = ''): string {
   return execFileSync('node', ['-e', script], { encoding: 'utf8' });
 }
 
+/**
+ * The environment the migrate Lambda actually receives: `local.db_env` from
+ * infra/lambda.tf, plus `AWS_REGION`, which the Lambda runtime injects and Terraform cannot
+ * set (it is reserved). Kept in sync with the Terraform by
+ * `migrate.js reaches the Data API with only the env vars Terraform sets`.
+ */
+const MIGRATE_ENV = {
+  AWS_REGION: 'eu-central-1',
+  AWS_REGION_NAME: 'eu-central-1',
+  DB_RESOURCE_ARN: 'arn:aws:rds:eu-central-1:111122223333:cluster:salary',
+  DB_SECRET_ARN: 'arn:aws:secretsmanager:eu-central-1:111122223333:secret:salary-db',
+  DB_NAME: 'salary',
+};
+
 describe('lambda bundles', () => {
   it('migrate.js loads and exports a handler', () => {
     // Cold-start regression: this threw
     // 'TypeError: The "path" argument must be of type string ... Received undefined'.
     expect(requireBundle('migrate.js')).toContain('typeof handler=function');
+  });
+
+  it('migrate.js gets past config validation with only the env vars Terraform sets', () => {
+    // Loading and exporting a handler is NOT enough. This test exists because the bundle
+    // loaded fine, exported `handler`, and then threw
+    // 'Invalid API configuration; check env vars: COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID'
+    // on every invocation — the migration handler reused the API's config loader, which
+    // requires Cognito variables it never reads. The schema was never created, so nothing
+    // else in the stack worked, and no test caught it.
+    //
+    // The AWS SDK is stubbed, so the call cannot reach RDS; what matters is that it fails
+    // trying to *use* the Data API rather than rejecting its own configuration.
+    const script = `
+      const Module = require('module');
+      const orig = Module._resolveFilename;
+      Module._resolveFilename = function (req, ...rest) {
+        if (req.startsWith('@aws-sdk/')) return require.resolve(${JSON.stringify(join(here, 'fixtures/rdsDataStub.cjs'))});
+        return orig.call(this, req, ...rest);
+      };
+      process.env = ${JSON.stringify(MIGRATE_ENV)};
+      const m = require(${JSON.stringify(join(sandbox, 'migrate.js'))});
+      m.handler()
+        .then((r) => console.log('RESULT=' + JSON.stringify(r)))
+        .catch((e) => console.log('THREW=' + e.message));
+    `;
+    const out = execFileSync('node', ['-e', script], { encoding: 'utf8' });
+
+    expect(out).not.toMatch(/check env vars/);
+    expect(out).not.toMatch(/Invalid (API|database) configuration/);
+    // The stub accepts every statement, so all migrations "apply" and no error is collected.
+    expect(out).toContain('RESULT=');
+    const result = JSON.parse(out.slice(out.indexOf('RESULT=') + 'RESULT='.length).trim());
+    expect(result.errors).toEqual([]);
+    expect(result.applied).toBe(3);
   });
 
   it('migrate.js carries the migration SQL inside the bundle', () => {

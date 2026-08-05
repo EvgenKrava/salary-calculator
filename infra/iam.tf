@@ -82,15 +82,30 @@ data "aws_iam_policy_document" "extraction_extra" {
     resources = ["${aws_s3_bucket.documents.arn}/*"]
   }
 
+  # NOTE: this statement is defence-in-depth, NOT the operative control for how the extraction
+  # Lambda actually calls Claude today.
+  #
+  # `AnthropicBedrockMantle` authenticates with the `AWS_BEARER_TOKEN_BEDROCK` API key. A bearer
+  # token carries its own identity, so authorization is evaluated against the principal that
+  # *generated the key* (`aws bedrock create-api-key`, run by a human per infra/README.md) —
+  # this execution role is not consulted on that path. Removing this statement would therefore
+  # not reduce what the Lambda can invoke, and keeping it does not restrict the token to
+  # Anthropic models.
+  #
+  # It is kept deliberately: it costs nothing, and it becomes the real control if the handler
+  # ever moves to SigV4 (the `bedrock-runtime` InvokeModel API), which is the failure mode where
+  # a missing grant is a confusing runtime 403 rather than an obvious one.
+  #
+  # If a genuine `anthropic.*` boundary is wanted, scope the permissions of the IAM identity
+  # used to create the API key. An execution-role policy cannot enforce it. Blast radius if the
+  # token leaks (it is a long-lived credential in a Lambda env var) is bounded by that
+  # principal's Bedrock permissions, not by the scoping below.
   statement {
     sid = "InvokeClaudeOnBedrock"
     actions = [
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
     ]
-    # Scoped to Anthropic models rather than "*": the extraction Lambda has no reason to
-    # invoke any other provider's models, and a narrower policy limits the blast radius if
-    # the function is ever compromised.
     resources = ["arn:aws:bedrock:${var.region}::foundation-model/anthropic.*"]
   }
 }

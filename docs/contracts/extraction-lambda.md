@@ -48,6 +48,15 @@ without a database round trip.
 RDS Data API + Secrets Manager on the one cluster, and CloudWatch Logs. The handler needs
 no other AWS permission — if it does, that is a contract change.
 
+**The `bedrock:InvokeModel` grant is not what authorizes the Claude call today.** The handler
+uses `AnthropicBedrockMantle` with the `AWS_BEARER_TOKEN_BEDROCK` API key, and a bearer token
+carries its own identity — authorization is evaluated against the principal that *generated the
+key*, not the Lambda's execution role. So the `anthropic.*` scoping in `infra/iam.tf` reads like
+a least-privilege boundary but does not constrain this call path; it is kept as
+defence-in-depth in case the handler ever moves to SigV4. To bound the real blast radius (the
+token is a long-lived credential sitting in a Lambda env var), scope the permissions of the
+identity used to run `aws bedrock create-api-key`.
+
 ## Expected behaviour
 
 Write an `extraction_jobs` row for every invocation, including failures, so nothing is
