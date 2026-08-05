@@ -3,11 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "bundle": "esbuild src/handler.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/extract.js --external:@aws-sdk/*"
+    "bundle": "node build.mjs"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.32.0",

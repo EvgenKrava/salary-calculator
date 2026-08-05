@@ -92,3 +92,32 @@ describe('request size guard', () => {
     ).not.toThrow();
   });
 });
+
+describe('model id', () => {
+  it('defaults to the pinned Bedrock model id', () => {
+    const req = buildExtractionRequest({ docType: 'revenue', media: { mediaType: 'image/jpeg', base64: 'AAA' } });
+    expect(req.model).toBe('anthropic.claude-opus-5');
+  });
+
+  it('honours an override, so BEDROCK_MODEL_ID actually takes effect', () => {
+    // Terraform sets this env var; the code used to hardcode the constant and ignore it, so
+    // changing the variable looked like a deploy but changed nothing.
+    const req = buildExtractionRequest({
+      docType: 'revenue',
+      media: { mediaType: 'image/jpeg', base64: 'AAA' },
+      modelId: 'anthropic.claude-sonnet-5',
+    });
+    expect(req.model).toBe('anthropic.claude-sonnet-5');
+  });
+
+  it('falls back to the default for a blank override rather than sending an empty model', () => {
+    for (const blank of ['', '   ']) {
+      const req = buildExtractionRequest({
+        docType: 'revenue',
+        media: { mediaType: 'image/jpeg', base64: 'AAA' },
+        modelId: blank,
+      });
+      expect(req.model).toBe('anthropic.claude-opus-5');
+    }
+  });
+});

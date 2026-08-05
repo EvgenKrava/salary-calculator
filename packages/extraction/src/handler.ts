@@ -11,6 +11,8 @@ export interface HandlerDeps {
   invokeModel: (request: unknown) => Promise<unknown>;
   recordJob: (job: JobRecord) => Promise<string>;
   threshold: number;
+  /** Model to use. Omitted falls back to buildRequest's MODEL_ID. */
+  modelId?: string;
 }
 
 function docTypeFromKey(key: string): DocType | null {
@@ -71,6 +73,7 @@ export function createHandler(deps: HandlerDeps) {
         const object = await deps.getObject(bucket(record), key);
         const request = buildExtractionRequest({
           docType,
+          modelId: deps.modelId,
           media: {
             mediaType: resolveMediaType(object.contentType, key, object.body),
             // 'base64' never inserts line breaks; explicit for the API's no-newline rule.
@@ -177,5 +180,7 @@ export const handler = async (event: S3Event): Promise<void> => {
     invokeModel: (request) => invokeModel(bedrock, request),
     recordJob,
     threshold: readThreshold(),
+    // Terraform sets BEDROCK_MODEL_ID; honour it so changing it actually takes effect.
+    modelId: process.env.BEDROCK_MODEL_ID,
   })(event);
 };

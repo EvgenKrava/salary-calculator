@@ -60,8 +60,13 @@ Copy amounts, dates, names and times exactly as they appear, as strings. Do not 
 export function buildExtractionRequest(input: {
   docType: DocType;
   media: ExtractionMedia;
+  /** Override the model. Defaults to MODEL_ID; the handler passes BEDROCK_MODEL_ID. */
+  modelId?: string;
 }): MessageRequest {
   const { docType, media } = input;
+  // Terraform sets BEDROCK_MODEL_ID; ignoring it meant changing the variable silently did
+  // nothing, so a model rollback would appear to deploy and have no effect.
+  const modelId = input.modelId?.trim() || MODEL_ID;
 
   if (!SUPPORTED_MEDIA.has(media.mediaType)) {
     throw new Error(`unsupported media type '${media.mediaType}' for extraction`);
@@ -91,7 +96,7 @@ export function buildExtractionRequest(input: {
         };
 
   return {
-    model: MODEL_ID,
+    model: modelId,
     max_tokens: 16000,
     output_config: {
       effort: 'high',
