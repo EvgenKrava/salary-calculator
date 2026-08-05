@@ -8,6 +8,7 @@ import { AppShell } from './shell/AppShell';
 import { LoginRoute } from './routes/LoginRoute';
 import { RevenueRoute } from './routes/RevenueRoute';
 import { ShiftsRoute } from './routes/ShiftsRoute';
+import { ScheduleRoute } from './routes/ScheduleRoute';
 import { ReviewRoute } from './routes/ReviewRoute';
 import { RunsRoute } from './routes/RunsRoute';
 import { MyShiftsRoute } from './routes/MyShiftsRoute';
@@ -73,6 +74,12 @@ const shiftsRoute = createRoute({
   component: ShiftsRoute,
 });
 
+const scheduleRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/schedule',
+  component: ScheduleRoute,
+});
+
 const reviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/review',
@@ -121,6 +128,7 @@ export const routeTree = rootRoute.addChildren([
     indexRoute,
     revenueRoute,
     shiftsRoute,
+    scheduleRoute,
     reviewRoute,
     runsRoute,
     importRoute,

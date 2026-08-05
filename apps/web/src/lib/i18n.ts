@@ -136,6 +136,7 @@ export const t = {
   nav: {
     revenue: 'Виручка',
     shifts: 'Зміни',
+    schedule: 'Графік',
     import: 'Імпорт',
     runs: 'Розрахунки',
     review: 'Перевірка',
@@ -333,6 +334,17 @@ export const t = {
     noLevels: 'Ще немає рівнів.',
     noLevelsAction: 'Додайте один нижче.',
     adding: 'Додаємо…',
+  },
+
+  schedule: {
+    title: 'Графік',
+    /** Monday-first, per Ukrainian convention — this order is the point, not Sunday-first. */
+    weekdays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'] as const,
+    year: 'Рік',
+    month: 'Місяць',
+    prevMonth: 'Попередній місяць',
+    nextMonth: 'Наступний місяць',
+    today: 'сьогодні',
   },
 
   importScreen: {

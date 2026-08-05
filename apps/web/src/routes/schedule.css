@@ -1,0 +1,140 @@
+/*
+ * A manager scans a whole month at once, so density beats breathing room here — the opposite
+ * trade-off from a form. Compact rows, no card padding, and an empty day renders as quiet
+ * whitespace rather than a card that looks broken.
+ */
+
+.schedule__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+  flex-wrap: wrap;
+}
+
+.schedule__nav {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+/* No `.field` wrapper around this input (it sits inline with the month picker and arrows,
+   not stacked as a labelled form field), so its width is capped explicitly — otherwise
+   `.field__input`'s `width: 100%` would stretch a 4-digit year across the flex row. */
+.schedule__year {
+  max-width: 8ch;
+  text-align: right;
+}
+
+.schedule__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.schedule__weekday {
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: var(--s2) 0;
+}
+
+.schedule__cell {
+  background: var(--surface);
+  min-height: 88px;
+  padding: var(--s1) var(--s2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Lead/trail days from the adjacent month complete the grid's weeks but are not this month's
+   schedule — dimmed so the eye lands on the current month first. */
+.schedule__cell--outside {
+  background: var(--ground);
+}
+.schedule__cell--outside .schedule__daynum {
+  color: var(--ink-faint);
+}
+
+.schedule__cell--today {
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+
+.schedule__daynum {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* An empty day is the normal case, not an error — no placeholder copy, just space. */
+.schedule__empty {
+  flex: 1;
+}
+
+.schedule__entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.schedule__entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  padding: 1px 0;
+}
+
+.schedule__entry-name {
+  font-weight: 600;
+}
+
+.schedule__entry-meta {
+  color: var(--ink-muted);
+}
+
+.schedule__entry-loc::before {
+  content: ' · ';
+}
+
+/* Below 720px the seven-column grid cannot stay readable at this row height, so the month
+   becomes a single-column list of day rows — same data, same density rule, laid out for a
+   narrow screen instead of a desktop scan. */
+@media (max-width: 720px) {
+  .schedule__grid {
+    grid-template-columns: 1fr;
+  }
+  .schedule__weekday {
+    display: none;
+  }
+  .schedule__cell {
+    min-height: unset;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--s3);
+    padding: var(--s2);
+  }
+  .schedule__daynum {
+    flex: 0 0 auto;
+    min-width: 2ch;
+  }
+  .schedule__cell--outside {
+    display: none;
+  }
+}
