@@ -1,0 +1,26 @@
+{
+  "name": "@salary/extraction",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "bundle": "esbuild src/handler.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/extract.js --external:@aws-sdk/*"
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.24.0",
+    "@aws-sdk/client-rds-data": "^3.665.0",
+    "@aws-sdk/client-s3": "^3.665.0",
+    "@salary/core": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.7.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}
