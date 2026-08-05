@@ -2,6 +2,10 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    // The full parsed JSON error body, when the response was JSON — carries fields beyond
+    // `error`, e.g. the blocked-salary-run 409's `gaps`, which the blocked-run screen needs
+    // to render the manager's worklist rather than just the message.
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -37,13 +41,15 @@ export function createApiClient({ baseUrl, getToken, fetchImpl = fetch }: ApiCli
 
     if (!res.ok) {
       let message = `${res.status} ${res.statusText}`;
+      let body: unknown;
       try {
         const parsed = (await res.json()) as { error?: string };
         if (parsed?.error) message = parsed.error;
+        body = parsed;
       } catch {
-        // Not JSON (a gateway error page, say) — keep the status line.
+        // Not JSON (a gateway error page, say) — keep the status line, no body.
       }
-      throw new ApiError(message, res.status);
+      throw new ApiError(message, res.status, body);
     }
 
     if (res.status === 204) return undefined as T;

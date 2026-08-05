@@ -10,6 +10,11 @@ export interface Location {
   opensAt: string;
   closesAt: string;
 }
+export interface Level {
+  id: string;
+  name: string;
+  ratePerHour: number;
+}
 export interface Employee {
   id: string;
   name: string;
@@ -71,6 +76,30 @@ export function useApi(): ApiClient {
 export function useLocations() {
   const api = useApi();
   return useQuery({ queryKey: ['locations'], queryFn: () => api.get<Location[]>('/api/locations') });
+}
+
+export function useAddLocation() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; opensAt: string; closesAt: string }) =>
+      api.post<Location>('/api/locations', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['locations'] }),
+  });
+}
+
+export function useLevels() {
+  const api = useApi();
+  return useQuery({ queryKey: ['levels'], queryFn: () => api.get<Level[]>('/api/levels') });
+}
+
+export function useAddLevel() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; ratePerHour: number }) => api.post<Level>('/api/levels', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['levels'] }),
+  });
 }
 
 export function useEmployees() {

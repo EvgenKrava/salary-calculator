@@ -50,4 +50,21 @@ describe('api client', () => {
     const api = createApiClient({ baseUrl: 'https://api.test', getToken: async () => 't', fetchImpl: fetchMock as never });
     await expect(api.del('/x')).resolves.toBeUndefined();
   });
+
+  it('carries the parsed error body so callers can reach fields beyond the message', async () => {
+    // The blocked-salary-run 409 sends { error, gaps }. The message string alone loses the
+    // gaps array, and the blocked-run screen needs it to render the manager's worklist.
+    const gaps = [{ employeeId: 'e1', locationId: 'l1', date: '2026-05-03' }];
+    const fetchMock = vi.fn(async () => jsonResponse({ error: 'revenue data incomplete for the period', gaps }, 409));
+    const api = createApiClient({ baseUrl: 'https://api.test', getToken: async () => 't', fetchImpl: fetchMock as never });
+    await expect(api.post('/api/salary-runs', {})).rejects.toMatchObject({
+      body: { error: 'revenue data incomplete for the period', gaps },
+    });
+  });
+
+  it('leaves body undefined when the error response is not JSON', async () => {
+    const fetchMock = vi.fn(async () => new Response('gateway timeout', { status: 504 }));
+    const api = createApiClient({ baseUrl: 'https://api.test', getToken: async () => 't', fetchImpl: fetchMock as never });
+    await expect(api.get('/x')).rejects.toMatchObject({ body: undefined });
+  });
 });

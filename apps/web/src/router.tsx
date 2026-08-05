@@ -9,6 +9,11 @@ import { LoginRoute } from './routes/LoginRoute';
 import { RevenueRoute } from './routes/RevenueRoute';
 import { ShiftsRoute } from './routes/ShiftsRoute';
 import { ReviewRoute } from './routes/ReviewRoute';
+import { RunsRoute } from './routes/RunsRoute';
+import { MyShiftsRoute } from './routes/MyShiftsRoute';
+import { MyPayRoute } from './routes/MyPayRoute';
+import { SetupRoute } from './routes/SetupRoute';
+import { ImportRoute } from './routes/ImportRoute';
 
 /**
  * The route tree. Auth is enforced in `beforeLoad` against the router context rather than
@@ -73,9 +78,49 @@ const reviewRoute = createRoute({
   component: ReviewRoute,
 });
 
+const runsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/runs',
+  component: RunsRoute,
+});
+
+const importRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/import',
+  component: ImportRoute,
+});
+
+const setupRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/setup',
+  component: SetupRoute,
+});
+
+const myShiftsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/me/shifts',
+  component: MyShiftsRoute,
+});
+
+const myPayRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/me/pay',
+  component: MyPayRoute,
+});
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
-  appRoute.addChildren([indexRoute, revenueRoute, shiftsRoute, reviewRoute]),
+  appRoute.addChildren([
+    indexRoute,
+    revenueRoute,
+    shiftsRoute,
+    reviewRoute,
+    runsRoute,
+    importRoute,
+    setupRoute,
+    myShiftsRoute,
+    myPayRoute,
+  ]),
 ]);
 
 export function makeRouter(context: RouterContext) {
