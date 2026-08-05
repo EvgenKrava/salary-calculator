@@ -5,6 +5,8 @@ import { MonthSelect } from '../ui/Select';
 import { config } from '../lib/config';
 import { useAuth } from '../lib/auth';
 import { t } from '../lib/i18n';
+import { Table, Th, Td } from '../ui/Table';
+import { useEmployees, useNameMap, useSetNameMapping } from '../lib/queries';
 
 interface PreviewResult {
   months: number[];
@@ -40,6 +42,90 @@ function ReportList({ title, items }: { title: string; items: (string | number)[
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Map each spreadsheet name to an employee, or mark it as not-a-person.
+ *
+ * This is the step that makes an import mean anything. The parser deliberately never guesses
+ * who gets paid, so an unmapped name yields no shift — the real workbook parses 3,337 cells and
+ * resolves NONE of them until these mappings exist. Previously the unmapped names were rendered
+ * as a read-only list, which told the manager there was a problem and gave them no way to fix
+ * it without hand-writing API calls.
+ *
+ * "Не людина" (ignored) exists because the sheet contains placeholder rows like `Бариста 1` that
+ * are slots, not staff. Marking them keeps them out of the unmapped list permanently instead of
+ * re-prompting on every import.
+ */
+export function NameMapper({ names }: { names: string[] }) {
+  const employees = useEmployees();
+  const mappings = useNameMap();
+  const setMapping = useSetNameMapping();
+  const [error, setError] = useState<string | null>(null);
+
+  if (names.length === 0) return null;
+
+  const active = (employees.data ?? []).filter((e) => e.active);
+  const mappedFor = (sourceName: string) => (mappings.data ?? []).find((m) => m.sourceName === sourceName);
+
+  async function assign(sourceName: string, value: string) {
+    setError(null);
+    try {
+      if (value === '__ignore__') await setMapping.mutateAsync({ sourceName, ignored: true });
+      else if (value === '') await setMapping.mutateAsync({ sourceName, employeeId: null, ignored: false });
+      else await setMapping.mutateAsync({ sourceName, employeeId: value, ignored: false });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <section style={{ marginTop: 'var(--s4)' }}>
+      <h3 style={{ marginBottom: 'var(--s1)' }}>{t.importScreen.mapNamesTitle}</h3>
+      <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
+        {t.importScreen.mapNamesHint}
+      </p>
+      {employees.error ? (
+        <p style={{ color: 'var(--stop)' }}>{t.common.couldNotLoad(t.nav.employees.toLowerCase())}</p>
+      ) : (
+        <Table caption={t.importScreen.mapNamesTitle}>
+          <thead>
+            <tr>
+              <Th>{t.importScreen.sheetName}</Th>
+              <Th>{t.common.employee}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {names.map((n) => {
+              const m = mappedFor(n);
+              const current = m?.ignored ? '__ignore__' : (m?.employeeId ?? '');
+              return (
+                <tr key={n}>
+                  <Td><span className="mono">{n}</span></Td>
+                  <Td>
+                    <select
+                      className="field__input field__select"
+                      aria-label={t.importScreen.mapNameFor(n)}
+                      value={current}
+                      disabled={setMapping.isPending}
+                      onChange={(e) => void assign(n, e.target.value)}
+                    >
+                      <option value="">{t.importScreen.chooseEmployee}</option>
+                      {active.map((e) => (
+                        <option key={e.id} value={e.id}>{e.name}</option>
+                      ))}
+                      <option value="__ignore__">{t.importScreen.notAPerson}</option>
+                    </select>
+                  </Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      )}
+      {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
+    </section>
   );
 }
 
@@ -141,7 +227,9 @@ export function ImportRoute() {
           <p className="mono" style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>
             {t.importScreen.monthsFound(preview.months.join(', ') || '—')}
           </p>
-          <ReportList title={t.importScreen.unmappedNames} items={preview.unmappedNames} />
+          {/* Unmapped names are the ONLY thing standing between a parsed workbook and real
+              shifts, so they get an action rather than a read-only list. */}
+          <NameMapper names={preview.unmappedNames} />
           <ReportList title={t.importScreen.unknownLocations} items={preview.unknownLocations} />
           <ReportList title={t.importScreen.missingSlots} items={preview.missingSlots} />
           <ReportList title={t.importScreen.inactiveEmployees} items={preview.inactiveEmployees} />

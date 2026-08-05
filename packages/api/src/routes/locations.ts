@@ -6,6 +6,7 @@ import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { toSqlTime } from '@salary/core';
 import { requireRole } from '../auth/middleware';
+import { isForeignKeyViolation } from '../http/dbErrors';
 import { readJson, getOr404 } from '../http/validation';
 import { locations } from '../schema';
 
@@ -85,9 +86,23 @@ export function createLocationRoutes(db: Db): Hono<AppEnv> {
   });
 
   routes.delete('/:id', async (c) => {
-    const [row] = await db.delete(locations).where(eq(locations.id, c.req.param('id'))).returning();
-    if (!row) throw new HTTPException(404, { message: 'location not found' });
-    return c.json({ deleted: row.id });
+    try {
+      const [row] = await db.delete(locations).where(eq(locations.id, c.req.param('id'))).returning();
+      if (!row) throw new HTTPException(404, { message: 'location not found' });
+      return c.json({ deleted: row.id });
+    } catch (err) {
+      // A location with revenue, shifts, or slot windows cannot be deleted — the FK is
+      // deliberate, because those records are payroll history. Say so instead of leaking a
+      // 500: the manager's actual options are to remove the dependent rows or leave the
+      // location in place, and a generic "internal" error tells them neither.
+      if (err instanceof HTTPException) throw err;
+      if (isForeignKeyViolation(err)) {
+        throw new HTTPException(409, {
+          message: 'location still has revenue, shifts or shift slots and cannot be deleted',
+        });
+      }
+      throw err;
+    }
   });
 
   return routes;

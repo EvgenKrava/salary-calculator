@@ -124,3 +124,40 @@ describe('locations routes', () => {
     expect(patched.status).toBe(400);
   });
 });
+
+describe('deleting a location that is still referenced', () => {
+  it('409s with the reason instead of leaking a 500', async () => {
+    // Observed live: deleting a location that had revenue produced `{"error":"internal"}` from
+    // a raw Postgres FK violation. The FK is deliberate — revenue and shifts are payroll
+    // history — so the manager needs to be told what is blocking the delete, not handed a
+    // generic error that suggests neither of their two real options.
+    const app = await makeApp();
+    const created = await app.request('/api/locations', {
+      method: 'POST',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ name: 'Referenced', opensAt: '08:00', closesAt: '20:00' }),
+    });
+    const loc = (await created.json()) as { id: string };
+
+    await app.request('/api/revenue', {
+      method: 'POST',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ locationId: loc.id, revenueDate: '2026-08-04', amount: 100 }),
+    });
+
+    const res = await app.request(`/api/locations/${loc.id}`, { method: 'DELETE', headers: ADMIN });
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(await res.json())).toMatch(/revenue|shifts/i);
+  });
+
+  it('still deletes a location nothing references', async () => {
+    const app = await makeApp();
+    const created = await app.request('/api/locations', {
+      method: 'POST',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ name: 'Unused', opensAt: '08:00', closesAt: '20:00' }),
+    });
+    const loc = (await created.json()) as { id: string };
+    expect((await app.request(`/api/locations/${loc.id}`, { method: 'DELETE', headers: ADMIN })).status).toBe(200);
+  });
+});

@@ -367,6 +367,14 @@ export const t = {
     // Each of these lists a thing the manager must resolve before the import is trustworthy,
     // so the headings say what is wrong rather than naming an internal field.
     unmappedNames: 'Не розпізнані імена',
+    // The mapping step is what turns a parsed workbook into real shifts.
+    mapNamesTitle: 'Прив’яжіть імена з файлу до працівників',
+    mapNamesHint:
+      'Без прив’язки зміни не створюються. Позначте «не людина» для рядків-заготовок, як-от «Бариста 1» — їх більше не будуть запитувати.',
+    sheetName: 'Ім’я у файлі',
+    chooseEmployee: 'Виберіть працівника…',
+    notAPerson: 'Не людина (заготовка)',
+    mapNameFor: (name: string) => `Працівник для «${name}»`,
     unknownLocations: 'Невідомі локації',
     missingSlots: 'Немає налаштованої зміни',
     inactiveEmployees: 'Неактивні працівники',

@@ -102,6 +102,35 @@ export function useAddLevel() {
   });
 }
 
+export interface NameMapping {
+  sourceName: string;
+  employeeId: string | null;
+  ignored: boolean;
+}
+
+/**
+ * The persisted spreadsheet-name -> employee mapping.
+ *
+ * The importer deliberately never guesses who gets paid, so every distinct name row in the
+ * workbook must be mapped once (or marked ignored, for placeholders like "Бариста 1"). Until
+ * then a parsed cell cannot become a shift — the real workbook parses 3,337 cells and resolves
+ * none of them without this.
+ */
+export function useNameMap() {
+  const api = useApi();
+  return useQuery({ queryKey: ['schedule-name-map'], queryFn: () => api.get<NameMapping[]>('/api/schedule-name-map') });
+}
+
+export function useSetNameMapping() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sourceName: string; employeeId?: string | null; ignored?: boolean }) =>
+      api.put<NameMapping>('/api/schedule-name-map', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['schedule-name-map'] }),
+  });
+}
+
 export function useEmployees() {
   const api = useApi();
   return useQuery({ queryKey: ['employees'], queryFn: () => api.get<Employee[]>('/api/employees') });
