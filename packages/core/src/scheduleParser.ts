@@ -105,6 +105,45 @@ function isBlank(value: unknown): boolean {
 const NAME_COL = 2; // 0-based: spreadsheet column 3
 
 /**
+ * Map every month-header column in the sheet to a calendar year.
+ *
+ * **The sheet is one continuous timeline that crosses a year boundary.** The real workbook runs
+ * Травень (May) → Серпень (Aug) across 16 month columns: months ascend 5..12, then restart at
+ * 1..8, which is January of the FOLLOWING year. Every month previously took `opts.year`
+ * verbatim, so January landed nine months *before* the May start instead of eight months after
+ * it — and because the same month name then appeared twice with the same year (c2:m5 and
+ * c421:m5), two different columns produced identical dates.
+ *
+ * Year is derived from **column order**, not from the row a header sits on: columns increase
+ * monotonically with time across the whole sheet, whereas headers are scattered over 21 rows.
+ * Each time the month number decreases as columns advance, the year rolls forward.
+ *
+ * Returns a column → year-offset map. Verified against the real workbook: 16 header columns, 16
+ * distinct months, offsets 0 for May–Dec and 1 for Jan–Aug.
+ */
+function yearOffsetByColumn(grid: (string | number | null)[][]): Map<number, number> {
+  // Collect the first month seen at each header column, in column order.
+  const monthAtCol = new Map<number, number>();
+  for (const row of grid) {
+    for (let c = 0; c < (row ?? []).length; c++) {
+      const month = monthFromHeader((row ?? [])[c]);
+      if (month !== null && !monthAtCol.has(c)) monthAtCol.set(c, month);
+    }
+  }
+
+  const offsets = new Map<number, number>();
+  let offset = 0;
+  let previousMonth = 0;
+  for (const [col, month] of [...monthAtCol].sort((a, b) => a[0] - b[0])) {
+    // A decrease means the calendar wrapped past December into the next year.
+    if (previousMonth !== 0 && month < previousMonth) offset += 1;
+    previousMonth = month;
+    offsets.set(col, offset);
+  }
+  return offsets;
+}
+
+/**
  * Parse the schedule grid into dated shift cells.
  *
  * Layout (verified against the real workbook, design spec §5.1): months run horizontally;
@@ -122,7 +161,8 @@ export function parseScheduleGrid(
   const anomalies: ParsedAnomaly[] = [];
   const sourceNames = new Set<string>();
   const months: { year: number; month: number }[] = [];
-  const seenMonths = new Set<number>();
+  const seenMonths = new Set<string>();
+  const yearOffsets = yearOffsetByColumn(grid);
 
   let slot = 0;
 
@@ -138,8 +178,19 @@ export function parseScheduleGrid(
     }
     if (monthCols.length === 0) continue;
 
-    slot += 1;
+    /*
+     * A block must have its own weekday row directly beneath its header.
+     *
+     * Without this, a stray month name anywhere in the sheet (a note, a merged label) started a
+     * block that then scanned every employee row below it.
+     */
     const weekdayRow = grid[r + 1] ?? [];
+    const hasWeekdayRow = weekdayRow.some(
+      (v) => typeof v === 'string' && WEEKDAYS.has(v.trim().toLowerCase()),
+    );
+    if (!hasWeekdayRow) continue;
+
+    slot += 1;
     const dayRow = grid[r + 2] ?? [];
 
     // Day columns are those whose weekday label is a known abbreviation AND whose day-row
@@ -152,8 +203,8 @@ export function parseScheduleGrid(
     // would reject the resulting date, and because that isn't a unique violation it would be
     // misreported to the manager as an overlap conflict — so it is routed to an `unparsed`
     // anomaly per populated cell instead.
-    const dayCols: { col: number; day: number; month: number }[] = [];
-    const invalidDayCols: { col: number; day: number; month: number }[] = [];
+    const dayCols: { col: number; day: number; month: number; year: number }[] = [];
+    const invalidDayCols: { col: number; day: number; month: number; year: number }[] = [];
     for (let c = 0; c < Math.max(weekdayRow.length, dayRow.length); c++) {
       const weekday = typeof weekdayRow[c] === 'string' ? String(weekdayRow[c]).trim().toLowerCase() : '';
       if (!WEEKDAYS.has(weekday)) continue;
@@ -161,17 +212,27 @@ export function parseScheduleGrid(
       if (day === null || day < 1 || day > 31) continue;
       // Attribute the column to the right-most month header at or before it.
       let month = monthCols[0].month;
-      for (const mc of monthCols) if (c >= mc.startCol) month = mc.month;
+      let headerCol = monthCols[0].startCol;
+      for (const mc of monthCols) {
+        if (c >= mc.startCol) {
+          month = mc.month;
+          headerCol = mc.startCol;
+        }
+      }
+      // The year comes from where this month sits in the sheet's overall column order, so a
+      // timeline that wraps past December is dated in the following year rather than looping
+      // back to January of the start year.
+      const year = opts.year + (yearOffsets.get(headerCol) ?? 0);
       // A non-integer day (e.g. '15.5', a fat-fingered or corrupted cell) must never reach a
       // dated cell: it would build a date string like '2026-05-15.5', which Postgres rejects
       // at insert time — and because that rejection is not a unique-constraint violation, the
       // commit route misreports it to the manager as an overlap *conflict* instead of a data
       // problem. Route it through the same invalid-day path as an out-of-range day.
-      if (!Number.isInteger(day) || day > daysInMonth(opts.year, month)) {
-        invalidDayCols.push({ col: c, day, month });
+      if (!Number.isInteger(day) || day > daysInMonth(year, month)) {
+        invalidDayCols.push({ col: c, day, month, year });
         continue;
       }
-      dayCols.push({ col: c, day, month });
+      dayCols.push({ col: c, day, month, year });
     }
 
     if (dayCols.length === 0) {
@@ -186,10 +247,14 @@ export function parseScheduleGrid(
       });
     }
 
+    // Keyed by year+month, not month alone: the sheet can contain the same month in two
+    // different years (May 2026 and May 2027), and a month-only key reported only the first.
     for (const mc of monthCols) {
-      if (!seenMonths.has(mc.month)) {
-        seenMonths.add(mc.month);
-        months.push({ year: opts.year, month: mc.month });
+      const year = opts.year + (yearOffsets.get(mc.startCol) ?? 0);
+      const key = `${year}-${mc.month}`;
+      if (!seenMonths.has(key)) {
+        seenMonths.add(key);
+        months.push({ year, month: mc.month });
       }
     }
 
@@ -205,7 +270,7 @@ export function parseScheduleGrid(
       for (const dc of dayCols) {
         const raw = bodyRow[dc.col];
         if (raw === null || raw === undefined || String(raw).trim() === '') continue;
-        const date = `${opts.year}-${pad(dc.month)}-${pad(dc.day)}`;
+        const date = `${dc.year}-${pad(dc.month)}-${pad(dc.day)}`;
 
         if (name === null) {
           if (nameCellBlank) {
@@ -229,7 +294,8 @@ export function parseScheduleGrid(
         cells.push({
           sourceName: name,
           slot,
-          year: opts.year,
+          // dc.year, not opts.year — must agree with `date` above, which rolls over.
+          year: dc.year,
           month: dc.month,
           day: dc.day,
           date,
@@ -244,7 +310,7 @@ export function parseScheduleGrid(
       for (const dc of invalidDayCols) {
         const raw = bodyRow[dc.col];
         if (isBlank(raw)) continue;
-        const date = `${opts.year}-${pad(dc.month)}-${pad(dc.day)}`;
+        const date = `${dc.year}-${pad(dc.month)}-${pad(dc.day)}`;
         anomalies.push({ kind: 'unparsed', sourceName: name, slot, date, raw: String(raw) });
       }
 

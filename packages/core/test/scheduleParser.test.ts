@@ -394,3 +394,104 @@ describe('parseScheduleGrid: invalid day-of-month guard (FIX 2)', () => {
     );
   });
 });
+
+/**
+ * Year rollover across a workbook that spans two calendar years.
+ *
+ * The real client workbook is ONE continuous timeline: Травень (May) 2026 → Серпень (Aug) 2027,
+ * laid out left-to-right as months 5..12 then 1..8. Every month previously took `opts.year`
+ * verbatim, so:
+ *  - January landed in 2026 — nine months BEFORE the May start instead of eight months after it;
+ *  - the same month name appeared twice with the same year (May 2026 twice), so two different
+ *    columns produced identical dates for the same person, and the commit route rejected the
+ *    import as overlapping shifts.
+ *
+ * Built as a hand-written grid rather than an xlsx fixture: the parser takes a grid, and the
+ * bug is about column order, which is exactly what a literal grid states plainly.
+ */
+describe('parseScheduleGrid: year rollover (two-year timeline)', () => {
+  /**
+   * Two month blocks side by side — Грудень (12) then Січень (1) — the boundary where the
+   * calendar wraps. Layout per block: header row, weekday row, day row, then one name row.
+   */
+  function twoYearGrid(): (string | number | null)[][] {
+    const width = 12;
+    const blank = (): (string | number | null)[] => Array.from({ length: width }, () => null);
+
+    const header = blank();
+    header[3] = 'Грудень';
+    header[8] = 'Січень';
+
+    const weekdays = blank();
+    const days = blank();
+    // Two day columns per month is enough to date a cell; the weekday label is what marks a
+    // column as a day column at all.
+    weekdays[4] = 'пн';
+    days[4] = 1;
+    weekdays[5] = 'вт';
+    days[5] = 2;
+    weekdays[9] = 'чт';
+    days[9] = 1;
+    weekdays[10] = 'пт';
+    days[10] = 2;
+
+    const nameRow = blank();
+    nameRow[2] = 'Олена';
+    nameRow[4] = 1; // 1 Dec
+    nameRow[9] = 2; // 1 Jan — must be the FOLLOWING year
+
+    return [header, weekdays, days, nameRow];
+  }
+
+  it('dates a month after December in the following year', () => {
+    const out = parseScheduleGrid(twoYearGrid(), { year: 2026 });
+    const dates = out.cells.map((c) => c.date).sort();
+    expect(dates).toEqual(['2026-12-01', '2027-01-01']);
+  });
+
+  it('reports the rolled-over year on the cell, not just in the date string', () => {
+    const out = parseScheduleGrid(twoYearGrid(), { year: 2026 });
+    const jan = out.cells.find((c) => c.month === 1)!;
+    // `year` and `date` must agree — the commit route filters on `year` and the DB stores `date`.
+    expect(jan.year).toBe(2027);
+    expect(jan.date.startsWith('2027-')).toBe(true);
+  });
+
+  it('lists both years in `months`, keyed by year+month', () => {
+    const out = parseScheduleGrid(twoYearGrid(), { year: 2026 });
+    expect(out.months).toEqual(
+      expect.arrayContaining([
+        { year: 2026, month: 12 },
+        { year: 2027, month: 1 },
+      ]),
+    );
+  });
+
+  it('does not roll over a single-year workbook', () => {
+    // Guards against the rollover firing on ascending months, which would break every
+    // existing single-year import.
+    const grid: (string | number | null)[][] = [
+      [null, null, null, 'Травень', null, null, 'Червень', null],
+      [null, null, null, null, 'пн', null, null, 'ср'],
+      [null, null, null, null, 1, null, null, 1],
+      [null, null, 'Олена', null, 1, null, null, 2],
+    ];
+    const out = parseScheduleGrid(grid, { year: 2026 });
+    expect(out.cells.every((c) => c.year === 2026)).toBe(true);
+    expect(out.cells.map((c) => c.date).sort()).toEqual(['2026-05-01', '2026-06-01']);
+  });
+
+  it('validates day-of-month against the rolled-over year, not the base year', () => {
+    // 29 Feb exists in 2028 but not in 2027. A block running Dec 2027 → Feb 2028 must accept it;
+    // validating against the base year would reject a real date as a stale copy-paste column.
+    const grid: (string | number | null)[][] = [
+      [null, null, null, 'Грудень', null, null, null, 'Лютий', null],
+      [null, null, null, null, 'пн', null, null, null, 'вт'],
+      [null, null, null, null, 1, null, null, null, 29],
+      [null, null, 'Олена', null, 1, null, null, null, 1],
+    ];
+    const out = parseScheduleGrid(grid, { year: 2027 });
+    expect(out.cells.map((c) => c.date).sort()).toEqual(['2027-12-01', '2028-02-29']);
+    expect(out.anomalies.filter((a) => a.kind === 'unparsed')).toHaveLength(0);
+  });
+});

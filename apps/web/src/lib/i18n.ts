@@ -409,6 +409,17 @@ export const t = {
     commit: 'Зберегти зміни',
     committing: 'Зберігаємо…',
     anomalies: 'Аномалії',
+    // Grouped by kind, because the real workbook yields ~2,100 of these and the handful that
+    // affect pay must not be buried in the annotation noise.
+    anomalySubstitute: 'Підміни',
+    anomalySubstituteNote:
+      'У клітинці ім\'я замість номера локації — хтось підмінив зміну. Ці зміни НЕ імпортуються: додайте їх вручну, інакше людина не отримає оплату.',
+    anomalyUnparsed: 'Не розпізнано',
+    anomalyUnparsedNote: 'Дата не існує (напр. 31-е у 30-денному місяці) — перевірте клітинку в файлі.',
+    anomalyAnnotation: 'Примітки у графіку',
+    anomalyAnnotationNote:
+      'Текст у рядку без імені (наради, інвентаризації). На зарплату не впливає.',
+    andMore: (n: number) => `…та ще ${n}`,
     empty: 'Файл ще не вибрано.',
     workbook: 'Файл графіка',
     preview: 'Попередній перегляд',
@@ -417,6 +428,10 @@ export const t = {
     commitResult: 'Результат збереження',
     year: 'Рік',
     month: 'Місяць',
+    // The period to commit. Named separately from `month` because a workbook can span two
+    // calendar years, so the year is part of the choice.
+    period: 'Період для збереження',
+    choosePeriodFirst: 'Спочатку виберіть період.',
     // Each of these lists a thing the manager must resolve before the import is trustworthy,
     // so the headings say what is wrong rather than naming an internal field.
     unmappedNames: 'Не розпізнані імена',

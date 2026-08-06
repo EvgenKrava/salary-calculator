@@ -188,8 +188,35 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
     if (!Number.isInteger(month) || month < 1 || month > 12) {
       throw new HTTPException(400, { message: 'month must be an integer between 1 and 12' });
     }
+    /*
+     * The period to import is (targetYear, month) — NOT (year, month).
+     *
+     * `year` is the year the sheet's timeline *starts* in, which the parser needs in order to date
+     * the first month block. The period the manager is committing is a separate thing: the real
+     * client sheet is one continuous timeline running Травень 2026 → Серпень 2027, so a workbook
+     * loaded with year=2026 legitimately contains January **2027**.
+     *
+     * Filtering on month alone was correct only while a workbook covered a single calendar year.
+     * Here `month === 5` matched May 2026 *and* May 2027: importing May selected 415 cells across
+     * both years instead of 191, and the same person on the same day-of-month in two different
+     * years was then reported to the manager as an overlapping-shift conflict — the error that
+     * surfaced on the real file.
+     *
+     * `targetYear` defaults to `year` so an existing single-year caller is unaffected.
+     */
+    const targetYearRaw = String(body['targetYear'] ?? '').trim();
+    const targetYear = targetYearRaw === '' ? year : Number(targetYearRaw);
+    if (!Number.isInteger(targetYear) || targetYear < 2000 || targetYear > 2100) {
+      throw new HTTPException(400, {
+        message: 'targetYear must be an integer between 2000 and 2100',
+      });
+    }
+
     const parsed = parseScheduleGrid(grid, { year });
-    const inMonth = parsed.cells.filter((cell) => cell.month === month);
+    // `cell.year` is the parser's rolled-over year (scheduleParser → yearOffsetByColumn).
+    const inMonth = parsed.cells.filter(
+      (cell) => cell.month === month && cell.year === targetYear,
+    );
     const { resolved, unmappedNames, unknownLocations, missingSlots, inactiveEmployees } =
       await resolve(inMonth);
 
@@ -259,7 +286,8 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
     }
 
     return c.json({
-      period: { year, month },
+      // The period actually committed, so the UI cannot report "May 2026" for a May 2027 import.
+      period: { year: targetYear, month },
       created,
       skipped,
       conflicts,

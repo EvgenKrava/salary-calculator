@@ -4,6 +4,7 @@ import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
 import { levels, locations, employees, locationShiftSlots, scheduleNameMap, shifts } from '../src/schema';
 import { makeScheduleWorkbookBuffer } from '../../core/test/fixtures/makeScheduleFixture';
+import { makeTwoYearScheduleWorkbookBuffer } from '../../core/test/fixtures/makeTwoYearScheduleFixture';
 import type { TokenVerifier } from '../src/auth/types';
 
 const verifier: TokenVerifier = {
@@ -336,5 +337,105 @@ describe('schedule import', () => {
       body: await form({ year: 'nope' }),
     });
     expect(badYear.status).toBe(400);
+  });
+});
+
+/**
+ * A workbook whose timeline crosses a calendar year.
+ *
+ * The real client file runs Травень 2026 → Серпень 2027 as one continuous sheet. Two bugs met
+ * there: the parser dated every month in the base year, and the commit route selected cells by
+ * month alone — so committing one month pulled in the same month from BOTH years, and the same
+ * person on the same day-of-month in two different years was reported to the manager as an
+ * overlapping-shift conflict. That is the error the real file produced.
+ */
+describe('schedule import: workbook spanning two calendar years', () => {
+  async function twoYearForm(fields: Record<string, string>): Promise<FormData> {
+    const fd = new FormData();
+    const buf = await makeTwoYearScheduleWorkbookBuffer();
+    fd.set(
+      'file',
+      new File([new Uint8Array(buf)], 'two-year.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    );
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+    return fd;
+  }
+
+  it('previews both years, so the manager can tell January 2027 from January 2026', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/schedule-imports/preview', {
+      method: 'POST',
+      headers: MGR,
+      body: await twoYearForm({ year: '2026' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PreviewResponse;
+    expect(body.months).toEqual(
+      expect.arrayContaining([
+        { year: 2026, month: 12 },
+        { year: 2027, month: 1 },
+      ]),
+    );
+  });
+
+  it('commits only the requested YEAR and month, not the same month in both years', async () => {
+    const { db, app } = await seed();
+    const res = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      // targetYear 2026 + month 12 → 1 December 2026 only.
+      body: await twoYearForm({ year: '2026', targetYear: '2026', month: '12' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as CommitResponse;
+
+    const rows = await db.select().from(shifts);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].workDate).toBe('2026-12-01');
+    // The January row is a different period and must NOT have been treated as a conflict.
+    expect(body.conflicts).toEqual([]);
+  });
+
+  it('can commit the month that falls in the FOLLOWING year', async () => {
+    // The whole point of `targetYear`: with a month-only filter, or with targetYear pinned to the
+    // parser's base year, January 2027 would be unreachable.
+    const { db, app } = await seed();
+    const res = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      body: await twoYearForm({ year: '2026', targetYear: '2027', month: '1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as CommitResponse;
+    expect(body.period).toEqual({ year: 2027, month: 1 });
+
+    const rows = await db.select().from(shifts);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].workDate).toBe('2027-01-01');
+  });
+
+  it('defaults targetYear to year, so a single-year caller is unaffected', async () => {
+    const { db, app } = await seed();
+    const res = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      body: await twoYearForm({ year: '2026', month: '12' }), // no targetYear
+    });
+    expect(res.status).toBe(200);
+    const rows = await db.select().from(shifts);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].workDate).toBe('2026-12-01');
+  });
+
+  it('rejects a nonsense targetYear rather than importing nothing silently', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/schedule-imports/commit', {
+      method: 'POST',
+      headers: MGR,
+      body: await twoYearForm({ year: '2026', targetYear: 'notayear', month: '12' }),
+    });
+    expect(res.status).toBe(400);
   });
 });

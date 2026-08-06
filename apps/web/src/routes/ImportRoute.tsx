@@ -1,18 +1,41 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
-import { MonthSelect } from '../ui/Select';
+import { Select } from '../ui/Select';
 import { config } from '../lib/config';
 import { useAuth } from '../lib/auth';
-import { t } from '../lib/i18n';
+import { t, MONTHS } from '../lib/i18n';
 import { Table, Th, Td } from '../ui/Table';
 import { Toolbar } from '../ui/Toolbar';
 import { useEmployees, useNameMap, useSetNameMapping } from '../lib/queries';
 
 interface PreviewResult {
-  months: number[];
+  /**
+   * Periods found in the workbook, as {year, month}.
+   *
+   * This was typed `number[]` while the API had always returned objects, so
+   * `preview.months.join(', ')` rendered "[object Object]". It matters more than cosmetically now:
+   * the real client sheet is one timeline spanning Травень 2026 → Серпень 2027, so the year is
+   * what distinguishes May 2026 from May 2027 and the manager has to be able to pick between them.
+   */
+  months: { year: number; month: number }[];
   sourceNames: string[];
-  anomalies: string[];
+  /**
+   * Cells the parser could not turn into a shift, as objects — NOT strings.
+   *
+   * This was typed `string[]` while the API had always returned `ParsedAnomaly` objects, so
+   * `<ReportList items={preview.anomalies}>` rendered an object as a React child and threw
+   * "Minified React error #31" — the import screen died the moment a preview came back with any
+   * anomaly at all. The real client workbook produces 2,097 of them, so it crashed every time;
+   * the throw was invisible to typecheck because the declared type was a lie.
+   */
+  anomalies: {
+    kind: 'substitute' | 'annotation' | 'unparsed';
+    sourceName: string | null;
+    slot: number;
+    date: string | null;
+    raw: string;
+  }[];
   unmappedNames: string[];
   unknownLocations: number[];
   missingSlots: string[];
@@ -42,6 +65,62 @@ function ReportList({ title, items }: { title: string; items: (string | number)[
           <li key={`${item}-${i}`}>{item}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+type Anomaly = PreviewResult['anomalies'][number];
+
+/**
+ * Anomalies, grouped by kind with a sample — not 2,097 raw rows.
+ *
+ * The real workbook produces ~2,100 anomalies, almost all `annotation` (text on a row with no
+ * name: meeting notes, inventory reminders). Listing them individually buries the handful that
+ * matter — a `substitute` means someone covered a shift and nobody will be paid for it unless the
+ * manager acts. So each kind gets a count, an explanation of what it means for payroll, and a few
+ * examples rather than the full dump.
+ */
+export function AnomalyReport({ anomalies }: { anomalies: Anomaly[] }) {
+  if (anomalies.length === 0) return null;
+
+  const KINDS: { kind: Anomaly['kind']; label: string; note: string }[] = [
+    { kind: 'substitute', label: t.importScreen.anomalySubstitute, note: t.importScreen.anomalySubstituteNote },
+    { kind: 'unparsed', label: t.importScreen.anomalyUnparsed, note: t.importScreen.anomalyUnparsedNote },
+    { kind: 'annotation', label: t.importScreen.anomalyAnnotation, note: t.importScreen.anomalyAnnotationNote },
+  ];
+
+  return (
+    <div style={{ marginTop: 'var(--s4)' }}>
+      <h3 style={{ fontSize: 'var(--text-base)', marginBottom: 'var(--s1)' }}>
+        {t.importScreen.anomalies} ({anomalies.length})
+      </h3>
+      {KINDS.map(({ kind, label, note }) => {
+        const group = anomalies.filter((a) => a.kind === kind);
+        if (group.length === 0) return null;
+        return (
+          <div key={kind} style={{ marginTop: 'var(--s3)' }}>
+            <p style={{ margin: 0, fontWeight: 500 }}>
+              {label} — {group.length}
+            </p>
+            <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{note}</p>
+            <ul
+              className="mono"
+              style={{ margin: 'var(--s1) 0 0', paddingLeft: 'var(--s6)', fontSize: 'var(--text-xs)' }}
+            >
+              {group.slice(0, 5).map((a, i) => (
+                <li key={`${kind}-${i}`}>
+                  {[a.date, a.sourceName, a.raw].filter(Boolean).join(' · ')}
+                </li>
+              ))}
+              {group.length > 5 ? (
+                <li style={{ listStyle: 'none', color: 'var(--ink-faint)' }}>
+                  {t.importScreen.andMore(group.length - 5)}
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -147,7 +226,14 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
   const { getToken } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [year, setYear] = useState(String(new Date().getUTCFullYear()));
-  const [month, setMonth] = useState(String(new Date().getUTCMonth() + 1));
+  /**
+   * The period to commit, as "YYYY-M", chosen from the periods the preview actually found.
+   *
+   * Previously a bare month number, decoupled from the file: a workbook spanning two calendar
+   * years contains the same month twice (May 2026 and May 2027), and a month-only choice could
+   * not say which — the API then imported both and reported the overlap as a conflict.
+   */
+  const [period, setPeriod] = useState('');
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -185,6 +271,10 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
     try {
       const result = await postMultipart<PreviewResult>('/api/schedule-imports/preview', { year });
       setPreview(result);
+      // Default to the first period in the file rather than to today's month, which may not be
+      // in the workbook at all.
+      const first = result.months[0];
+      setPeriod(first ? `${first.year}-${first.month}` : '');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -196,7 +286,16 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
     setError(null);
     setBusy(true);
     try {
-      const result = await postMultipart<CommitResult>('/api/schedule-imports/commit', { year, month });
+      // `year` is the timeline's STARTING year (what the parser needs to date the first block);
+      // `targetYear`+`month` are the period being committed. They differ whenever the workbook
+      // crosses a year boundary — see the commit route in scheduleImports.ts.
+      const [targetYear, month] = period.split('-');
+      if (!targetYear || !month) throw new Error(t.importScreen.choosePeriodFirst);
+      const result = await postMultipart<CommitResult>('/api/schedule-imports/commit', {
+        year,
+        targetYear,
+        month,
+      });
       setCommitResult(result);
       // Notify the host HERE, in the event handler, not from an effect.
       //
@@ -240,7 +339,9 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
         <div className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }}>
           <h2>{t.importScreen.previewResult}</h2>
           <p className="mono" style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>
-            {t.importScreen.monthsFound(preview.months.join(', ') || '—')}
+            {t.importScreen.monthsFound(
+              preview.months.map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`).join(', ') || '—',
+            )}
           </p>
           {/* Unmapped names are the ONLY thing standing between a parsed workbook and real
               shifts, so they get an action rather than a read-only list. */}
@@ -248,12 +349,27 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
           <ReportList title={t.importScreen.unknownLocations} items={preview.unknownLocations} />
           <ReportList title={t.importScreen.missingSlots} items={preview.missingSlots} />
           <ReportList title={t.importScreen.inactiveEmployees} items={preview.inactiveEmployees} />
-          <ReportList title={t.importScreen.anomalies} items={preview.anomalies} />
+          <AnomalyReport anomalies={preview.anomalies} />
 
           <div style={{ marginTop: 'var(--s6)' }}>
             <h3 style={{ marginBottom: 'var(--s2)' }}>{t.importScreen.commitHeading}</h3>
-            <MonthSelect label={t.importScreen.month} value={month} onChange={setMonth} />
-            <Button variant="primary" onClick={runCommit} disabled={busy}>
+            {/* Choose from the periods the file actually contains, not from all twelve months:
+                a month that isn't in the workbook imports nothing, and with a two-year timeline
+                a bare month number cannot say which year is meant. */}
+            <Select
+              label={t.importScreen.period}
+              name="period"
+              size="wide"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+            >
+              {preview.months.map((m) => (
+                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                  {MONTHS[m.month - 1]} {m.year}
+                </option>
+              ))}
+            </Select>
+            <Button variant="primary" onClick={runCommit} disabled={busy || period === ''}>
               {busy ? t.importScreen.committing : t.importScreen.commit}
             </Button>
           </div>
