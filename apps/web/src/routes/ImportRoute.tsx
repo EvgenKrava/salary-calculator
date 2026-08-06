@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { MonthSelect } from '../ui/Select';
@@ -198,19 +198,22 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
     try {
       const result = await postMultipart<CommitResult>('/api/schedule-imports/commit', { year, month });
       setCommitResult(result);
+      // Notify the host HERE, in the event handler, not from an effect.
+      //
+      // This was an effect keyed on `[committed, onCommitted]`, and callers pass an inline
+      // arrow — so `onCommitted` had a new identity every render, the effect re-ran, its
+      // refetch re-rendered the parent, and the schedule page died with "Something went
+      // wrong!" after every import. Reproduced at 51 effect firings for a single mount.
+      //
+      // A commit is a discrete event, so the event handler is where it belongs; there is no
+      // dependency array to get wrong.
+      onCommitted?.();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   }
-
-  // Tell the caller a commit landed, so a host screen can refresh (the schedule modal reloads
-  // the month rather than showing the manager a calendar that predates their own import).
-  const committed = commitResult !== null;
-  useEffect(() => {
-    if (committed) onCommitted?.();
-  }, [committed, onCommitted]);
 
   return (
     <>
