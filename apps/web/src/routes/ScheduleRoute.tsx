@@ -7,6 +7,9 @@ import { MonthSelect } from '../ui/Select';
 import { StatusPill } from '../ui/StatusPill';
 import { anyLoading, firstError } from '../ui/QueryGate';
 import { useEmployees, useLocations, useShifts, type Shift } from '../lib/queries';
+// Shared with the Today screen. A second copy of calendar arithmetic is how an off-by-one-day
+// bug reaches a payroll screen.
+import { isoOf, todayIso } from '../lib/dates';
 import { t } from '../lib/i18n';
 import './schedule.css';
 
@@ -62,21 +65,10 @@ export function buildMonthGrid(year: number, month1to12: number): Cell[] {
   return cells;
 }
 
-function isoOf(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 /** First and last ISO date of the visible grid — used to scope the shifts query to the month
  * actually on screen (plus the lead/trail days from adjacent months shown in the grid). */
 function gridBounds(cells: Cell[]): { from: string; to: string } {
   return { from: cells[0].iso, to: cells[cells.length - 1].iso };
-}
-
-function todayIso(): string {
-  return isoOf(new Date());
 }
 
 export function DayCell({

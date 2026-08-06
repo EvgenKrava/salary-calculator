@@ -1,0 +1,110 @@
+/*
+ * Today — the worklist home screen.
+ *
+ * Attention list and the week figure sit side by side on a laptop, stacked on a phone. The
+ * worklist comes FIRST in the DOM so it is also first on a phone and first for a screen reader:
+ * what needs doing outranks what the total was.
+ */
+.today {
+  display: grid;
+  /* The figure card only needs its own width; the worklist takes the rest. */
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 22rem);
+  gap: var(--s4);
+  align-items: start;
+  margin-bottom: var(--s6);
+}
+
+@media (max-width: 900px) {
+  .today {
+    grid-template-columns: 1fr;
+  }
+}
+
+.today__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.today__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule);
+  /* Leading edge carries the state colour: a 3px bar, not a filled panel. A fully tinted row
+     for every item would make three warnings shout equally loudly. */
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.today__item:hover {
+  background: var(--surface-sunk);
+}
+
+.today__item--warn {
+  border-left-color: var(--warn);
+}
+.today__item--stop {
+  border-left-color: var(--stop);
+}
+
+.today__itemBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.today__itemText {
+  font-weight: 500;
+}
+
+.today__itemDetail {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  /* A long list of missing dates truncates rather than wrapping the row to three lines. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The arrow is affordance only; the row is the target. */
+.today__itemGo {
+  flex: none;
+  color: var(--ink-faint);
+  transition: transform var(--transition), color var(--transition);
+}
+.today__item:hover .today__itemGo {
+  color: var(--ink);
+  transform: translateX(2px);
+}
+
+/*
+ * All-clear. Deliberately styled as a statement, not as an empty state: nothing is missing, so
+ * the dashed "waiting to be filled" outline would misdescribe it.
+ */
+.today__clear {
+  padding: var(--s2) 0;
+}
+
+.today__clearTitle {
+  margin: 0 0 var(--s1);
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.today__loading {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  padding: var(--s2) var(--s3);
+}

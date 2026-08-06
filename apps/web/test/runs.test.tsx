@@ -30,7 +30,21 @@ describe('run breakdown', () => {
 
   it('shows a grand total that equals the sum of the lines', () => {
     render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
-    expect(screen.getByText('340.00')).toBeInTheDocument();
+    // Twice: the display figure at the top of the ledger and the footer's total column. The
+    // figure is the answer, the footer is the evidence — see docs/design/system.md.
+    expect(screen.getAllByText('340.00')).toHaveLength(2);
+  });
+
+  it('leads with the payroll total in display numerals', () => {
+    render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
+    expect(screen.getByText(t.runs.payrollTotal)).toBeInTheDocument();
+  });
+
+  it('shows the period alongside the display total when one is given', () => {
+    render(
+      <RunBreakdown lines={LINES} employees={EMPLOYEES} period="05.05.2026 — 04.06.2026" />,
+    );
+    expect(screen.getByText(/05\.05\.2026 — 04\.06\.2026/)).toBeInTheDocument();
   });
 
   it('names employees rather than showing ids', () => {
@@ -95,11 +109,13 @@ describe('breakdown column totals', () => {
     render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
     expect(screen.getByText('240.00')).toBeInTheDocument(); // hourly: 160 + 80
     expect(screen.getByText('75.00')).toBeInTheDocument();  // revenue share: 50 + 25
-    expect(screen.getByText('340.00')).toBeInTheDocument(); // grand total: 235 + 105
+    // Grand total appears twice — display figure plus footer column.
+    expect(screen.getAllByText('340.00')).toHaveLength(2);
   });
 
   it('names how many people are in the run', () => {
     render(<RunBreakdown lines={LINES} employees={EMPLOYEES} />);
-    expect(screen.getByText(`${t.runs.allEmployees} (2)`)).toBeInTheDocument();
+    // Twice: beside the display figure, and in the footer's label cell.
+    expect(screen.getAllByText(`${t.runs.allEmployees} (2)`)).toHaveLength(2);
   });
 });

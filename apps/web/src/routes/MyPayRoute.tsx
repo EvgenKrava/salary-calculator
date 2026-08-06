@@ -2,6 +2,7 @@ import { Table, Th, Td, NumCell } from '../ui/Table';
 import { Money } from '../ui/Money';
 import { EmptyState } from '../ui/EmptyState';
 import { Toolbar } from '../ui/Toolbar';
+import { Figure } from '../ui/Figure';
 import { useMyPay } from '../lib/queries';
 import { t, formatDate } from '../lib/i18n';
 
@@ -13,6 +14,15 @@ export function MyPayRoute() {
   if (pay.error) return <p style={{ color: 'var(--stop)' }}>{(pay.error as Error).message}</p>;
 
   const rows = pay.data ?? [];
+  /*
+   * The most recent period's pay, not a lifetime sum.
+   *
+   * An employee opening this screen wants "what am I getting for the period just ended" — a
+   * running total of everything ever earned would be a bigger number that answers a question
+   * nobody asked. Rows are sorted here rather than trusted from the API so the figure and the
+   * first row cannot disagree.
+   */
+  const latest = [...rows].sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
 
   return (
     <>
@@ -20,6 +30,14 @@ export function MyPayRoute() {
       {rows.length === 0 ? (
         <EmptyState title={t.myPay.empty} action={t.myPay.emptyAction} />
       ) : (
+        <>
+        <div className="ledger__head">
+          <Figure
+            value={latest.total.toFixed(2)}
+            unit={t.common.currency}
+            label={`${t.myPay.latestPeriod} · ${formatDate(latest.periodStart)} — ${formatDate(latest.periodEnd)}`}
+          />
+        </div>
         <Table caption={t.myPay.title}>
           <thead>
             <tr>
@@ -44,6 +62,7 @@ export function MyPayRoute() {
             ))}
           </tbody>
         </Table>
+        </>
       )}
     </>
   );

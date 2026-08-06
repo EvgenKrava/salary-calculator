@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { resolveMediaType, sniffMediaType, mediaTypeFromKey } from '../src/mediaType';
 import { createHandler, type HandlerDeps } from '../src/handler';
+import { toolUseResponse, GOOD_REVENUE } from './bedrockResponse';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
@@ -53,12 +54,7 @@ describe('handler media-type resolution', () => {
   function deps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
     return {
       getObject: vi.fn(async () => ({ body: JPEG, contentType: 'binary/octet-stream' })),
-      invokeModel: vi.fn(async () => ({
-        stop_reason: 'end_turn',
-        content: [{ type: 'text', text: JSON.stringify({
-          rows: [{ locationName: '1', date: '2026-05-05', amount: '10.00', confidence: 0.95 }],
-          confidence: 0.95, notes: '' }) }],
-      })),
+      invokeModel: vi.fn(async () => toolUseResponse(GOOD_REVENUE)),
       recordJob: vi.fn(async () => 'job-1'),
       threshold: 0.85,
       ...overrides,

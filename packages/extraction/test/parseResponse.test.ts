@@ -3,8 +3,27 @@ import { parseExtractionResponse } from '../src/parseResponse';
 
 const OPTS = { docType: 'revenue' as const, threshold: 0.85 };
 
-function ok(payload: unknown, stop = 'end_turn') {
-  return { stop_reason: stop, content: [{ type: 'text', text: JSON.stringify(payload) }] };
+/**
+ * A successful Bedrock response: the payload arrives as the already-parsed `input` of the
+ * forced `record_extraction` tool call, NOT as JSON text. Bedrock rejects structured outputs
+ * (see buildRequest), so this tool-call shape is the real wire format.
+ */
+function ok(payload: unknown, stop = 'tool_use') {
+  return {
+    stop_reason: stop,
+    content: [
+      {
+        type: 'tool_use',
+        id: 'toolu_1',
+        name: 'record_extraction',
+        // Round-tripped through JSON because that is what the SDK hands back: it parses the
+        // wire body, so `input` can only ever contain JSON-representable values. Passing a
+        // live JS object here would let NaN/Infinity reach the parser, which cannot happen
+        // in production and would make the tests below assert against an impossible input.
+        input: JSON.parse(JSON.stringify(payload)),
+      },
+    ],
+  };
 }
 
 const GOOD = {
@@ -66,16 +85,31 @@ describe('parseExtractionResponse', () => {
     expect((out as { reason: string }).reason).toMatch(/truncat|max_tokens/i);
   });
 
-  it('reports malformed JSON as unusable', () => {
+  it('reports a prose answer as unusable and keeps the prose for the reviewer', () => {
+    // `tool_choice` is forced, but if the model ever answers in text instead, that text is
+    // the only clue a reviewer has about why the document did not transcribe.
     const out = parseExtractionResponse(
-      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'not json' }] },
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'The photo is too blurry.' }] },
       OPTS,
     );
+    expect(out).toMatchObject({ kind: 'unusable', raw: 'The photo is too blurry.' });
+  });
+
+  it('reports a response with no content at all as unusable', () => {
+    const out = parseExtractionResponse({ stop_reason: 'end_turn', content: [] }, OPTS);
     expect(out).toMatchObject({ kind: 'unusable' });
   });
 
-  it('reports a response with no text block as unusable', () => {
-    const out = parseExtractionResponse({ stop_reason: 'end_turn', content: [] }, OPTS);
+  it('ignores a tool call with a different name rather than trusting its input', () => {
+    // Guards the buildRequest/parseResponse name contract: reading any tool_use block would
+    // let an unrelated call's arguments be validated as an extraction payload.
+    const out = parseExtractionResponse(
+      {
+        stop_reason: 'tool_use',
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'something_else', input: GOOD }],
+      },
+      OPTS,
+    );
     expect(out).toMatchObject({ kind: 'unusable' });
   });
 
@@ -96,8 +130,9 @@ describe('parseExtractionResponse', () => {
     },
   );
 
-  // NaN/Infinity cannot survive JSON: `JSON.stringify(NaN)` is `null`, so these are rejected
-  // as schema violations before confidence is read. Asserted so the safe outcome is pinned —
+  // NaN/Infinity cannot survive JSON: `JSON.stringify(NaN)` is `null` (and the SDK parses the
+  // wire body, so tool input is always JSON-representable), which makes these schema
+  // violations before confidence is ever read. Asserted so the safe outcome is pinned —
   // either way they must not approve.
   it.each([Number.NaN, Number.POSITIVE_INFINITY])(
     'treats a non-finite confidence (%p) as unusable, never approved',

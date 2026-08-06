@@ -1,14 +1,17 @@
 import { z } from 'zod';
+import { EXTRACTION_TOOL } from './buildRequest';
 import type { DocType } from './schemas';
 
 /**
  * Row shapes mirroring each doc type's JSON Schema `required` list.
  *
- * These are not redundant with the outbound schemas. `output_config.format` constrains what
+ * These are not redundant with the outbound schema. The tool's `input_schema` constrains what
  * the model is *asked* for, but the response still has to be validated here: a row that
  * parses as `{confidence: 0.95}` with no amount and no date would otherwise be staged as
- * approved revenue data. `.passthrough()` keeps unknown fields rather than stripping them,
- * so nothing the model reported is lost before a human sees it.
+ * approved revenue data. Bedrock also rejects `strict: true` on a tool, so tool input is
+ * schema-*guided*, not schema-*enforced* — this validation is the only real gate.
+ * `.passthrough()` keeps unknown fields rather than stripping them, so nothing the model
+ * reported is lost before a human sees it.
  */
 const revenueRow = z
   .object({
@@ -52,8 +55,9 @@ export type ExtractionOutcome =
  * **Do not replace this with a clamp.** Clamping saturates *upward*: a model that reports
  * confidence as a percentage (`20` meaning 20%) would become `1.0`, clear the threshold, and
  * be auto-approved — the exact low-confidence read the human-review gate exists to catch.
- * Structured outputs do not enforce JSON Schema `minimum`/`maximum`, so nothing upstream
- * constrains this value and this check is load-bearing rather than defence-in-depth.
+ * Tool input schemas do not enforce JSON Schema `minimum`/`maximum` (and Bedrock rejects
+ * `strict` outright), so nothing upstream constrains this value — the check is load-bearing
+ * rather than defence-in-depth.
  *
  * An out-of-range value means the model misunderstood the field, which is itself grounds for
  * review — so it maps to 0 (never approved) rather than to a guess about intent.
@@ -81,7 +85,7 @@ export function parseExtractionResponse(
   const res = response as {
     stop_reason?: string;
     stop_details?: { category?: string | null } | null;
-    content?: { type?: string; text?: string }[];
+    content?: { type?: string; text?: string; name?: string; input?: unknown }[];
   };
 
   // Check the refusal FIRST — content may be empty and indexing it would throw.
@@ -96,26 +100,33 @@ export function parseExtractionResponse(
     };
   }
 
-  const text = res?.content?.find((b) => b?.type === 'text')?.text;
-  if (typeof text !== 'string' || text.trim() === '') {
-    return { kind: 'unusable', reason: 'response contained no text block' };
-  }
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return { kind: 'unusable', reason: 'response was not valid JSON', raw: text };
+  /*
+   * The payload arrives as the input to the forced `record_extraction` tool call, already
+   * parsed by the SDK — there is no JSON string to decode. (Bedrock does not support
+   * structured outputs; see buildRequest.) `tool_choice` is forced, but a forced choice is not
+   * a guarantee: a refusal or a truncated turn can still end without the block, so its absence
+   * is handled rather than assumed.
+   */
+  const call = res?.content?.find((b) => b?.type === 'tool_use' && b?.name === EXTRACTION_TOOL);
+  if (!call) {
+    // Surface whatever prose the model produced instead — that text is the only clue a
+    // reviewer has about why the document did not transcribe.
+    const text = res?.content?.find((b) => b?.type === 'text')?.text;
+    return {
+      kind: 'unusable',
+      reason: `response contained no ${EXTRACTION_TOOL} tool call`,
+      raw: typeof text === 'string' && text.trim() !== '' ? text : undefined,
+    };
   }
 
   // Validate against the schema for THIS doc type, not a shape that only requires a
   // confidence. A revenue row missing `amount` must never reach `approved`.
-  const parsed = payloadFor(opts.docType).safeParse(raw);
+  const parsed = payloadFor(opts.docType).safeParse(call.input);
   if (!parsed.success) {
     return {
       kind: 'unusable',
       reason: `payload did not match the ${opts.docType} schema: ${parsed.error.message}`,
-      raw: text,
+      raw: JSON.stringify(call.input),
     };
   }
 

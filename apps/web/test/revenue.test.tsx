@@ -17,7 +17,23 @@ describe('revenue table', () => {
         locations={LOCATIONS}
       />,
     );
-    expect(screen.getByText('1234.50')).toBeInTheDocument();
+    // Two matches, not one: the row and the totals row. With a single row they carry the same
+    // figure, so this asserts the count rather than using getByText, which throws on ambiguity.
+    expect(screen.getAllByText('1234.50')).toHaveLength(2);
+  });
+
+  it('sums the money column so the manager does not add it up by hand', () => {
+    render(
+      <RevenueTable
+        rows={[
+          { id: 'r1', locationId: 'l1', revenueDate: '2026-05-05', amount: 1234.5, source: 'manual', status: 'approved' },
+          { id: 'r2', locationId: 'l2', revenueDate: '2026-05-05', amount: 65.5, source: 'manual', status: 'approved' },
+        ]}
+        locations={LOCATIONS}
+      />,
+    );
+    // 1234.50 + 65.50 = 1300.00 — and the total must be distinguishable from either row.
+    expect(screen.getByText('1300.00')).toBeInTheDocument();
   });
 
   it('shows the location name rather than its uuid', () => {

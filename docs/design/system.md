@@ -34,6 +34,58 @@ inside cards.
 amber-tinted, with a hairline rule to its left — so the eye finds totals instantly on any
 screen, and columns of figures align digit-for-digit down the page.
 
+## Structure & navigation
+
+The surface rules below (colour, type, the money column) were followed, and the app still
+read as assembled rather than designed. The reason was **structure**, not paint: every
+screen was an identical heading-plus-table, navigation was six equal-weight links with no
+grouping, and the home route said *"Choose a section from the navigation."* — a payroll
+tool whose front door asks the manager to figure out where to go.
+
+**Left rail, not a top tab strip.** Nine destinations across three roles do not fit one
+horizontal row; on a phone they became a sideways-scrolling strip where half the app was
+off-screen. A rail gives each item a full-width hit target, room for a count badge, and —
+most importantly — **grouping**, so the nav teaches the shape of the product:
+
+| Group | Contains | Why together |
+|---|---|---|
+| **Операції** (Operations) | Today, Revenue, Shifts, Schedule | Recurring work, most days |
+| **Розрахунки** (Payroll) | Review, Runs | Money leaving the business; needs more care |
+| **Налаштування** (Setup) | Employees, Parameters | Rarely touched, admin-only |
+
+The rail collapses to a bottom bar below 900px (thumb reach), and the count badge is the
+only place in the app where a number appears outside a mono face — it is a notification,
+not a figure to verify.
+
+**Every screen answers "what needs me?" before "here is data."** That is what the `Today`
+home screen exists for: unreviewed extractions, days missing revenue, shifts awaiting a
+decision, blocked runs. Each item is a **link to the thing itself**, never a bare count —
+a badge saying "3" that a manager has to go hunting for is worse than no badge.
+
+### Page archetypes
+
+Three, and every route is exactly one of them. Mixing them is what made the screens feel
+interchangeable.
+
+1. **Worklist** — attention items with an action per row (Today, Review, pending shifts).
+   Opens with what is wrong; a *clean* worklist is a first-class state and says so
+   explicitly rather than rendering an empty table.
+2. **Ledger** — dense figures (Revenue, Runs, My pay). Leads with the period total in
+   display-size numerals, then the rows. The total is the answer; the rows are evidence.
+3. **Form** — labelled fields, no tables (Setup, Employees, modals). Never dense.
+
+### Display numerals
+
+A ledger's period total is set in `--text-display` mono, tabular, amber, with the unit and
+period beneath it in muted small caps. This is the second memorable element after the money
+column, and it earns its size: the total is what the manager came to the screen for.
+
+Rules that keep it from becoming decoration:
+- **One per screen.** Two competing display figures means neither is the answer.
+- **Only for a figure the user came for** — a period total or a run total. Never a count of
+  rows, never a percentage.
+- Ledger rows stay at `--row-h`; the display figure does not license loosening the table.
+
 ## Typography
 
 | Role | Family | Why |
@@ -47,7 +99,9 @@ Rules:
   times, percentages, counts, UUID fragments. Prose numerals stay in IBM Plex Sans.
 - `font-variant-numeric: tabular-nums` on all numeric cells so digits align in columns.
 - No serif display face. Utilitarian is the point.
-- Scale (rem): `0.75 / 0.8125 / 0.875 / 1 / 1.25 / 1.75`. Tight and few.
+- Scale (rem): `0.75 / 0.8125 / 0.9375 / 1.0625 / 1.375 / 1.75`, plus `2.75` for the ledger
+  display figure only. Base is 15px, not 14px: at 14px a manager reading a dense payroll
+  table had to lean in, and it made every heading look timid by comparison.
 - **Cyrillic is first-class, and this constrains the type choice.** The entire UI is Ukrainian,
   so any candidate face must ship a Cyrillic subset — verify it before adopting one rather than
   assuming. This rule previously named **Instrument Sans**, which ships **latin and latin-ext
@@ -100,12 +154,18 @@ Discipline:
 
 ## Space, density, shape
 
-- **4px base unit.** Spacing: `4 / 8 / 12 / 16 / 24 / 32 / 48`.
-- **Table row height 34px** (not 48+). A manager scanning a month of shifts should see the
-  month, not scroll it. Comfortable-density toggle is out of scope.
-- **Radius 2px.** Not pills, not sharp-zero. Buttons, inputs, panels all 2px.
+- **4px base unit.** Spacing: `4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48`.
+- **Table row height 40px.** This rule said 34px, on the reasoning that a manager scanning a
+  month should see the month rather than scroll it. That reasoning holds for *density* but
+  34px is below the 44px minimum tap target, and revenue gets entered on a phone behind a
+  counter — so the rule was failing the primary use case to serve the secondary one. 40px
+  with `--tap: 44px` on interactive cells still fits a month on a laptop screen.
+- **Radius scales with element size:** `4px` inline chips, `6px` controls (buttons, inputs),
+  `10px` containers (cards, panels), pill only for count badges. A single 2px value on
+  everything is what made this read as a 2010s admin panel — and it removed the size cue that
+  tells you a button is a button next to a card.
 - **Borders over shadows.** One `1px solid var(--rule)`. Shadow only on genuinely floating
-  layers (dropdown, modal), and then a single tight shadow — no stacked glows.
+  layers (dropdown, modal, sticky bar), and then a single tight shadow — no stacked glows.
 - **Full-bleed tables.** Tables run edge-to-edge in their panel with no inner padding
   gutter; the row rules are the structure.
 

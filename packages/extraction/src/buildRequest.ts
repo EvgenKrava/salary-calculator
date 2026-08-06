@@ -30,13 +30,23 @@ export interface ContentBlock {
   [key: string]: unknown;
 }
 
+/**
+ * Name of the tool the model must call to return its transcription.
+ *
+ * Shared with parseResponse, which reads the matching `tool_use` block — a mismatch would
+ * make every extraction "unusable" while the model was in fact answering correctly.
+ */
+export const EXTRACTION_TOOL = 'record_extraction';
+
 export interface MessageRequest {
   // Index signature lets call sites assert this to Record<string, unknown> (see tests) to
   // check for absent 400-triggering keys, without weakening the named fields below.
   [key: string]: unknown;
   model: string;
   max_tokens: number;
-  output_config: { effort: string; format: { type: 'json_schema'; schema: unknown } };
+  output_config: { effort: string };
+  tools: { name: string; description: string; input_schema: unknown }[];
+  tool_choice: { type: 'tool'; name: string };
   messages: { role: 'user'; content: ContentBlock[] }[];
 }
 
@@ -46,14 +56,24 @@ Transcribe only what is actually written. Do not guess, infer, or complete value
 
 For every row, give a confidence between 0 and 1 for that specific row. Give a separate overall confidence for the document. Use the notes field for anything illegible, ambiguous, crossed out, or otherwise unexpected.
 
-Copy amounts, dates, names and times exactly as they appear, as strings. Do not reformat, round, or convert them.`;
+Copy amounts, dates, names and times exactly as they appear, as strings. Do not reformat, round, or convert them.
+
+Transcribe only real data rows. A summary line — a total, subtotal, or balance, however it is labelled — is not a location or a person: leave it out of the rows and mention it in the notes instead. Verified against a real sheet: a "РАЗОМ" (total) line was otherwise returned as a fourth location, which would have double-counted the day's revenue.`;
 
 /**
  * Build the Bedrock request body for one document. Pure — no network, no AWS, no clock.
  *
- * Notable constraints encoded here (all confirmed against the claude-api skill):
+ * Notable constraints encoded here:
+ * - **The JSON Schema travels as a forced tool, not as `output_config.format`.** Bedrock's
+ *   Mantle endpoint does not implement structured outputs at all: `output_config.format`,
+ *   the deprecated top-level `output_format`, and `strict: true` on a tool each return
+ *   `400 invalid_request_error … Extra inputs are not permitted`. This is a real divergence
+ *   from the first-party Claude API, where all three work — so the shape cannot be derived
+ *   from the Anthropic docs and was established by probing the live endpoint with this
+ *   deployment's own bearer token. A forced `tool_choice` gets the same guarantee that
+ *   matters here: the answer arrives as a validated object rather than prose to be parsed.
  * - `max_tokens` is deliberately generous: Opus 5 thinks by default and thinking shares
- *   this budget with the response, so a tight value truncates the answer mid-JSON.
+ *   this budget with the response, so a tight value truncates the answer mid-object.
  * - No `temperature`/`top_p`/`top_k`/`budget_tokens` — each returns a 400 on Opus 5.
  * - PDFs and images use different block types, and the media block must precede the text.
  */
@@ -98,10 +118,18 @@ export function buildExtractionRequest(input: {
   return {
     model: modelId,
     max_tokens: 16000,
-    output_config: {
-      effort: 'high',
-      format: { type: 'json_schema', schema: schemaFor(docType) },
-    },
+    output_config: { effort: 'high' },
+    tools: [
+      {
+        name: EXTRACTION_TOOL,
+        description:
+          'Record the transcribed rows, with a confidence for each row and for the document.',
+        input_schema: schemaFor(docType),
+      },
+    ],
+    // Forced, not `auto`: the only acceptable outcome is the structured transcription. Left
+    // on `auto` the model may answer in prose, which parseResponse can only class as unusable.
+    tool_choice: { type: 'tool', name: EXTRACTION_TOOL },
     messages: [
       {
         role: 'user',

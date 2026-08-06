@@ -91,3 +91,20 @@ p:last-child {
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
 }
+
+/*
+ * Ledger header: the period total in display numerals, above the rows that make it up.
+ *
+ * Shared by every ledger screen (revenue, runs, my pay) so the archetype looks the same
+ * everywhere — see docs/design/system.md § Page archetypes. Deliberately NOT inside a card: the
+ * figure is the page's answer, not an item on it, and boxing it made it read as one tile among
+ * several.
+ */
+.ledger__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s5);
+}

@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router';
 import { AppShell } from './shell/AppShell';
 import { LoginRoute } from './routes/LoginRoute';
+import { TodayRoute } from './routes/TodayRoute';
 import { RevenueRoute } from './routes/RevenueRoute';
 import { ShiftsRoute } from './routes/ShiftsRoute';
 import { ScheduleRoute } from './routes/ScheduleRoute';
@@ -53,12 +54,16 @@ const appRoute = createRoute({
   },
 });
 
+/**
+ * Home is the "Today" worklist.
+ *
+ * It used to render `<p>Choose a section from the navigation.</p>` — the front door of a payroll
+ * tool asking the manager to work out where to go. See docs/design/system.md § Structure.
+ */
 const indexRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
-  component: function Home() {
-    return <p>Choose a section from the navigation.</p>;
-  },
+  component: TodayRoute,
 });
 
 const revenueRoute = createRoute({

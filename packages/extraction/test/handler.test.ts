@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHandler, readThreshold, type HandlerDeps } from '../src/handler';
+import { toolUseResponse, GOOD_REVENUE } from './bedrockResponse';
 
 function s3Event(key: string) {
   return {
@@ -10,19 +11,7 @@ function s3Event(key: string) {
 function deps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
   return {
     getObject: vi.fn(async () => ({ body: Buffer.from('fake-image-bytes'), contentType: 'image/jpeg' })),
-    invokeModel: vi.fn(async () => ({
-      stop_reason: 'end_turn',
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            rows: [{ locationName: '1', date: '2026-05-05', amount: '1000.00', confidence: 0.95 }],
-            confidence: 0.95,
-            notes: '',
-          }),
-        },
-      ],
-    })),
+    invokeModel: vi.fn(async () => toolUseResponse(GOOD_REVENUE)),
     recordJob: vi.fn(async () => 'job-1'),
     threshold: 0.85,
     ...overrides,
@@ -48,19 +37,13 @@ describe('extraction handler', () => {
     // The row must be schema-valid for a *revenue* document, so this exercises the routing
     // decision rather than tripping doc-type validation first.
     const d = deps({
-      invokeModel: vi.fn(async () => ({
-        stop_reason: 'end_turn',
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              rows: [{ locationName: '1', date: '2026-05-05', amount: '1234.50', confidence: 0.2 }],
-              confidence: 0.2,
-              notes: 'blurry',
-            }),
-          },
-        ],
-      })),
+      invokeModel: vi.fn(async () =>
+        toolUseResponse({
+          rows: [{ locationName: '1', date: '2026-05-05', amount: '1234.50', confidence: 0.2 }],
+          confidence: 0.2,
+          notes: 'blurry',
+        }),
+      ),
     });
     await createHandler(d)(s3Event('uploads/revenue/x.jpg'));
     expect(d.recordJob).toHaveBeenCalledWith(
@@ -72,10 +55,9 @@ describe('extraction handler', () => {
     // Guards I2: a row that is only `{confidence: 0.95}` — no amount, no date — was staged
     // `approved`, because the payload check required nothing but a confidence number.
     const d = deps({
-      invokeModel: vi.fn(async () => ({
-        stop_reason: 'end_turn',
-        content: [{ type: 'text', text: JSON.stringify({ rows: [{ confidence: 0.95 }], confidence: 0.95, notes: '' }) }],
-      })),
+      invokeModel: vi.fn(async () =>
+        toolUseResponse({ rows: [{ confidence: 0.95 }], confidence: 0.95, notes: '' }),
+      ),
     });
     await createHandler(d)(s3Event('uploads/revenue/x.jpg'));
     expect(d.recordJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'rejected' }));
@@ -227,12 +209,17 @@ describe('extraction handler — one row per document', () => {
   });
 
   it('records the raw response when the payload is unusable, so a reviewer can see it', async () => {
+    // A prose answer instead of the forced tool call — the text is kept as `raw` so the
+    // reviewer sees the model's own explanation rather than only "unusable".
     const d = deps({
-      invokeModel: vi.fn(async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'not json at all' }] })),
+      invokeModel: vi.fn(async () => ({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'I cannot read this photograph.' }],
+      })),
     });
     await createHandler(d)(s3Event('uploads/revenue/x.jpg'));
     expect(d.recordJob).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'rejected', raw: 'not json at all' }),
+      expect.objectContaining({ status: 'rejected', raw: 'I cannot read this photograph.' }),
     );
   });
 });

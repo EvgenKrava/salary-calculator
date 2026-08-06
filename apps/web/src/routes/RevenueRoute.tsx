@@ -7,6 +7,9 @@ import { Field } from '../ui/Field';
 import { Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { Toolbar } from '../ui/Toolbar';
+import { Figure } from '../ui/Figure';
+import { Modal } from '../ui/Modal';
+import { PhotoImport } from './PhotoImport';
 import { t, formatDate } from '../lib/i18n';
 import { useAddRevenue, useLocations, useRevenue, type Location, type RevenueRow } from '../lib/queries';
 
@@ -15,6 +18,7 @@ export function RevenueTable({ rows, locations }: { rows: RevenueRow[]; location
     return <EmptyState title={t.revenue.empty} action={t.revenue.emptyAction} />;
   }
   const nameOf = (id: string) => locations.find((l) => l.id === id)?.name ?? '—';
+  const total = rows.reduce((sum, r) => sum + r.amount, 0);
   return (
     <Table caption={t.revenue.title}>
       <thead>
@@ -29,20 +33,37 @@ export function RevenueTable({ rows, locations }: { rows: RevenueRow[]; location
       <tbody>
         {rows.map((r) => (
           <tr key={r.id}>
-            <Td>
+            <Td label={t.common.date}>
               <span className="mono">{formatDate(r.revenueDate)}</span>
             </Td>
-            <Td>{nameOf(r.locationId)}</Td>
-            <Td>{r.source === 'manual' ? t.revenue.sourceManual : t.revenue.sourceExtracted}</Td>
-            <Td>
+            <Td label={t.common.location}>{nameOf(r.locationId)}</Td>
+            <Td label={t.revenue.source}>
+              {r.source === 'manual' ? t.revenue.sourceManual : t.revenue.sourceExtracted}
+            </Td>
+            <Td label={t.common.status}>
               <StatusPill status={r.status} />
             </Td>
-            <NumCell money>
+            <NumCell money label={t.common.amount}>
               <Money value={r.amount} />
             </NumCell>
           </tr>
         ))}
       </tbody>
+      {/*
+       * A ledger that does not sum its own column makes the manager add it up by hand — which is
+       * the arithmetic this app exists to remove. The table had no tfoot at all.
+       */}
+      <tfoot>
+        <tr>
+          <Td label={t.common.total}>{t.common.total}</Td>
+          <Td> </Td>
+          <Td> </Td>
+          <Td> </Td>
+          <NumCell money label={t.common.total}>
+            <Money value={total} />
+          </NumCell>
+        </tr>
+      </tfoot>
     </Table>
   );
 }
@@ -75,8 +96,7 @@ export function RevenueForm({
   }
 
   return (
-    <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }} onSubmit={submit}>
-      <h2 style={{ marginBottom: 'var(--s4)' }}>{t.revenue.addTitle}</h2>
+    <form onSubmit={submit}>
       <Select
         label={t.common.location}
         name="locationId"
@@ -122,6 +142,11 @@ export function RevenueRoute() {
   const locations = useLocations();
   const revenue = useRevenue();
   const add = useAddRevenue();
+  // Two distinct ways in, both modals: type one figure, or photograph the sheet and let AI read
+  // it. The form used to sit permanently below the table, which made the screen look like a data
+  // entry form that happened to show history, rather than a record you occasionally add to.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   if (locations.isLoading || revenue.isLoading) {
     return <p className="mono">{t.common.loading}</p>;
@@ -130,16 +155,55 @@ export function RevenueRoute() {
     return <p style={{ color: 'var(--stop)' }}>{((locations.error ?? revenue.error) as Error).message}</p>;
   }
 
+  const rows = revenue.data ?? [];
+  const total = rows.reduce((sum, r) => sum + r.amount, 0);
+
   return (
     <>
-      <Toolbar title={t.revenue.title} />
-      <RevenueTable rows={revenue.data ?? []} locations={locations.data ?? []} />
-      <RevenueForm
-        locations={locations.data ?? []}
-        onSubmit={async (body) => {
-          await add.mutateAsync(body);
-        }}
-      />
+      <Toolbar title={t.revenue.title}>
+        <Button onClick={() => setImportOpen(true)}>{t.nav.import}</Button>
+        <Button variant="primary" onClick={() => setManualOpen(true)}>
+          {t.revenue.addManually}
+        </Button>
+      </Toolbar>
+
+      {/*
+       * Ledger archetype: the total is the answer, the rows are the evidence
+       * (docs/design/system.md § Page archetypes). Rendered only when there is something to sum —
+       * a display-size "0.00" above an empty-state card would be a very loud way to say nothing.
+       */}
+      {rows.length > 0 ? (
+        <div className="ledger__head">
+          <Figure value={total.toFixed(2)} unit={t.common.currency} label={t.revenue.periodTotal} />
+        </div>
+      ) : null}
+
+      <RevenueTable rows={rows} locations={locations.data ?? []} />
+
+      <Modal
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
+        title={t.revenue.addTitle}
+      >
+        <RevenueForm
+          locations={locations.data ?? []}
+          onSubmit={async (body) => {
+            await add.mutateAsync(body);
+            // Close on success only — an error keeps the modal open with the figures still in
+            // the fields, so the manager does not have to retype them.
+            setManualOpen(false);
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title={t.revenue.importTitle}
+        description={t.photo.hint}
+      >
+        <PhotoImport docType="revenue" />
+      </Modal>
     </>
   );
 }

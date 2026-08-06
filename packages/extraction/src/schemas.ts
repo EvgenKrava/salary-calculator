@@ -1,7 +1,9 @@
 export type DocType = 'revenue' | 'schedule';
 
 /**
- * Structured-output schemas for `output_config.format`.
+ * Schemas describing the extraction payload, sent as the `input_schema` of the forced
+ * `record_extraction` tool. (Not `output_config.format` — Bedrock rejects structured outputs;
+ * see buildRequest for the probe results.)
  *
  * Two deliberate choices carried through both schemas:
  * - Every extracted row carries its own `confidence`, not just the document. One illegible

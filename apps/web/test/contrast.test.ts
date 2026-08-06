@@ -63,4 +63,43 @@ describe('contrast', () => {
     // If someone collapses these, the button silently drops below AA again.
     expect(token('amber')).not.toBe(token('amber-action'));
   });
+
+  it('the rail count badge meets AA', () => {
+    // The badge is white on a filled amber, the same trap as the primary button — it uses
+    // --amber-action for exactly that reason. Plain --amber would put it at 4.20:1.
+    expect(ratio('#ffffff', token('amber-action'))).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('rail text meets AA on the rail surface', () => {
+    // The rail sits on --surface-raised, not --surface, so its own contrast needs checking:
+    // inactive nav items and group headings are --ink-muted, active items --ink on --amber-tint.
+    expect(ratio(token('ink-muted'), token('surface-raised'))).toBeGreaterThanOrEqual(AA);
+    expect(ratio(token('ink'), token('amber-tint'))).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('does not use --ink-faint for rail group headings', () => {
+    /*
+     * --ink-faint is 3.01:1 on --surface-raised. That is fine for what it is scoped to
+     * (placeholders and disabled text, which WCAG exempts) and NOT fine for a group heading,
+     * which is content a user reads to navigate. The first draft of the rail used it; this test
+     * is what caught it. Asserted against the stylesheet because the failure mode is a token
+     * swap in CSS, not a computed value any unit test would otherwise see.
+     */
+    const shell = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/shell/shell.css'),
+      'utf8',
+    );
+    const rule = /\.rail__groupLabel\s*\{[^}]*\}/.exec(shell);
+    expect(rule, '.rail__groupLabel rule not found').toBeTruthy();
+    expect(rule![0]).not.toContain('--ink-faint');
+    expect(ratio(token('ink-faint'), token('surface-raised'))).toBeLessThan(AA);
+  });
+
+  it('the display figure meets AA on the surfaces it appears on', () => {
+    // A ledger total in --amber at 44px is large text (AA large = 3:1), but it also renders in
+    // the money column at body size, so hold it to the stricter bar on both surfaces.
+    for (const bg of ['surface', 'ground', 'amber-tint'] as const) {
+      expect(ratio(token('amber'), token(bg)), `amber on ${bg}`).toBeGreaterThanOrEqual(3);
+    }
+  });
 });

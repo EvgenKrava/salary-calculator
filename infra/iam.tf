@@ -80,6 +80,29 @@ resource "aws_iam_role_policy" "api_user_management" {
   policy = data.aws_iam_policy_document.api_user_management.json
 }
 
+/**
+ * Presigning an upload requires the signer to hold s3:PutObject itself — a presigned URL can
+ * only ever grant a subset of the signer's own permissions.
+ *
+ * Scoped to the `uploads/` prefix, not the whole bucket: that is the only place the extraction
+ * trigger watches, and it keeps the API from being able to overwrite anything else the bucket
+ * comes to hold. No GetObject or Delete — the API never reads or removes a document; the
+ * extraction Lambda reads, and documents are payroll evidence that should not be silently
+ * deletable.
+ */
+data "aws_iam_policy_document" "api_uploads" {
+  statement {
+    sid       = "PresignDocumentUploads"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.documents.arn}/uploads/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "api_uploads" {
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.api_uploads.json
+}
+
 resource "aws_iam_role" "migrate" {
   name               = "${var.project_name}-migrate"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json

@@ -107,6 +107,19 @@
 }
 
 /*
+ * ...but the money column keeps its wash in the footer too.
+ *
+ * `.table tfoot .td` is more specific than `.td--money`, so the grand total — the single most
+ * important figure in the table — was the one cell that dropped the signature amber treatment
+ * and sat on plain grey. Caught in a screenshot, not by a test: every assertion was about the
+ * figure's text, which was correct. Slightly deeper than --amber-tint so the footer still reads
+ * as weightier than the rows above it.
+ */
+.table tfoot .td--money {
+  background: #f8ecd8;
+}
+
+/*
  * Below 640px a wide table becomes a stack of labelled rows.
  *
  * `data-label` on each cell (set by Td/NumCell) supplies the column name inline, so a figure is

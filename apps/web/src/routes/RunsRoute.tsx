@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Card } from '../ui/Card';
 import { Toolbar } from '../ui/Toolbar';
+import { Figure } from '../ui/Figure';
 import { MonthSelect, Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { ApiError } from '../lib/api';
@@ -20,7 +21,16 @@ import {
   type SalaryRunLine,
 } from '../lib/queries';
 
-export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; employees: Employee[] }) {
+export function RunBreakdown({
+  lines,
+  employees,
+  period,
+}: {
+  lines: SalaryRunLine[];
+  employees: Employee[];
+  /** Shown under the display total, e.g. "05.05.2026 — 04.06.2026". Omitted in the saved view. */
+  period?: string;
+}) {
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? '—';
   /**
    * Column totals, not just a grand total.
@@ -42,7 +52,23 @@ export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; emp
     { hourlyPay: 0, revenueShare: 0, bonus: 0, total: 0 },
   );
   return (
-    <Table caption={t.runs.breakdown}>
+    <>
+      {/*
+       * The payroll total in display numerals — the single figure a manager opens this screen
+       * for, and the one they reconcile against the bank transfer. Per
+       * docs/design/system.md § Display numerals there is exactly one per screen, which is why
+       * the column totals below stay at body size.
+       */}
+      <div className="ledger__head">
+        <Figure
+          value={totals.total.toFixed(2)}
+          unit={t.common.currency}
+          label={period ? `${t.runs.payrollTotal} · ${period}` : t.runs.payrollTotal}
+        />
+        <p className="muted">{`${t.runs.allEmployees} (${lines.length})`}</p>
+      </div>
+
+      <Table caption={t.runs.breakdown}>
       <thead>
         <tr>
           <Th>{t.common.employee}</Th>
@@ -74,7 +100,8 @@ export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; emp
           <NumCell money><Money value={totals.total} /></NumCell>
         </tr>
       </tfoot>
-    </Table>
+      </Table>
+    </>
   );
 }
 
@@ -336,7 +363,11 @@ export function RunsRoute() {
             />
           ) : (
             <>
-              <RunBreakdown lines={previewed.lines} employees={employees.data ?? []} />
+              <RunBreakdown
+                lines={previewed.lines}
+                employees={employees.data ?? []}
+                period={`${formatDate(previewed.periodStart)} — ${formatDate(previewed.periodEnd)}`}
+              />
               {previewIsCurrent ? (
                 <Button
                   variant="primary"

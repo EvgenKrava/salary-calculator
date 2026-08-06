@@ -61,6 +61,10 @@ resource "aws_lambda_function" "api" {
     variables = merge(local.db_env, {
       COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
       COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.spa.id
+      # Lets the API presign uploads of photographed revenue sheets, so the browser PUTs
+      # straight to S3 and the ObjectCreated event triggers AI extraction. Without it the
+      # upload route returns 503 by design rather than failing on an undefined bucket.
+      DOCUMENTS_BUCKET = aws_s3_bucket.documents.id
     })
   }
 }

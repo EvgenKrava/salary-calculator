@@ -124,6 +124,7 @@ export const t = {
     from: 'з',
     to: 'по',
     total: 'Разом',
+    currency: '₴',
     reload: 'Оновіть сторінку, перш ніж діяти на основі цих даних.',
     couldNotLoad: (what: string) => `Не вдалося завантажити ${what}`,
     saving: 'Зберігаємо…',
@@ -135,6 +136,14 @@ export const t = {
   },
 
   nav: {
+    // Rail group headings. Grouping is what makes the nav teach the shape of the product
+    // instead of presenting nine equal-weight links (docs/design/system.md § Structure).
+    groupOps: 'Операції',
+    groupPayroll: 'Розрахунки',
+    groupSetup: 'Налаштування',
+    today: 'Сьогодні',
+    /** Screen-reader text on a count badge, so "3" is never announced bare. */
+    needsAttention: (n: number) => `${n} потребує уваги`,
     revenue: 'Виручка',
     shifts: 'Зміни',
     schedule: 'Графік',
@@ -202,9 +211,50 @@ export const t = {
     revenuePercentFor: (name: string) => `Відсоток від виручки для ${name}`,
   },
 
+  /** Photographing a hand-written document for AI extraction. */
+  photo: {
+    title: 'Імпорт із фото',
+    hint:
+      'Сфотографуйте рукописний звіт — AI розпізнає його. Дані НЕ застосовуються автоматично: спочатку ви перевіряєте їх у черзі перевірки.',
+    file: 'Фото або PDF',
+    upload: 'Завантажити',
+    uploading: 'Завантажуємо…',
+    uploaded: 'Завантажено. Розпізнавання триває — перевірте чергу перевірки за хвилину.',
+    uploadFailed: 'Не вдалося завантажити файл',
+    chooseFirst: 'Спочатку виберіть файл.',
+    inQueue: (n: number) => `У черзі на перевірку: ${n}`,
+  },
+
+  /**
+   * The "Today" home screen — a worklist, not a dashboard.
+   *
+   * Every string here names a thing the manager can act on and links to it. Deliberately no
+   * "welcome back" copy and no vanity metrics: the screen replaced "Choose a section from the
+   * navigation", and its job is to answer "what needs me?" in one glance.
+   */
+  today: {
+    title: 'Сьогодні',
+    needsAttention: 'Потребує уваги',
+    /** The all-clear state. A clean worklist is a real answer, not an empty table. */
+    allClear: 'Усе під контролем.',
+    allClearHint: 'Немає нічого, що потребує вашої уваги.',
+    reviewQueue: (n: number) =>
+      `${n} ${plural(n, 'документ очікує', 'документи очікують', 'документів очікує')} перевірки`,
+    pendingShifts: (n: number) =>
+      `${n} ${plural(n, 'зміна очікує', 'зміни очікують', 'змін очікує')} підтвердження`,
+    missingRevenue: (n: number) =>
+      `${n} ${plural(n, 'день без даних', 'дні без даних', 'днів без даних')} про виручку`,
+    weekRevenue: 'Виручка за 7 днів',
+    quickActions: 'Швидкі дії',
+    open: 'Відкрити',
+  },
+
   revenue: {
     title: 'Виручка за день',
+    periodTotal: 'Разом за період',
     addTitle: 'Додати виручку',
+    addManually: 'Додати вручну',
+    importTitle: 'Імпорт виручки',
     revenueDate: 'Дата',
     amountUah: 'Сума, ₴',
     saving: 'Зберігаємо…',
@@ -245,12 +295,14 @@ export const t = {
     empty: 'Розрахунків ще не було.',
     emptyAction: 'Ваша зарплата з’явиться тут після розрахунку.',
     period: 'Період',
+    latestPeriod: 'За останній період',
     hourlyPay: 'За години',
     revenueShare: 'Від виручки',
     bonus: 'Премія',
   },
 
   runs: {
+    payrollTotal: 'До виплати',
     title: 'Розрахунки зарплати',
     runTitle: 'Розрахувати зарплату',
     hint:

@@ -1,0 +1,53 @@
+/*
+ * Display numerals for a ledger's period total. See docs/design/system.md § Display numerals.
+ */
+
+.figure__row {
+  display: flex;
+  align-items: baseline; /* baseline, not center — the unit sits on the figure's baseline */
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.figure__value {
+  font-size: var(--text-display);
+  font-weight: 500; /* Plex Mono at display size does not need 600; 500 stays readable */
+  line-height: 1;
+  /* Large mono figures need negative tracking or they read as spaced-out digits. */
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1; /* slashed zero — 0/O confusion is a payroll hazard */
+}
+
+.figure__value--money {
+  color: var(--amber);
+}
+
+.figure__value--plain {
+  color: var(--ink);
+}
+
+.figure__unit {
+  font-size: var(--text-md);
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.figure__label {
+  margin: var(--s2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+/*
+ * At 44px a long figure ("1 234 567.00") overflows a 390px phone. Stepping down one notch keeps
+ * it on one line — a wrapped total is worse than a slightly smaller one.
+ */
+@media (max-width: 640px) {
+  .figure__value {
+    font-size: var(--text-xl);
+  }
+}

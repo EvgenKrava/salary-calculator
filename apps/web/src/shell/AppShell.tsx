@@ -1,10 +1,21 @@
+import type { ReactNode } from 'react';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { useAuth, useRole } from '../lib/auth';
-import { Button } from '../ui/Button';
+import { useExtractionJobs, useShifts } from '../lib/queries';
 import { t } from '../lib/i18n';
 import './shell.css';
 
-/** Nav is filtered by role — an employee never sees a link they'd get a 403 from. */
+/**
+ * The app frame: a grouped left rail plus the routed content.
+ *
+ * Why a rail rather than the top tab strip this replaced: nine destinations across three roles
+ * do not fit one horizontal row, and on a phone they became a sideways-scrolling strip with half
+ * the app off-screen. A rail gives each item a full-width target, room for a count badge, and —
+ * the actual point — **grouping**, so navigation teaches the shape of the product instead of
+ * presenting nine equal-weight links. See docs/design/system.md § Structure & navigation.
+ *
+ * Nav is filtered by role, so an employee never sees a link they would get a 403 from.
+ */
 export function AppShell() {
   const { email, signOut } = useAuth();
   const { isAdmin, isManager, isEmployee } = useRole();
@@ -24,33 +35,110 @@ export function AppShell() {
 
   return (
     <div className="shell">
-      <header className="shell__bar">
-        <span className="shell__brand">{t.common.appName}</span>
-        <nav className="shell__nav">
+      <a className="shell__skip" href="#main">
+        {t.nav.today}
+      </a>
+
+      <aside className="rail">
+        <div className="rail__brand">
+          <span className="rail__mark" aria-hidden="true" />
+          <span className="rail__brandText">{t.common.appName}</span>
+        </div>
+
+        <nav className="rail__nav" aria-label={t.common.appName}>
           {isManager ? (
             <>
-              <Link to="/revenue" className="shell__link">{t.nav.revenue}</Link>
-              <Link to="/shifts" className="shell__link">{t.nav.shifts}</Link>
-              <Link to="/schedule" className="shell__link">{t.nav.schedule}</Link>
-              <Link to="/runs" className="shell__link">{t.nav.runs}</Link>
-              <Link to="/review" className="shell__link">{t.nav.review}</Link>
-              <Link to="/employees" className="shell__link">{t.nav.employees}</Link>
+              <RailGroup label={t.nav.groupOps}>
+                <RailLink to="/" label={t.nav.today} />
+                <RailLink to="/revenue" label={t.nav.revenue} />
+                <RailLink to="/shifts" label={t.nav.shifts} badge={<PendingShiftsBadge />} />
+                <RailLink to="/schedule" label={t.nav.schedule} />
+              </RailGroup>
+
+              <RailGroup label={t.nav.groupPayroll}>
+                <RailLink to="/review" label={t.nav.review} badge={<ReviewBadge />} />
+                <RailLink to="/runs" label={t.nav.runs} />
+              </RailGroup>
             </>
           ) : null}
-          {isAdmin ? <Link to="/setup" className="shell__link">{t.nav.setup}</Link> : null}
+
+          {isManager || isAdmin ? (
+            <RailGroup label={t.nav.groupSetup}>
+              {isManager ? <RailLink to="/employees" label={t.nav.employees} /> : null}
+              {isAdmin ? <RailLink to="/setup" label={t.nav.setup} /> : null}
+            </RailGroup>
+          ) : null}
+
           {isEmployee && !isManager ? (
-            <>
-              <Link to="/me/shifts" className="shell__link">{t.nav.myShifts}</Link>
-              <Link to="/me/pay" className="shell__link">{t.nav.myPay}</Link>
-            </>
+            <RailGroup label={t.nav.groupOps}>
+              <RailLink to="/me/shifts" label={t.nav.myShifts} />
+              <RailLink to="/me/pay" label={t.nav.myPay} />
+            </RailGroup>
           ) : null}
         </nav>
-        <span className="shell__user">{email}</span>
-        <Button onClick={handleSignOut}>{t.common.signOut}</Button>
-      </header>
-      <main className="shell__main">
+
+        <div className="rail__foot">
+          <span className="rail__user mono" title={email ?? undefined}>
+            {email}
+          </span>
+          <button type="button" className="rail__signout" onClick={handleSignOut}>
+            {t.common.signOut}
+          </button>
+        </div>
+      </aside>
+
+      <main className="shell__main" id="main">
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function RailGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="rail__group">
+      <p className="rail__groupLabel">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function RailLink({ to, label, badge }: { to: string; label: string; badge?: ReactNode }) {
+  return (
+    // `exact` only for "/" — otherwise the index route matches every path as a prefix and
+    // Today would render as active on every screen in the app.
+    <Link to={to} className="rail__link" activeOptions={{ exact: to === '/' }}>
+      <span className="rail__linkText">{label}</span>
+      {badge}
+    </Link>
+  );
+}
+
+/**
+ * Count badges.
+ *
+ * These read from the same queries their destination screens use, so React Query serves them
+ * from cache rather than issuing extra requests. A zero count renders **nothing**: a badge
+ * showing "0" is noise, and it trains the manager to ignore the badges that do matter.
+ */
+function ReviewBadge() {
+  const jobs = useExtractionJobs('needs_review');
+  return <Badge count={jobs.data?.length ?? 0} />;
+}
+
+function PendingShiftsBadge() {
+  const shifts = useShifts({ status: 'requested' });
+  return <Badge count={shifts.data?.length ?? 0} />;
+}
+
+function Badge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="rail__badge">
+      {/* The digits are decorative — the accessible name carries the meaning, so a screen
+          reader announces "3 потребує уваги" instead of a bare "3". */}
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">{t.nav.needsAttention(count)}</span>
+    </span>
   );
 }

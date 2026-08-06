@@ -12,12 +12,18 @@ import { createRevenueRoutes } from './routes/revenue';
 import { createSalaryRunRoutes } from './routes/salaryRuns';
 import { createShiftSlotRoutes } from './routes/shiftSlots';
 import { createScheduleNameMapRoutes } from './routes/scheduleNameMap';
+import { createUploadRoutes, type UploadSigner } from './routes/uploads';
 import { createScheduleImportRoutes } from './routes/scheduleImports';
 import { createExtractionJobRoutes } from './routes/extractionJobs';
 
 export interface AppDeps {
   db: Db;
   verifier: TokenVerifier;
+  /**
+   * Presigns document uploads. Optional: omitted in tests and in any deployment without the
+   * documents bucket, where the route returns 503 rather than failing on undefined.
+   */
+  uploadSigner?: UploadSigner;
   /**
    * Creates and disables Cognito logins. Optional: omitted in tests and in any deployment
    * without Cognito admin permissions, where the invite route returns 503 instead of failing
@@ -60,6 +66,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/salary-runs', createSalaryRunRoutes(deps.db));
   app.route('/api/locations/:locationId/slots', createShiftSlotRoutes(deps.db));
   app.route('/api/schedule-name-map', createScheduleNameMapRoutes(deps.db));
+  app.route('/api/uploads', createUploadRoutes(deps.uploadSigner));
   app.route('/api/schedule-imports', createScheduleImportRoutes(deps.db));
   app.route('/api/extraction-jobs', createExtractionJobRoutes(deps.db));
 

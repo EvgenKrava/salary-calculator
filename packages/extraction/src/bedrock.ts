@@ -51,5 +51,9 @@ function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
 export async function invokeModel(client: AnthropicBedrockMantle, request: unknown): Promise<unknown> {
   // The request body is built by buildExtractionRequest; the SDK forwards unknown keys, so
   // output_config passes through even where the typings lag.
+  //
+  // Not `.stream()`: the whole answer is one tool-call object consumed by parseResponse, so
+  // there is nothing to render incrementally, and this runs in a Lambda with no client
+  // attached. max_tokens (16000) stays under the SDK's non-streaming timeout.
   return client.messages.create(request as never);
 }
