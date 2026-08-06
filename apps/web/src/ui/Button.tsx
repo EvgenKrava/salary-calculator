@@ -1,7 +1,12 @@
 import type { ButtonHTMLAttributes } from 'react';
 import './button.css';
 
-type Variant = 'primary' | 'secondary' | 'danger';
+/**
+ * `quiet` is text-weight, for the secondary choice in a group of row actions. Two identically
+ * outlined buttons side by side tell the user nothing about which is the normal action — the
+ * employees table shipped exactly that.
+ */
+type Variant = 'primary' | 'secondary' | 'danger' | 'quiet';
 
 export function Button({
   variant = 'secondary',

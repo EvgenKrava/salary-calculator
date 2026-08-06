@@ -21,17 +21,41 @@
   gap: var(--s4);
   align-items: flex-start;
 }
+/*
+ * A field in a row sizes to its own content — INCLUDING its label, which may be wider than the
+ * input. Without `min-width: max-content` a long label either wraps to three lines (when the
+ * field is capped narrow, e.g. 12ch for numerics) or overflows and prints over the next field.
+ * `flex: 0 1 auto` keeps fields from stretching to fill the row.
+ */
 .field-row > .field {
   margin-bottom: var(--s4);
+  flex: 0 1 auto;
+  min-width: max-content;
 }
 
+/*
+ * Sentence case, not uppercase.
+ *
+ * All-caps removes the word-shape cues readers use, and it is worse in Cyrillic than in Latin —
+ * "ВІДСОТОК ВІД ВИРУЧКИ (0–100)" is markedly harder to scan than "Відсоток від виручки (0–100)".
+ * Uppercase is kept for TABLE headers, which are one or two words and benefit from reading as
+ * chrome rather than content; a form label is content.
+ *
+ * The label may be WIDER than its input but must not overflow its column. A long label inside a
+ * `.field` capped at 12ch wrapped onto three ragged lines above a tiny box; a bare
+ * `min-width: max-content` fixed that and immediately caused the opposite bug — in a `field-row`
+ * the label overflowed its own field and printed on top of the next one
+ * ("Рівень (визначає ставку за день)" over "Відсоток від виручки"). So: opt out of wrapping only
+ * where there is room to do it, which is what `field-row` sets below.
+ */
 .field__label {
-  font-size: var(--text-xs);
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: 500;
   color: var(--ink-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  /* Wraps by default — never overflows into a neighbour. */
+  overflow-wrap: break-word;
 }
+
 
 .field__input {
   font-family: var(--font-ui);
@@ -41,9 +65,16 @@
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
-  min-height: 38px;
+  /* Shared with buttons: an input was 38px beside the 44px button that submitted it. */
+  min-height: var(--control-h);
   width: 100%;
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+@media (pointer: coarse) {
+  .field__input {
+    min-height: var(--tap);
+  }
 }
 
 .field__input:hover:not(:disabled) {

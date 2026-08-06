@@ -304,7 +304,13 @@ export function RunsRoute() {
             // payroll believing there was nothing to enter.
             <p style={{ color: 'var(--stop)' }}>{t.runs.employeesFailed}</p>
           ) : activeEmployees.length === 0 ? (
-            <p className="mono">{t.runs.noActive}</p>
+            /*
+             * Not mono, and not adjacent to the CTA by accident. In mono directly above the
+             * primary button this read as an error message beside an enabled control — while
+             * "Порахувати" stayed clickable on a run that has nobody to pay. It is now a plain
+             * hint, and the button below is disabled for the same condition.
+             */
+            <p className="muted">{t.runs.noActive}</p>
           ) : (
             <Table caption={t.runs.bonusPerEmployeeCaption}>
               <thead>
@@ -341,7 +347,14 @@ export function RunsRoute() {
             type="submit"
             variant="primary"
             block
-            disabled={preview.isPending || employees.isLoading || Boolean(employees.error)}
+            // Also disabled with no active employees: the button sat enabled on a run that had
+            // nobody to pay, so the only feedback was a mono line that looked like an error.
+            disabled={
+              preview.isPending ||
+              employees.isLoading ||
+              Boolean(employees.error) ||
+              activeEmployees.length === 0
+            }
           >
             {preview.isPending ? t.runs.calculating : t.runs.calculate}
           </Button>

@@ -85,33 +85,49 @@ function AddEmployee({ levels }: { levels: Level[] }) {
   }
 
   return (
-    <form className="panel" style={{ padding: 'var(--s4)', marginBottom: 'var(--s6)' }} onSubmit={submit}>
+    /*
+     * `field-row`, not a stacked column. Three short fields down the left edge of a 1200px card
+     * left the rest of it empty and made the form look unfinished; a name, a level and a
+     * percentage are one logical row of inputs and now read as one.
+     */
+    <form className="panel" style={{ padding: 'var(--s5)', marginBottom: 'var(--s6)' }} onSubmit={submit}>
       <h2 style={{ marginBottom: 'var(--s4)' }}>{t.employees.addTitle}</h2>
-      <Field label={t.employees.name} name="name" value={name} onChange={(e) => setName(e.target.value)} required />
-      <div className="field">
-        <label className="field__label" htmlFor="levelId">{t.employees.levelWithRate}</label>
-        <select
-          id="levelId"
-          className="field__input"
-          value={levelId}
-          onChange={(e) => setLevelId(e.target.value)}
-        >
-          <option value="">{t.employees.chooseLevel}</option>
-          {levels.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name} — {l.ratePerDay} ₴/{t.employees.perDay}
-            </option>
-          ))}
-        </select>
+      <div className="field-row">
+        {/* `fieldSize`, not `size` — Field extends input attributes, where `size` is the native
+            numeric character-width attribute and a string is a type error. */}
+        <Field
+          label={t.employees.name}
+          name="name"
+          fieldSize="wide"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <div className="field field--month">
+          <label className="field__label" htmlFor="levelId">{t.employees.levelWithRate}</label>
+          <select
+            id="levelId"
+            className="field__input field__select"
+            value={levelId}
+            onChange={(e) => setLevelId(e.target.value)}
+          >
+            <option value="">{t.employees.chooseLevel}</option>
+            {levels.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} — {l.ratePerDay} ₴/{t.employees.perDay}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Field
+          label={t.employees.revenuePercent}
+          name="revenuePercent"
+          numeric
+          inputMode="decimal"
+          value={percent}
+          onChange={(e) => setPercent(e.target.value)}
+        />
       </div>
-      <Field
-        label={t.employees.revenuePercent}
-        name="revenuePercent"
-        numeric
-        inputMode="decimal"
-        value={percent}
-        onChange={(e) => setPercent(e.target.value)}
-      />
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
       <Button type="submit" variant="primary" disabled={add.isPending || levels.length === 0}>
         {add.isPending ? t.employees.adding : t.employees.addButton}
@@ -164,7 +180,7 @@ function InviteEmployee({ emp, onDone }: { emp: Employee; onDone: () => void }) 
         onChange={(ev) => setEmail(ev.target.value)}
       />
       <select
-        className="field__input"
+        className="field__input field__select"
         aria-label={t.employees.roleFor(emp.name)}
         value={role}
         onChange={(ev) => setRole(ev.target.value as 'admin' | 'manager' | 'employee')}
@@ -227,29 +243,41 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
   if (!editing) {
     return (
       <tr>
-        <Td>{emp.name}</Td>
-        <Td>{levelName}</Td>
-        <NumCell>{fractionToPercent(emp.revenuePercent)}%</NumCell>
-        <Td>
+        <Td label={t.employees.name}>{emp.name}</Td>
+        <Td label={t.common.level}>{levelName}</Td>
+        <NumCell label={t.employees.revenuePercentShort}>
+          {fractionToPercent(emp.revenuePercent)}%
+        </NumCell>
+        <Td label={t.employees.login}>
           {emp.cognitoSub ? (
             <span className="mono">{t.employees.canSignIn}</span>
           ) : inviting ? (
             <InviteEmployee emp={emp} onDone={() => setInviting(false)} />
           ) : (
-            <>
-              <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>{' '}
+            <span className="row-actions">
+              <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
               {emp.active ? (
-                <Button onClick={() => setInviting(true)}>{t.employees.invite}</Button>
+                <Button size="sm" onClick={() => setInviting(true)}>{t.employees.invite}</Button>
               ) : null}
-            </>
+            </span>
           )}
         </Td>
-        <Td><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
-        <Td>
-          <Button onClick={() => setEditing(true)}>{t.common.edit}</Button>{' '}
-          <Button onClick={toggleActive} disabled={update.isPending}>
-            {emp.active ? t.employees.deactivate : t.employees.reactivate}
-          </Button>
+        <Td label={t.common.status}><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
+        <Td label={t.common.actions}>
+          {/*
+           * `sm` + `quiet` for edit: two identically-outlined full-size buttons gave the manager
+           * no cue which was the ordinary action, and at 40px they inflated the row. Edit is the
+           * routine one and stays quiet; activate/deactivate keeps its border because it changes
+           * whether a person can be paid.
+           */}
+          <span className="row-actions">
+            <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
+              {t.common.edit}
+            </Button>
+            <Button size="sm" onClick={toggleActive} disabled={update.isPending}>
+              {emp.active ? t.employees.deactivate : t.employees.reactivate}
+            </Button>
+          </span>
           {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
         </Td>
       </tr>
@@ -260,7 +288,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
     <tr>
       <Td>{emp.name}</Td>
       <Td>
-        <select className="field__input" aria-label={t.employees.levelFor(emp.name)} value={levelId} onChange={(e) => setLevelId(e.target.value)}>
+        <select className="field__input field__select" aria-label={t.employees.levelFor(emp.name)} value={levelId} onChange={(e) => setLevelId(e.target.value)}>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}

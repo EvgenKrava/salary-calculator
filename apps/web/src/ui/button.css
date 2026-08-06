@@ -14,9 +14,10 @@
   font-size: var(--text-base);
   font-weight: 500;
   line-height: 1;
-  /* min-height, not padding alone: a manager taps these on a phone behind a counter, and 44px
-     is the accessible minimum. */
-  min-height: var(--tap);
+  /* --control-h, shared with inputs and selects: a button used to be 44px next to a 38px field
+     it submitted, so the two never sat on one line. Touch is preserved by widening the tap
+     target on coarse pointers below rather than by making every desktop button oversized. */
+  min-height: var(--control-h);
   padding: 0 var(--s4);
   border-radius: var(--radius);
   border: 1px solid var(--rule-strong);
@@ -26,6 +27,13 @@
   white-space: nowrap;
   transition: background var(--transition), border-color var(--transition),
     box-shadow var(--transition), transform var(--transition);
+}
+
+/* On a touch device every button gets the full accessible target, including row-scale ones. */
+@media (pointer: coarse) {
+  .btn {
+    min-height: var(--tap);
+  }
 }
 
 .btn:hover:not(:disabled) {
@@ -45,17 +53,30 @@
   cursor: not-allowed;
 }
 
-/* Amber is the primary action — at most one per view. */
+/*
+ * Amber is the primary action — at most one per view.
+ *
+ * The flat fill read as a heavy brown slab: at full saturation over a large area the brand amber
+ * goes muddy and outshouts the form it belongs to. Fixed with a slight vertical gradient and a
+ * darker bottom edge rather than by lightening the colour, which would drop it below AA (white
+ * on the brand --amber is 4.20:1; --amber-action clears it at 4.68:1). The result reads as a
+ * pressable object instead of a painted rectangle, and the hue is untouched.
+ */
 .btn--primary {
-  /* --amber-action, not --amber: white on the brand amber is 4.20:1, which fails AA. */
-  background: var(--amber-action);
-  border-color: var(--amber-action);
+  background: linear-gradient(180deg, #b26f08 0%, var(--amber-action) 100%);
+  border-color: var(--amber-strong);
   color: #fff;
-  box-shadow: var(--shadow-sm);
+  /* Inset highlight on the top edge, shadow on the bottom — the cheapest honest depth cue. */
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%), 0 1px 2px rgb(21 24 27 / 12%);
 }
 .btn--primary:hover:not(:disabled) {
-  background: var(--amber-strong);
+  background: linear-gradient(180deg, var(--amber-action) 0%, var(--amber-strong) 100%);
   border-color: var(--amber-strong);
+}
+/* Pressed: flatten the gradient and drop the highlight, so the surface reads as pushed in. */
+.btn--primary:active:not(:disabled) {
+  background: var(--amber-strong);
+  box-shadow: inset 0 1px 3px rgb(21 24 27 / 22%);
 }
 .btn--primary:disabled {
   /* Keep it recognisably the primary action while unavailable, rather than turning grey and
@@ -65,6 +86,22 @@
   color: #fff;
   opacity: 0.45;
   box-shadow: none;
+}
+
+/*
+ * Quiet action: text-weight, for the third-or-later action in a group where two bordered boxes
+ * of equal weight give the user no idea which one is the normal choice (the employees table had
+ * "Редагувати" and "Активувати" as identical outlined boxes).
+ */
+.btn--quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--ink-muted);
+}
+.btn--quiet:hover:not(:disabled) {
+  background: var(--surface-sunk);
+  border-color: transparent;
+  color: var(--ink);
 }
 
 /* Destructive is outlined here; filled red is reserved for confirmation dialogs. */

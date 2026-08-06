@@ -27,13 +27,77 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Column sizing.
+ *
+ * Auto table layout distributed width by content with no ceiling, so on the revenue ledger the
+ * ДАТА column took ~350px for a ten-character date while ЛОКАЦІЯ and СТАТУС bunched up beside
+ * it.
+ *
+ * The approach that did NOT work, recorded so it is not retried: shrinking the fixed-width
+ * columns with `width: 1%`. It over-corrected — `1%` is a **minimum** hint that browsers satisfy
+ * by taking space from whichever neighbour is cheapest, which collapsed ЛОКАЦІЯ to nothing and
+ * dumped the slack into ДЖЕРЕЛО. Constraining a column only tells the browser what NOT to grow;
+ * it does not say what SHOULD absorb the remainder.
+ *
+ * What works: cap the known-width columns to the width their data actually needs, and let the
+ * text columns share the rest by normal auto distribution. Nothing is pinned to 1%.
+ *
+ * Done on cells rather than with <colgroup> so it applies to every existing table without
+ * touching a call site. `:has()` is unsupported on Firefox < 121 / Safari < 15.4, where these
+ * rules are skipped and the table falls back to auto layout — degraded, not broken.
+ */
+
+/* A money figure is at most "1234567.00" — 11ch plus cell padding. */
+.table .td--num,
+.table .th--num {
+  width: 14ch;
+}
+
+/* A date ("05.08.2026") or time ("09:00") cell: enough for the data, no more. */
+.table .td:has(> .mono):not(.td--num) {
+  width: 15ch;
+  white-space: nowrap;
+}
+
+/* A status pill sizes to its longest label ("потребує перевірки"). */
+.table .td:has(> .pill) {
+  width: 20ch;
+  white-space: nowrap;
+}
+
+/* Row actions: two small buttons plus the gap between them. */
+.table .td:has(> .row-actions) {
+  width: 22ch;
+  white-space: nowrap;
+}
+
+/*
+ * The caption is for assistive tech, not a second visible heading.
+ *
+ * Every table sat inside a Card whose title said the same thing, or directly under a page <h1>
+ * that did — "Виручка за день" appeared twice on screen, ~40px apart. Visually hidden keeps the
+ * `<caption>` doing its real job (screen readers announce what the table contains) without
+ * printing a duplicate. A table that genuinely needs a visible heading gets one from its Card.
+ */
 .table__caption {
-  text-align: left;
-  padding: var(--s4);
-  font-size: var(--text-md);
-  font-weight: 600;
-  letter-spacing: -0.011em;
-  border-bottom: 1px solid var(--rule);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Row actions: kept tight and right-aligned so the ДІЇ column cannot inflate. */
+.row-actions {
+  display: inline-flex;
+  gap: var(--s1);
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .th {
@@ -136,6 +200,19 @@
   .table .td {
     display: block;
     width: 100%;
+  }
+  /*
+   * The desktop column caps above use `:has()`, which outranks the plain `.table .td` selector
+   * on specificity — so without this the stacked rows kept their 14ch/15ch/20ch widths and the
+   * phone layout collapsed into a narrow column. Repeated per selector rather than as one
+   * `:is()` list so it is obvious which rules are being undone.
+   */
+  .table .td--num,
+  .table .td:has(> .mono):not(.td--num),
+  .table .td:has(> .pill),
+  .table .td:has(> .row-actions) {
+    width: 100%;
+    white-space: normal;
   }
   .table tr {
     border-bottom: 1px solid var(--rule);

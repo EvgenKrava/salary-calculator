@@ -109,6 +109,17 @@
 
   /* Rows: 34px was tight for touch. 40px reads calmer and still fits a month on screen. */
   --row-h: 40px;
+
+  /*
+   * ONE height for every interactive control — buttons, inputs, selects.
+   *
+   * Three heights were coexisting on the same screens: buttons at 44px, inputs and selects at
+   * 38px, and the rail's sign-out at 32px. A button next to the field it submits sat 6px taller
+   * than it, which is the single loudest "assembled, not designed" tell in a form. Anything a
+   * user clicks or types into now derives its height from this.
+   */
+  --control-h: 40px;
+
   /* Minimum tap target — a manager enters revenue on a phone behind a counter. */
   --tap: 44px;
 
