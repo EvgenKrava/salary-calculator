@@ -1,28 +1,50 @@
 :root {
+  /*
+   * "Steel & Amber", modernised.
+   *
+   * The palette and the borders-over-shadows discipline are kept from docs/design/system.md —
+   * they are what stop this looking like every other generated dashboard. What changed is the
+   * execution: the old scale was cramped (0.875rem base, a single 2px radius on everything, no
+   * elevation vocabulary, no page rhythm), which read as unstyled rather than austere.
+   */
+
   /* Ground — cool gray, deliberately not cream and not pure white */
-  --ground: #f2f4f5;
+  --ground: #eef1f3;
   --surface: #ffffff;
-  --surface-sunk: #e8ebed;
+  --surface-sunk: #e7ebee;
+  /* Header/toolbar fill: a hair off --surface so a sticky bar separates without a hard rule. */
+  --surface-raised: #fbfcfc;
 
   /* Ink */
-  --ink: #16191c;
-  --ink-muted: #5a636b;
-  --ink-faint: #8b959d;
+  --ink: #15181b;
+  --ink-muted: #58616a;
+  --ink-faint: #8a949c;
 
   /* Structure — visible and embraced, not hidden behind shadows */
-  --rule: #d3d9dd;
-  --rule-strong: #a9b2b9;
+  --rule: #dbe0e4;
+  --rule-strong: #a7b0b8;
 
-  /* Amber — value and primary action, used sparingly */
+  /*
+   * Amber — value and primary action, used sparingly.
+   *
+   * `--amber-action` is a shade darker than the brand `--amber` because white-on-#b26b00 is
+   * only 4.20:1 — below the 4.5:1 AA threshold, on the most important control in the app.
+   * Measured, not eyeballed: #a86400 clears it at 4.68:1 while staying the same hue, so the
+   * brand colour is unchanged everywhere it is used as a tint, rule, or accent.
+   */
   --amber: #b26b00;
-  --amber-tint: #fbf0dc;
+  --amber-action: #a86400; /* 4.68:1 with white — the minimum that passes AA */
+  --amber-strong: #8f5600; /* hover/active: 6.00:1 */
+  --amber-tint: #fdf4e5;
   --amber-edge: #e0a64b;
 
   /* State — functional only */
-  --ok: #1f6b4a;
+  --ok: #1a6b48;
+  --ok-tint: #e8f3ee;
   --warn: #8a5a00;
+  --warn-tint: #fdf3e0;
   --stop: #a32020;
-  --stop-tint: #fbebeb;
+  --stop-tint: #fbeaea;
 
   /* Type */
   /* IBM Plex Sans, not Instrument Sans: Instrument Sans ships NO Cyrillic subset (verified
@@ -32,25 +54,59 @@
      coherent and keeps the utilitarian character the design system locked in. */
   --font-ui: 'IBM Plex Sans', ui-sans-serif, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.875rem;
-  --text-md: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.75rem;
+
+  /*
+   * Type scale. Base moved 0.875rem -> 0.9375rem (15px): the old size was small enough that
+   * managers reading a dense payroll table had to lean in, and it made every heading look
+   * timid by comparison. Steps are ~1.2x so hierarchy is legible at a glance.
+   */
+  --text-xs: 0.75rem; /* 12px — captions, table headers, hints */
+  --text-sm: 0.8125rem; /* 13px — secondary rows */
+  --text-base: 0.9375rem; /* 15px — body, inputs, table cells */
+  --text-md: 1.0625rem; /* 17px — card titles */
+  --text-lg: 1.375rem; /* 22px — section headings */
+  --text-xl: 1.75rem; /* 28px — page title */
+
+  --leading-tight: 1.25;
+  --leading: 1.5;
 
   /* Space — 4px base */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
+  --s5: 20px;
   --s6: 24px;
   --s8: 32px;
+  --s10: 40px;
   --s12: 48px;
 
-  --radius: 2px;
-  --row-h: 34px;
-  --transition: 120ms ease-out;
+  /*
+   * Radii. A single 2px value on everything is what made this read as a 2010s admin panel.
+   * Now scaled by element size — controls 6px, containers 10px — which is the current idiom
+   * and, more usefully, makes a button look like a button next to a card.
+   */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /*
+   * Elevation, used sparingly and never as decoration. The design system prefers borders, so
+   * these exist only for things that genuinely float: a sticky header, a focus ring, a menu.
+   */
+  --shadow-sm: 0 1px 2px rgb(21 24 27 / 6%);
+  --shadow: 0 1px 3px rgb(21 24 27 / 8%), 0 1px 2px rgb(21 24 27 / 4%);
+  --shadow-lg: 0 4px 12px rgb(21 24 27 / 10%);
+  --ring: 0 0 0 3px rgb(178 107 0 / 18%);
+  --ring-stop: 0 0 0 3px rgb(163 32 32 / 16%);
+
+  /* Rows: 34px was tight for touch. 40px reads calmer and still fits a month on screen. */
+  --row-h: 40px;
+  /* Minimum tap target — a manager enters revenue on a phone behind a counter. */
+  --tap: 44px;
+
+  --transition: 140ms cubic-bezier(0.2, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -25,11 +25,30 @@ export function Th({ children, numeric = false }: { children: ReactNode; numeric
   );
 }
 
-export function Td({ children }: { children: ReactNode }) {
-  return <td className="td">{children}</td>;
+export function Td({ children, label }: { children: ReactNode; label?: string }) {
+  // `label` drives the mobile stacked layout: below 640px the header row is hidden and each
+  // cell prints its own column name, so a figure is never separated from what it means.
+  // Optional so existing call sites keep working — they just lose the mobile label.
+  return (
+    <td className="td" data-label={label}>
+      {children}
+    </td>
+  );
 }
 
 /** Any numeric cell: mono, tabular, right-aligned so columns line up. */
-export function NumCell({ children, money = false }: { children?: ReactNode; money?: boolean }) {
-  return <td className={money ? 'td td--num td--money mono' : 'td td--num mono'}>{children}</td>;
+export function NumCell({
+  children,
+  money = false,
+  label,
+}: {
+  children?: ReactNode;
+  money?: boolean;
+  label?: string;
+}) {
+  return (
+    <td className={money ? 'td td--num td--money mono' : 'td td--num mono'} data-label={label}>
+      {children}
+    </td>
+  );
 }

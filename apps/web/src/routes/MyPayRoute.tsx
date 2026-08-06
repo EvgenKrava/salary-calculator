@@ -1,6 +1,7 @@
 import { Table, Th, Td, NumCell } from '../ui/Table';
 import { Money } from '../ui/Money';
 import { EmptyState } from '../ui/EmptyState';
+import { Toolbar } from '../ui/Toolbar';
 import { useMyPay } from '../lib/queries';
 import { t, formatDate } from '../lib/i18n';
 
@@ -15,7 +16,7 @@ export function MyPayRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.myPay.title}</h1>
+      <Toolbar title={t.myPay.title} />
       {rows.length === 0 ? (
         <EmptyState title={t.myPay.empty} action={t.myPay.emptyAction} />
       ) : (
@@ -33,12 +34,12 @@ export function MyPayRoute() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.runId}>
-                <Td><span className="mono">{formatDate(r.periodStart)}</span></Td>
-                <Td><span className="mono">{formatDate(r.periodEnd)}</span></Td>
-                <NumCell><Money value={r.hourlyPay} /></NumCell>
-                <NumCell><Money value={r.revenueShare} /></NumCell>
-                <NumCell><Money value={r.bonus} /></NumCell>
-                <NumCell money><Money value={r.total} /></NumCell>
+                <Td label={t.runs.periodStart}><span className="mono">{formatDate(r.periodStart)}</span></Td>
+                <Td label={t.runs.periodEnd}><span className="mono">{formatDate(r.periodEnd)}</span></Td>
+                <NumCell label={t.myPay.hourlyPay}><Money value={r.hourlyPay} /></NumCell>
+                <NumCell label={t.myPay.revenueShare}><Money value={r.revenueShare} /></NumCell>
+                <NumCell label={t.myPay.bonus}><Money value={r.bonus} /></NumCell>
+                <NumCell money label={t.common.total}><Money value={r.total} /></NumCell>
               </tr>
             ))}
           </tbody>

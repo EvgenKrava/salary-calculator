@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
+import { Toolbar } from '../ui/Toolbar';
 import { t, formatDate } from '../lib/i18n';
 import { useAddRevenue, useLocations, useRevenue, type Location, type RevenueRow } from '../lib/queries';
 
@@ -131,7 +132,7 @@ export function RevenueRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.revenue.title}</h1>
+      <Toolbar title={t.revenue.title} />
       <RevenueTable rows={revenue.data ?? []} locations={locations.data ?? []} />
       <RevenueForm
         locations={locations.data ?? []}

@@ -4,6 +4,7 @@ import { Money } from '../ui/Money';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
+import { Toolbar } from '../ui/Toolbar';
 import {
   useAddLevel,
   useAddLocation,
@@ -176,7 +177,7 @@ function LevelsPanel() {
 export function SetupRoute() {
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.setup.title}</h1>
+      <Toolbar title={t.setup.title} />
       <LocationsPanel />
       <LevelsPanel />
     </>

@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { useExtractionJobs, useJobDecision } from '../lib/queries';
 import { anyLoading, firstError } from '../ui/QueryGate';
+import { Toolbar } from '../ui/Toolbar';
 import { t } from '../lib/i18n';
 
 const DOC_TYPE_LABEL: Record<string, string> = {
@@ -42,7 +43,7 @@ export function ReviewRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.review.title}</h1>
+      <Toolbar title={t.review.title} />
       {rows.length === 0 ? (
         <EmptyState title={t.review.empty} action={t.review.emptyAction} />
       ) : (

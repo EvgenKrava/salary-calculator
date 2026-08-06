@@ -1,20 +1,55 @@
 .shell {
   min-height: 100vh;
+  min-height: 100dvh; /* dvh so the mobile browser chrome does not clip the last row */
 }
 
+/*
+ * Sticky app bar.
+ *
+ * It was static, so on the schedule calendar or a month of shifts the manager scrolled away
+ * from navigation entirely. Sticky plus a real elevation is also what separates "an app" from
+ * "a web page with links at the top".
+ */
 .shell__bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: var(--s4);
   flex-wrap: wrap;
-  padding: var(--s2) var(--s4);
-  background: var(--surface);
+  padding: var(--s2) var(--s5);
+  background: rgb(255 255 255 / 88%);
+  backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--rule);
 }
 
+/* Browsers without backdrop-filter get an opaque bar rather than unreadable overlap. */
+@supports not (backdrop-filter: blur(1px)) {
+  .shell__bar {
+    background: var(--surface);
+  }
+}
+
 .shell__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.014em;
+  white-space: nowrap;
+}
+
+/* The favicon bean doubles as the in-app mark — cheap identity, no extra asset. */
+.shell__brand::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  flex: none;
+  background-image: url('/favicon.ico');
+  background-size: contain;
+  background-repeat: no-repeat;
+  border-radius: var(--radius-sm);
 }
 
 .shell__nav {
@@ -25,44 +60,98 @@
 }
 
 .shell__link {
-  padding: var(--s1) var(--s2);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--s3);
   border-radius: var(--radius);
   color: var(--ink-muted);
   text-decoration: none;
   font-weight: 500;
+  font-size: var(--text-sm);
+  white-space: nowrap;
   transition: background var(--transition), color var(--transition);
 }
 
-.shell__link:hover,
-.shell__link[data-status='active'] {
+.shell__link:hover {
   background: var(--surface-sunk);
   color: var(--ink);
 }
 
+/*
+ * The active tab gets an amber underline, not just a grey fill.
+ *
+ * Previously hover and active were styled identically, so the nav never told you which screen
+ * you were on — you had to read the heading to find out.
+ */
+.shell__link[data-status='active'] {
+  color: var(--ink);
+  background: var(--amber-tint);
+}
+.shell__link[data-status='active']::after {
+  content: '';
+  position: absolute;
+  left: var(--s3);
+  right: var(--s3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-pill) var(--radius-pill) 0 0;
+  background: var(--amber);
+}
+
 .shell__user {
   font-size: var(--text-xs);
-  color: var(--ink-faint);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shell__main {
-  padding: var(--s6) var(--s4);
-  max-width: 1200px;
+  padding: var(--s8) var(--s5) var(--s12);
+  max-width: 1180px;
   margin: 0 auto;
 }
 
+/*
+ * Login: centred card on the ground colour, with a soft amber wash so the first screen of the
+ * app is not a blank grey field with a box on it.
+ */
 .login-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: var(--s4);
+  background:
+    radial-gradient(60ch 40ch at 50% -10%, var(--amber-tint), rgb(255 255 255 / 0%)),
+    var(--ground);
 }
 
 /* Manager flows must work at 390px — revenue gets entered behind a counter. */
 @media (max-width: 720px) {
+  .shell__bar {
+    padding: var(--s2) var(--s3);
+    gap: var(--s2);
+  }
   .shell__main {
-    padding: var(--s4) var(--s2);
+    padding: var(--s5) var(--s3) var(--s10);
   }
   .shell__user {
+    display: none;
+  }
+  /* Nav scrolls horizontally rather than wrapping to three ragged rows and pushing content
+     below the fold on a phone. */
+  .shell__nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .shell__nav::-webkit-scrollbar {
     display: none;
   }
 }

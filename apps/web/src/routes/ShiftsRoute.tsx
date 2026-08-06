@@ -3,6 +3,7 @@ import { StatusPill } from '../ui/StatusPill';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { anyLoading, firstError } from '../ui/QueryGate';
+import { Toolbar } from '../ui/Toolbar';
 import { useEmployees, useLocations, useShiftDecision, useShifts } from '../lib/queries';
 import { shiftHours } from '../lib/hours';
 import { t, formatDate } from '../lib/i18n';
@@ -38,7 +39,7 @@ export function ShiftsRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.shifts.title}</h1>
+      <Toolbar title={t.shifts.title} />
       {rows.length === 0 ? (
         <EmptyState title={t.shifts.empty} action={t.shifts.emptyAction} />
       ) : (

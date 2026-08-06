@@ -1,33 +1,70 @@
+/*
+ * Buttons.
+ *
+ * Previously: hover only — no active, no visible disabled affordance beyond grey text, no small
+ * size for use inside a table row, and a hardcoded #9a5c00 hover that bypassed the tokens. A
+ * control with no press feedback is the single clearest "unfinished" tell in a UI.
+ */
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
   font-family: var(--font-ui);
   font-size: var(--text-base);
   font-weight: 500;
-  padding: var(--s2) var(--s3);
+  line-height: 1;
+  /* min-height, not padding alone: a manager taps these on a phone behind a counter, and 44px
+     is the accessible minimum. */
+  min-height: var(--tap);
+  padding: 0 var(--s4);
   border-radius: var(--radius);
   border: 1px solid var(--rule-strong);
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition);
+  white-space: nowrap;
+  transition: background var(--transition), border-color var(--transition),
+    box-shadow var(--transition), transform var(--transition);
 }
 
 .btn:hover:not(:disabled) {
   background: var(--surface-sunk);
+  border-color: var(--ink-faint);
+}
+
+/* A 1px nudge reads as a physical press without animating layout. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
+  background: var(--surface-sunk);
+  border-color: var(--rule);
   color: var(--ink-faint);
   cursor: not-allowed;
 }
 
 /* Amber is the primary action — at most one per view. */
 .btn--primary {
-  background: var(--amber);
-  border-color: var(--amber);
+  /* --amber-action, not --amber: white on the brand amber is 4.20:1, which fails AA. */
+  background: var(--amber-action);
+  border-color: var(--amber-action);
   color: #fff;
+  box-shadow: var(--shadow-sm);
 }
 .btn--primary:hover:not(:disabled) {
-  background: #9a5c00;
+  background: var(--amber-strong);
+  border-color: var(--amber-strong);
+}
+.btn--primary:disabled {
+  /* Keep it recognisably the primary action while unavailable, rather than turning grey and
+     making the manager hunt for where the button went. */
+  background: var(--amber-action);
+  border-color: var(--amber-action);
+  color: #fff;
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 /* Destructive is outlined here; filled red is reserved for confirmation dialogs. */
@@ -37,4 +74,23 @@
 }
 .btn--danger:hover:not(:disabled) {
   background: var(--stop-tint);
+  border-color: var(--stop);
+}
+
+/*
+ * Row-scale button, for actions inside a table cell where a 44px control would blow the row
+ * height apart. Only used on pointer devices in dense tables; the base size stays the default
+ * everywhere else so touch targets are not silently shrunk across the app.
+ */
+.btn--sm {
+  min-height: 30px;
+  padding: 0 var(--s3);
+  font-size: var(--text-sm);
+}
+
+/* Full-width on narrow screens: side-by-side buttons at 360px end up unreadably cramped. */
+@media (max-width: 480px) {
+  .btn--block {
+    width: 100%;
+  }
 }

@@ -1,0 +1,22 @@
+.empty {
+  padding: var(--s10) var(--s6);
+  text-align: center;
+  background: var(--surface);
+  /* Dashed, not solid: an empty state should read as a space waiting to be filled, not as a
+     panel that failed to load. */
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-lg);
+}
+
+.empty__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.empty__action {
+  margin: var(--s2) auto 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  max-width: 52ch;
+}

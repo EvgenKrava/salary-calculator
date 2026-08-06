@@ -123,3 +123,21 @@
   background-position: right var(--s3) center;
   cursor: pointer;
 }
+
+/*
+ * Fieldset without the browser's default border/legend styling, which looked like a 1998 form.
+ * Used to group the per-employee bonus inputs under one heading.
+ */
+.fieldset {
+  border: 0;
+  padding: 0;
+  margin: var(--s6) 0 0;
+}
+
+.fieldset__legend {
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-md);
+  padding: 0;
+  margin-bottom: var(--s1);
+}

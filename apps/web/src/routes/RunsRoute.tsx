@@ -3,6 +3,8 @@ import { Table, Th, Td, NumCell } from '../ui/Table';
 import { Money } from '../ui/Money';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { Card } from '../ui/Card';
+import { Toolbar } from '../ui/Toolbar';
 import { MonthSelect, Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { ApiError } from '../lib/api';
@@ -53,11 +55,11 @@ export function RunBreakdown({ lines, employees }: { lines: SalaryRunLine[]; emp
       <tbody>
         {lines.map((l) => (
           <tr key={l.employeeId}>
-            <Td>{nameOf(l.employeeId)}</Td>
-            <NumCell><Money value={l.hourlyPay} /></NumCell>
-            <NumCell><Money value={l.revenueShare} /></NumCell>
-            <NumCell><Money value={l.bonus} /></NumCell>
-            <NumCell money><Money value={l.total} /></NumCell>
+            <Td label={t.common.employee}>{nameOf(l.employeeId)}</Td>
+            <NumCell label={t.runs.hourly}><Money value={l.hourlyPay} /></NumCell>
+            <NumCell label={t.runs.revenueShare}><Money value={l.revenueShare} /></NumCell>
+            <NumCell label={t.runs.bonusColumn}><Money value={l.bonus} /></NumCell>
+            <NumCell money label={t.common.total}><Money value={l.total} /></NumCell>
           </tr>
         ))}
       </tbody>
@@ -103,17 +105,15 @@ export function BlockedRun({
   }
 
   return (
-    <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-      <h2 style={{ color: 'var(--stop)', marginBottom: 'var(--s2)' }}>{t.runs.blockedTitle}</h2>
-      <p style={{ marginTop: 0, color: 'var(--ink-muted)' }}>{t.runs.blockedHint}</p>
-      <ul className="mono" style={{ margin: 0, paddingLeft: 'var(--s6)' }}>
+    <Card tone="stop" title={t.runs.blockedTitle} description={t.runs.blockedHint}>
+      <ul className="mono" style={{ margin: 0, paddingLeft: 'var(--s5)' }}>
         {[...byDay.values()].map((g) => (
           <li key={`${g.locationId}-${g.date}`}>
             {formatDate(g.date)} — {t.common.location.toLowerCase()} {locOf(g.locationId)} ({g.who.join(', ')})
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }
 
@@ -245,11 +245,13 @@ export function RunsRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.runs.title}</h1>
+      <Toolbar title={t.runs.title} />
 
-      <form className="panel" style={{ padding: 'var(--s4)', marginBottom: 'var(--s6)' }} onSubmit={doPreview}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.runs.runTitle}</h2>
-        <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.runs.hint}</p>
+      <form onSubmit={doPreview}>
+        <Card title={t.runs.runTitle} description={t.runs.hint}>
+        {/* Period selectors sit on one row — three stacked full-width fields for year, month
+            and half read as a long form when they are really one choice. */}
+        <div className="field-row">
         <Field label={t.runs.year} name="year" type="number" numeric value={year} onChange={(e) => setYear(e.target.value)} />
         <MonthSelect label={t.runs.month} value={month} onChange={setMonth} />
         <Select
@@ -262,6 +264,7 @@ export function RunsRoute() {
           <option value="1">{t.runs.firstHalf}</option>
           <option value="2">{t.runs.secondHalf}</option>
         </Select>
+        </div>
         <fieldset style={{ border: 0, padding: 0, margin: 'var(--s6) 0 0' }}>
           <legend style={{ font: 'inherit', fontWeight: 600, padding: 0, marginBottom: 'var(--s1)' }}>
             {t.runs.bonusesTitle}
@@ -307,14 +310,15 @@ export function RunsRoute() {
 
         {/* Preview is the primary action; committing is deliberately the SECOND step, and only
             becomes available once the manager has seen the figures for the current inputs. */}
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={preview.isPending || employees.isLoading || Boolean(employees.error)}
-          style={{ marginTop: 'var(--s4)' }}
-        >
-          {preview.isPending ? t.runs.calculating : t.runs.calculate}
-        </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            block
+            disabled={preview.isPending || employees.isLoading || Boolean(employees.error)}
+          >
+            {preview.isPending ? t.runs.calculating : t.runs.calculate}
+          </Button>
+        </Card>
       </form>
 
       {previewed ? (

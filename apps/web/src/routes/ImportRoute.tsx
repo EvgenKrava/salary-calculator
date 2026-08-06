@@ -6,6 +6,7 @@ import { config } from '../lib/config';
 import { useAuth } from '../lib/auth';
 import { t } from '../lib/i18n';
 import { Table, Th, Td } from '../ui/Table';
+import { Toolbar } from '../ui/Toolbar';
 import { useEmployees, useNameMap, useSetNameMapping } from '../lib/queries';
 
 interface PreviewResult {
@@ -199,7 +200,7 @@ export function ImportRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.importScreen.title}</h1>
+      <Toolbar title={t.importScreen.title} />
 
       <form className="panel" style={{ padding: 'var(--s4)' }} onSubmit={runPreview}>
         <h2 style={{ marginBottom: 'var(--s4)' }}>{t.importScreen.preview}</h2>

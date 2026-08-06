@@ -1,6 +1,7 @@
 import { Table, Th, Td, NumCell } from '../ui/Table';
 import { StatusPill } from '../ui/StatusPill';
 import { EmptyState } from '../ui/EmptyState';
+import { Toolbar } from '../ui/Toolbar';
 import { useMyShifts } from '../lib/queries';
 import { shiftHours } from '../lib/hours';
 import { t, formatDate } from '../lib/i18n';
@@ -17,7 +18,7 @@ export function MyShiftsRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.myShifts.title}</h1>
+      <Toolbar title={t.myShifts.title} />
       {rows.length === 0 ? (
         <EmptyState title={t.myShifts.empty} action={t.myShifts.emptyAction} />
       ) : (

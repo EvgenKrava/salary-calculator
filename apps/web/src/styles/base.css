@@ -12,37 +12,82 @@ body {
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: var(--text-base);
-  line-height: 1.45;
+  line-height: var(--leading);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Plex Sans has real small caps and old-style figures; we want neither by default, but we do
+     want its contextual alternates for Cyrillic to kick in. */
+  font-feature-settings: 'calt' 1;
 }
 
-/* Never remove the focus ring — these screens are keyboard-driven. */
+/*
+ * Never remove the focus ring — these screens are keyboard-driven.
+ *
+ * Amber ring plus a dark outline: the ring alone can vanish against --amber-tint backgrounds
+ * (the money column, the preview panel), and the outline alone looked like a 1990s dotted box.
+ */
 :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
+/*
+ * Headings carry their own rhythm.
+ *
+ * They used to be `margin: 0`, which forced every route to set an ad-hoc inline
+ * `style={{ marginBottom: 'var(--s4)' }}` — inconsistently, so vertical spacing drifted from
+ * screen to screen. Owning it here is what makes the app feel like one product.
+ */
 h1,
 h2,
 h3 {
   font-weight: 600;
-  margin: 0;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.011em; /* large text needs slight negative tracking to look intentional */
+  margin: 0 0 var(--s4);
+  text-wrap: balance; /* avoids a one-word orphan line in a Ukrainian heading */
 }
 h1 {
   font-size: var(--text-xl);
 }
 h2 {
   font-size: var(--text-lg);
+  margin-top: var(--s8);
+}
+h3 {
+  font-size: var(--text-md);
+  margin-bottom: var(--s2);
+}
+/* A heading that opens a container should not push away from its own edge. */
+h1:first-child,
+h2:first-child,
+h3:first-child {
+  margin-top: 0;
+}
+
+p {
+  margin: 0 0 var(--s4);
+}
+p:last-child {
+  margin-bottom: 0;
+}
+
+/* Secondary prose: hints, period ranges, "nothing saved yet" notes. */
+.muted {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
 }
 
 /* Every numeral a user might compare is mono + tabular. */
 .mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1; /* slashed zero — 0/O confusion is a payroll hazard */
 }
 
 .panel {
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
 }

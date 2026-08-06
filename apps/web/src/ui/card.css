@@ -1,0 +1,107 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--s6);
+  overflow: hidden; /* so a flush table's corners follow the card's radius */
+}
+
+/*
+ * Header: title and description on the left, actions right, wrapping on narrow screens rather
+ * than squeezing a button off the edge.
+ */
+.card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-raised);
+}
+
+.card__heading {
+  min-width: 0; /* lets a long Ukrainian title wrap instead of pushing actions out */
+}
+
+.card__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.011em;
+}
+
+.card__desc {
+  margin: var(--s1) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  max-width: 68ch; /* a hint nobody reads is a hint set too wide */
+}
+
+.card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.card__body {
+  padding: var(--s5);
+}
+.card__body--flush {
+  padding: 0;
+}
+
+.card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--rule);
+  background: var(--surface-raised);
+}
+
+/*
+ * Tones. A left accent bar rather than a fully tinted card: tinting the whole surface made the
+ * blocked-run panel shout over the data inside it, which is the thing the manager actually
+ * needs to read.
+ */
+.card--stop {
+  border-color: var(--stop);
+  box-shadow: inset 3px 0 0 var(--stop), var(--shadow-sm);
+}
+.card--stop .card__head {
+  background: var(--stop-tint);
+}
+.card--stop .card__title {
+  color: var(--stop);
+}
+
+.card--warn {
+  border-color: var(--amber-edge);
+  box-shadow: inset 3px 0 0 var(--warn), var(--shadow-sm);
+}
+.card--warn .card__head {
+  background: var(--warn-tint);
+}
+
+.card--ok {
+  box-shadow: inset 3px 0 0 var(--ok), var(--shadow-sm);
+}
+.card--ok .card__head {
+  background: var(--ok-tint);
+}
+
+@media (max-width: 640px) {
+  .card__head,
+  .card__body,
+  .card__foot {
+    padding: var(--s4);
+  }
+  /* Stacked actions get full width so they are not two cramped half-buttons. */
+  .card__actions {
+    width: 100%;
+  }
+}

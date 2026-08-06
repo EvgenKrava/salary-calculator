@@ -5,6 +5,7 @@ import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
 import { StatusPill } from '../ui/StatusPill';
 import { anyLoading, firstError } from '../ui/QueryGate';
+import { Toolbar } from '../ui/Toolbar';
 import {
   useAddEmployee,
   useEmployees,
@@ -316,7 +317,7 @@ export function EmployeesRoute() {
 
   return (
     <>
-      <h1 style={{ marginBottom: 'var(--s4)' }}>{t.employees.title}</h1>
+      <Toolbar title={t.employees.title} />
       <AddEmployee levels={levelList} />
 
       {rows.length === 0 ? (
