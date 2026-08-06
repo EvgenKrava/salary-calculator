@@ -1,0 +1,106 @@
+/*
+ * Native <dialog>. The ::backdrop pseudo-element is the browser's own overlay — no extra DOM
+ * node, and it cannot be escaped by a stray z-index because the dialog lives in the top layer.
+ */
+.modal {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  max-width: min(920px, calc(100vw - var(--s8)));
+  width: 100%;
+  max-height: calc(100dvh - var(--s8));
+}
+
+.modal::backdrop {
+  background: rgb(21 24 27 / 45%);
+  backdrop-filter: blur(2px);
+}
+
+.modal__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--s8));
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-raised);
+}
+
+.modal__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.011em;
+}
+
+.modal__desc {
+  margin: var(--s1) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  max-width: 68ch;
+}
+
+.modal__close {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.modal__close:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+/* The body scrolls, not the whole dialog — the header stays visible through a long import. */
+.modal__body {
+  padding: var(--s5);
+  overflow-y: auto;
+}
+
+.modal__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--rule);
+  background: var(--surface-raised);
+}
+
+/* Full-screen on a phone: a centred dialog with margins wastes scarce height. */
+@media (max-width: 640px) {
+  .modal {
+    max-width: 100vw;
+    max-height: 100dvh;
+  }
+  .modal__panel {
+    max-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+  .modal__head,
+  .modal__body,
+  .modal__foot {
+    padding: var(--s4);
+  }
+}

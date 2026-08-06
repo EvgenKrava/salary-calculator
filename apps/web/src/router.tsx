@@ -15,7 +15,6 @@ import { MyShiftsRoute } from './routes/MyShiftsRoute';
 import { MyPayRoute } from './routes/MyPayRoute';
 import { SetupRoute } from './routes/SetupRoute';
 import { EmployeesRoute } from './routes/EmployeesRoute';
-import { ImportRoute } from './routes/ImportRoute';
 
 /**
  * The route tree. Auth is enforced in `beforeLoad` against the router context rather than
@@ -92,12 +91,6 @@ const runsRoute = createRoute({
   component: RunsRoute,
 });
 
-const importRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/import',
-  component: ImportRoute,
-});
-
 const employeesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/employees',
@@ -131,7 +124,6 @@ export const routeTree = rootRoute.addChildren([
     scheduleRoute,
     reviewRoute,
     runsRoute,
-    importRoute,
     employeesRoute,
     setupRoute,
     myShiftsRoute,

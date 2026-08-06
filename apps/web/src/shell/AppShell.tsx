@@ -32,7 +32,6 @@ export function AppShell() {
               <Link to="/revenue" className="shell__link">{t.nav.revenue}</Link>
               <Link to="/shifts" className="shell__link">{t.nav.shifts}</Link>
               <Link to="/schedule" className="shell__link">{t.nav.schedule}</Link>
-              <Link to="/import" className="shell__link">{t.nav.import}</Link>
               <Link to="/runs" className="shell__link">{t.nav.runs}</Link>
               <Link to="/review" className="shell__link">{t.nav.review}</Link>
               <Link to="/employees" className="shell__link">{t.nav.employees}</Link>

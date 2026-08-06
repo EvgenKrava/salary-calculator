@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { MonthSelect } from '../ui/Select';
@@ -136,7 +136,14 @@ export function NameMapper({ names }: { names: string[] }) {
  * so every report array below is always shown, even when empty of `created` rows, because
  * hiding `unmappedNames` (say) would defeat the point of the importer surfacing them.
  */
-export function ImportRoute() {
+/**
+ * The import flow itself, with no page chrome.
+ *
+ * Extracted from the route so it can live inside a modal on the schedule page — importing a
+ * schedule is something a manager does *from* the schedule, not by navigating away from it and
+ * losing the month they were looking at.
+ */
+export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) {
   const { getToken } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [year, setYear] = useState(String(new Date().getUTCFullYear()));
@@ -198,12 +205,16 @@ export function ImportRoute() {
     }
   }
 
+  // Tell the caller a commit landed, so a host screen can refresh (the schedule modal reloads
+  // the month rather than showing the manager a calendar that predates their own import).
+  const committed = commitResult !== null;
+  useEffect(() => {
+    if (committed) onCommitted?.();
+  }, [committed, onCommitted]);
+
   return (
     <>
-      <Toolbar title={t.importScreen.title} />
-
-      <form className="panel" style={{ padding: 'var(--s4)' }} onSubmit={runPreview}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.importScreen.preview}</h2>
+      <form onSubmit={runPreview}>
         <div className="field">
           <label className="field__label" htmlFor="file">{t.importScreen.workbook}</label>
           <input

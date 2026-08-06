@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { buildMonthGrid, DayCell } from '../src/routes/ScheduleRoute';
 import { t } from '../src/lib/i18n';
 
@@ -10,6 +11,12 @@ vi.mock('@tanstack/react-router', () => ({
 const shiftsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
 const employeesQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
 const locationsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
+
+vi.mock('../src/routes/ImportRoute', () => ({
+  // The calendar tests are about the grid; the import flow has its own tests. Stubbing keeps
+  // this file from needing an AuthProvider and a config shim it does not otherwise care about.
+  ImportPanel: () => null,
+}));
 
 vi.mock('../src/lib/queries', () => ({
   useShifts: () => shiftsQuery,
@@ -131,9 +138,16 @@ describe('ScheduleRoute', () => {
     expect(weekdays.map((el) => el.textContent)).toEqual(['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']);
   });
 
-  it('links the import button to /import', () => {
+  it('opens the import as a modal on this page, not a separate destination', async () => {
+    // Navigating away to /import lost the month the manager was looking at, which is the
+    // context they need in order to know what to import.
+    const user = userEvent.setup();
     render(<ScheduleRoute />);
-    expect(screen.getByRole('link', { name: t.nav.import })).toHaveAttribute('href', '/import');
+
+    // No dialog until asked for.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: t.nav.import }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('places a shift on its own day, identified by employee name', () => {

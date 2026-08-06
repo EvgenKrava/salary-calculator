@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
 import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
+import { Toolbar } from '../ui/Toolbar';
+import { ImportPanel } from './ImportRoute';
 import { MonthSelect } from '../ui/Select';
 import { StatusPill } from '../ui/StatusPill';
 import { anyLoading, firstError } from '../ui/QueryGate';
@@ -127,6 +129,7 @@ export function ScheduleRoute() {
   const { from, to } = useMemo(() => gridBounds(cells), [cells]);
 
   const shifts = useShifts({ from, to });
+  const [importOpen, setImportOpen] = useState(false);
   const employees = useEmployees();
   const locations = useLocations();
 
@@ -181,10 +184,27 @@ export function ScheduleRoute() {
 
   return (
     <>
-      <div className="schedule__header">
-        <h1 style={{ marginBottom: 0 }}>{t.schedule.title}</h1>
-        <Link to="/import" className="btn btn--secondary">{t.nav.import}</Link>
-      </div>
+      {/* Import is an action on this page, not a separate destination: a manager importing a
+          schedule is already looking at the month they want to fill, and navigating away lost
+          that context. */}
+      <Toolbar title={t.schedule.title}>
+        <Button onClick={() => setImportOpen(true)}>{t.nav.import}</Button>
+      </Toolbar>
+
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title={t.importScreen.title}
+        description={t.importScreen.hint}
+      >
+        <ImportPanel
+          onCommitted={() => {
+            // Refetch so the calendar behind the modal shows the shifts just imported, rather
+            // than a month that predates the manager's own action.
+            void shifts.refetch();
+          }}
+        />
+      </Modal>
 
       <div className="schedule__nav">
         <Button aria-label={t.schedule.prevMonth} onClick={goToPrevMonth}>

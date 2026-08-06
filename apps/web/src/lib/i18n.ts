@@ -109,6 +109,7 @@ export const t = {
     loading: 'завантаження…',
     save: 'Зберегти',
     cancel: 'Скасувати',
+    close: 'Закрити',
     edit: 'Редагувати',
     add: 'Додати',
     signOut: 'Вийти',
