@@ -313,13 +313,19 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
           <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
         )}
       </Td>
-      <Td><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
-      <Td>
-        <Button variant="primary" onClick={save} disabled={update.isPending}>
-          {update.isPending ? t.common.saving : t.common.save}
-        </Button>{' '}
-        <Button onClick={() => setEditing(false)}>{t.common.cancel}</Button>
-        {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
+      <Td label={t.common.status}><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
+      <Td label={t.common.actions}>
+        {/* `sm` + row-actions, matching the read-only row and the setup tables: full-size buttons
+            in a 40px row push it apart, and the two rows should not change height on edit. */}
+        <span className="row-actions">
+          <Button size="sm" variant="primary" onClick={save} disabled={update.isPending}>
+            {update.isPending ? t.common.saving : t.common.save}
+          </Button>
+          <Button size="sm" variant="quiet" onClick={() => setEditing(false)}>
+            {t.common.cancel}
+          </Button>
+        </span>
+        {error ? <p className="setup__rowError">{error}</p> : null}
       </Td>
     </tr>
   );

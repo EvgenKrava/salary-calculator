@@ -1,0 +1,67 @@
+/*
+ * One day's shifts, inside the schedule modal: the existing rows first, then the add form.
+ * Existing-before-form because the manager's first question is "who is already on?" — adding
+ * someone who is already scheduled is the mistake this ordering prevents.
+ */
+
+.day-editor__list {
+  margin: 0 0 var(--s5);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.day-editor__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  min-height: var(--control-h);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.day-editor__who {
+  font-weight: 500;
+  /* Takes the slack so the meta columns and the delete button stay right-aligned. */
+  flex: 1;
+  min-width: 8ch;
+}
+
+.day-editor__meta {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.day-editor__form {
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+
+.day-editor__actions {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  margin-top: var(--s2);
+}
+
+.day-editor__error {
+  margin: var(--s2) 0 0;
+  color: var(--stop);
+  font-size: var(--text-sm);
+}
+
+/* On a phone the row stacks; the delete button must stay reachable, not squeezed to a sliver. */
+@media (max-width: 640px) {
+  .day-editor__row {
+    align-items: flex-start;
+  }
+  .day-editor__who {
+    flex-basis: 100%;
+  }
+}

@@ -108,3 +108,32 @@ p:last-child {
   gap: var(--s4);
   margin-bottom: var(--s5);
 }
+
+/*
+ * An inline error inside a table row.
+ *
+ * Sits under the row's action buttons, which is where the failure originated — a toast or a
+ * page-level banner would separate "cannot delete this location" from the location it refers to.
+ * Common enough across the setup tables to live here rather than in three route stylesheets.
+ */
+.setup__rowError {
+  margin: var(--s1) 0 0;
+  color: var(--stop);
+  font-size: var(--text-xs);
+  /* The actions column is sized to its buttons; let a sentence wrap rather than widen the column. */
+  max-width: 34ch;
+  white-space: normal;
+}
+
+/*
+ * A detail row expanded under its parent table row (e.g. a location's shift slots).
+ *
+ * Sunk background and no row height so it reads as belonging to the row above rather than as
+ * another record in the list. `height: auto` overrides the table's fixed --row-h, which would
+ * otherwise clip a multi-line panel.
+ */
+.setup__detailRow > .td {
+  height: auto;
+  padding: 0 var(--s3) var(--s3);
+  background: var(--surface-sunk);
+}

@@ -1,0 +1,219 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { t } from '../src/lib/i18n';
+
+const fn = () => ({ mutateAsync: vi.fn(async () => ({})), isPending: false });
+const updateLocation = fn();
+const deleteLocation = fn();
+const updateLevel = fn();
+const deleteLevel = fn();
+const setSlot = fn();
+const deleteSlot = fn();
+const slotsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
+
+vi.mock('../src/lib/queries', () => ({
+  useAddLocation: fn,
+  useAddLevel: fn,
+  useLocations: () => ({ data: [], isLoading: false, error: null }),
+  useLevels: () => ({ data: [], isLoading: false, error: null }),
+  useUpdateLocation: () => updateLocation,
+  useDeleteLocation: () => deleteLocation,
+  useUpdateLevel: () => updateLevel,
+  useDeleteLevel: () => deleteLevel,
+  useShiftSlots: () => slotsQuery,
+  useSetShiftSlot: () => setSlot,
+  useDeleteShiftSlot: () => deleteSlot,
+}));
+
+const { SlotEditor } = await import('../src/routes/SlotEditor');
+const { LocationRow, LevelRow } = await import('../src/routes/SetupRoute');
+
+const LOCATION = { id: 'l1', name: 'Перша', opensAt: '08:00', closesAt: '20:00' };
+
+beforeEach(() => {
+  for (const m of [updateLocation, deleteLocation, updateLevel, deleteLevel, setSlot, deleteSlot]) {
+    m.mutateAsync.mockClear();
+    m.isPending = false;
+  }
+  slotsQuery.data = [];
+  slotsQuery.isLoading = false;
+});
+
+/**
+ * Shift-slot windows.
+ *
+ * These had a complete API and NO UI, which is why the deployed locations still run on placeholder
+ * 09:00–21:00 hours. They are a payroll input, not configuration trivia: an imported shift takes
+ * its hours from the matching slot window, and a day rate is pro-rated against the location's
+ * working day — so a wrong time here pays the wrong amount silently rather than failing.
+ */
+describe('SlotEditor', () => {
+  it('defaults a new slot to the location hours and the next free number', async () => {
+    slotsQuery.data = [{ locationId: 'l1', slotNumber: 1, startsAt: '08:00', endsAt: '14:00' }];
+    render(<SlotEditor location={LOCATION as never} />);
+    // Slot 1 is taken, so the form offers 2 — not 1, which would silently overwrite it.
+    expect(screen.getByLabelText(t.setup.slotNumber)).toHaveValue(2);
+    expect(screen.getByLabelText(t.setup.opensAt)).toHaveValue('08:00');
+    expect(screen.getByLabelText(t.setup.closesAt)).toHaveValue('20:00');
+  });
+
+  it('saves a slot for the location it belongs to', async () => {
+    render(<SlotEditor location={LOCATION as never} />);
+    await userEvent.clear(screen.getByLabelText(t.setup.opensAt));
+    await userEvent.type(screen.getByLabelText(t.setup.opensAt), '14:00');
+    await userEvent.click(screen.getByRole('button', { name: t.setup.saveSlot }));
+
+    expect(setSlot.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ locationId: 'l1', slotNumber: 1, startsAt: '14:00' }),
+    );
+  });
+
+  it('advances the slot number after saving, so entering a run of slots is uninterrupted', async () => {
+    render(<SlotEditor location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.saveSlot }));
+    expect(screen.getByLabelText(t.setup.slotNumber)).toHaveValue(2);
+  });
+
+  it('lists slots in number order regardless of what the API returned', () => {
+    slotsQuery.data = [
+      { locationId: 'l1', slotNumber: 2, startsAt: '14:00', endsAt: '20:00' },
+      { locationId: 'l1', slotNumber: 1, startsAt: '08:00', endsAt: '14:00' },
+    ];
+    render(<SlotEditor location={LOCATION as never} />);
+    const items = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
+    expect(items[0]).toContain(t.setup.slotN(1));
+    expect(items[1]).toContain(t.setup.slotN(2));
+  });
+
+  it('deletes a slot by its number', async () => {
+    slotsQuery.data = [{ locationId: 'l1', slotNumber: 3, startsAt: '08:00', endsAt: '14:00' }];
+    render(<SlotEditor location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.deleteSlotN(3) }));
+    expect(deleteSlot.mutateAsync).toHaveBeenCalledWith({ locationId: 'l1', slotNumber: 3 });
+  });
+
+  it('surfaces the API rejection when a window falls outside the location hours', async () => {
+    // The API enforces this; the UI must not swallow the reason, because "why did nothing
+    // happen" is unanswerable from a silent failure.
+    setSlot.mutateAsync.mockRejectedValueOnce(
+      new Error('slot window must fall inside the location working hours'),
+    );
+    render(<SlotEditor location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.saveSlot }));
+    expect(
+      await screen.findByText('slot window must fall inside the location working hours'),
+    ).toBeInTheDocument();
+  });
+
+  it('says slots are unset rather than showing an empty list', () => {
+    render(<SlotEditor location={LOCATION as never} />);
+    expect(screen.getByText(t.setup.noSlots)).toBeInTheDocument();
+  });
+
+  it('explains what slots do for payroll', () => {
+    // The hint is the only place the consequence is stated; four bare time fields would not
+    // tell an admin that these decide what an imported shift is worth.
+    render(<SlotEditor location={LOCATION as never} />);
+    expect(screen.getByText(t.setup.slotsHint)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Inline row editing for locations and levels.
+ *
+ * Both had create-only UIs: a wrong location time or day rate could not be corrected without a
+ * hand-written API call, which is exactly why the deployed locations still carry placeholder
+ * hours. Wrapped in a <table> because these components render <tr>, and React warns (and jsdom
+ * reparents) if a row is mounted outside one.
+ */
+function inTable(node: React.ReactNode) {
+  return render(<table><tbody>{node}</tbody></table>);
+}
+
+describe('LocationRow', () => {
+  it('saves edited hours for that location', async () => {
+    inTable(<LocationRow location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
+    const opens = screen.getByLabelText(t.setup.opensAtFor('Перша'));
+    await userEvent.clear(opens);
+    await userEvent.type(opens, '07:30');
+    await userEvent.click(screen.getByRole('button', { name: t.common.save }));
+
+    expect(updateLocation.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'l1', opensAt: '07:30', closesAt: '20:00' }),
+    );
+  });
+
+  it('restores the stored values on cancel', async () => {
+    // Leaving edited text on screen after cancelling reads as if it had been saved.
+    inTable(<LocationRow location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
+    const name = screen.getByLabelText(t.setup.locationNameFor('Перша'));
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Змінено');
+    await userEvent.click(screen.getByRole('button', { name: t.common.cancel }));
+
+    expect(screen.getByText('Перша')).toBeInTheDocument();
+    expect(screen.queryByText('Змінено')).not.toBeInTheDocument();
+    expect(updateLocation.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('explains why a location with payroll history cannot be deleted', async () => {
+    // The FK is deliberate: revenue and shifts are payroll history. The API's 409 message names
+    // the actual options, which a generic failure would not.
+    deleteLocation.mutateAsync.mockRejectedValueOnce(
+      new Error('location still has revenue, shifts or shift slots and cannot be deleted'),
+    );
+    inTable(<LocationRow location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.deleteLocationFor('Перша') }));
+    expect(
+      await screen.findByText('location still has revenue, shifts or shift slots and cannot be deleted'),
+    ).toBeInTheDocument();
+  });
+
+  it('expands slot configuration under the location it belongs to', async () => {
+    inTable(<LocationRow location={LOCATION as never} />);
+    expect(screen.queryByText(t.setup.slotsHint)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: t.setup.slots }));
+    expect(screen.getByText(t.setup.slotsHint)).toBeInTheDocument();
+  });
+});
+
+describe('LevelRow', () => {
+  const LEVEL = { id: 'lv1', name: 'Бариста', ratePerDay: 600 };
+
+  it('saves an edited day rate as a number, not a string', async () => {
+    inTable(<LevelRow level={LEVEL as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
+    const rate = screen.getByLabelText(t.setup.rateFor('Бариста'));
+    await userEvent.clear(rate);
+    await userEvent.type(rate, '750');
+    await userEvent.click(screen.getByRole('button', { name: t.common.save }));
+
+    expect(updateLevel.mutateAsync).toHaveBeenCalledWith({
+      id: 'lv1',
+      name: 'Бариста',
+      ratePerDay: 750,
+    });
+  });
+
+  it('rejects a negative rate locally rather than sending it', async () => {
+    inTable(<LevelRow level={LEVEL as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
+    const rate = screen.getByLabelText(t.setup.rateFor('Бариста'));
+    await userEvent.clear(rate);
+    await userEvent.type(rate, '-5');
+    await userEvent.click(screen.getByRole('button', { name: t.common.save }));
+
+    expect(updateLevel.mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText(t.setup.rateInvalid)).toBeInTheDocument();
+  });
+
+  it('surfaces the API 409 when an employee still uses the level', async () => {
+    deleteLevel.mutateAsync.mockRejectedValueOnce(new Error('level is still used by an employee'));
+    inTable(<LevelRow level={LEVEL as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.deleteLevelFor('Бариста') }));
+    expect(await screen.findByText('level is still used by an employee')).toBeInTheDocument();
+  });
+});

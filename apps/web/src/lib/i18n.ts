@@ -387,6 +387,35 @@ export const t = {
     noLevels: 'Ще немає рівнів.',
     noLevelsAction: 'Додайте один нижче.',
     adding: 'Додаємо…',
+
+    delete: 'Видалити',
+    // Accessible names: a table full of identical "Видалити" buttons is unusable with a screen
+    // reader, which announces the button alone with no idea which row it belongs to.
+    deleteLocationFor: (name: string) => `Видалити локацію ${name}`,
+    deleteLevelFor: (name: string) => `Видалити рівень ${name}`,
+    locationNameFor: (name: string) => `Назва локації (зараз ${name})`,
+    opensAtFor: (name: string) => `Час відкриття, ${name}`,
+    closesAtFor: (name: string) => `Час закриття, ${name}`,
+    levelNameFor: (name: string) => `Назва рівня (зараз ${name})`,
+    rateFor: (name: string) => `Ставка за день, ${name}`,
+    rateInvalid: 'Ставка має бути числом не менше 0.',
+
+    /*
+     * Shift slots. The hint states the payroll consequence rather than describing the fields:
+     * a slot window decides how many hours an imported shift is worth, and the location's working
+     * day is the denominator revenue share is pro-rated against — so a wrong time here pays the
+     * wrong amount silently instead of failing.
+     */
+    slots: 'Зміни',
+    slotsFor: (name: string) => `Зміни локації ${name}`,
+    slotsHint:
+      'Зміни визначають години для імпорту графіка: клітинка з номером локації отримує час відповідної зміни. Час має бути в межах роботи локації.',
+    noSlots: 'Зміни ще не налаштовані — імпорт використає час роботи локації.',
+    slotNumber: 'Номер',
+    slotN: (n: number) => `Зміна ${n}`,
+    deleteSlotN: (n: number) => `Видалити зміну ${n}`,
+    saveSlot: 'Зберегти зміну',
+    slotNumberInvalid: 'Номер зміни має бути цілим числом від 1.',
   },
 
   schedule: {
@@ -398,6 +427,32 @@ export const t = {
     prevMonth: 'Попередній місяць',
     nextMonth: 'Наступний місяць',
     today: 'сьогодні',
+    /** Accessible name for a clickable day cell — says what happens and what is already there. */
+    editDay: (day: number, count: number) =>
+      count === 0
+        ? `${day} — додати зміну`
+        : `${day} — ${count} ${plural(count, 'зміна', 'зміни', 'змін')}, редагувати`,
+  },
+
+  /** Editing one day's shifts by hand, from the calendar. */
+  dayEditor: {
+    title: (date: string) => `Зміни на ${date}`,
+    hintShort: 'Додайте або приберіть зміну. Змінюється лише цей день.',
+    hint: (date: string) => `Усі зміни стосуються ${date}.`,
+    noShifts: 'На цей день змін ще немає.',
+    addTitle: 'Додати зміну',
+    add: 'Додати зміну',
+    remove: 'Прибрати',
+    removeShiftFor: (name: string) => `Прибрати зміну: ${name}`,
+    chooseEmployee: 'Виберіть працівника.',
+    chooseEmployeePlaceholder: 'Виберіть працівника…',
+    window: 'Час зміни',
+    wholeDay: 'Весь день',
+    slotLabel: (n: number) => `Зміна ${n}`,
+    customWindow: 'Свій час…',
+    startsAt: 'Початок',
+    endsAt: 'Кінець',
+    noEmployees: 'Немає активних працівників — спочатку додайте їх у розділі «Працівники».',
   },
 
   importScreen: {

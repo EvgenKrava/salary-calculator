@@ -10,7 +10,8 @@ import { useEmployees, useLocations, useShifts, type Shift } from '../lib/querie
 // Shared with the Today screen. A second copy of calendar arithmetic is how an off-by-one-day
 // bug reaches a payroll screen.
 import { isoOf, todayIso } from '../lib/dates';
-import { t } from '../lib/i18n';
+import { t, formatDate } from '../lib/i18n';
+import { DayEditor } from './DayEditor';
 import './schedule.css';
 
 /**
@@ -77,17 +78,40 @@ export function DayCell({
   nameOf,
   locOf,
   isToday,
+  onEdit,
 }: {
   cell: Cell;
   shifts: Shift[];
   nameOf: (id: string) => string;
   locOf: (id: string) => string;
   isToday: boolean;
+  /** Omitted → the cell renders read-only, which is how existing tests use it. */
+  onEdit?: (iso: string) => void;
 }) {
+  /*
+   * A real <button> around the day, not a click handler on the div.
+   *
+   * The cell is the whole target — a small "edit" affordance in the corner is a poor tap target
+   * on the phone a manager actually uses, and the entire cell reads as clickable anyway. Using a
+   * button rather than a div+onClick is what gets keyboard focus, Enter/Space activation, and the
+   * right role for free.
+   */
+  const Cell = onEdit ? 'button' : 'div';
+  const editProps = onEdit
+    ? {
+        type: 'button' as const,
+        onClick: () => onEdit(cell.iso),
+        'aria-label': t.schedule.editDay(cell.day, shifts.length),
+      }
+    : { 'aria-label': isToday ? `${cell.day} (${t.schedule.today})` : String(cell.day) };
+
   return (
-    <div
-      className={`schedule__cell${cell.inMonth ? '' : ' schedule__cell--outside'}${isToday ? ' schedule__cell--today' : ''}`}
-      aria-label={isToday ? `${cell.day} (${t.schedule.today})` : String(cell.day)}
+    <Cell
+      className={
+        `schedule__cell${cell.inMonth ? '' : ' schedule__cell--outside'}` +
+        `${isToday ? ' schedule__cell--today' : ''}${onEdit ? ' schedule__cell--editable' : ''}`
+      }
+      {...editProps}
     >
       <span className="schedule__daynum">{cell.day}</span>
       {shifts.length === 0 ? (
@@ -108,7 +132,7 @@ export function DayCell({
           ))}
         </ul>
       )}
-    </div>
+    </Cell>
   );
 }
 
@@ -122,6 +146,8 @@ export function ScheduleRoute() {
 
   const shifts = useShifts({ from, to });
   const [importOpen, setImportOpen] = useState(false);
+  /** The day being edited, or null. Clicking a cell opens the editor for that date. */
+  const [editingDay, setEditingDay] = useState<string | null>(null);
   const employees = useEmployees();
   const locations = useLocations();
 
@@ -230,9 +256,27 @@ export function ScheduleRoute() {
             nameOf={nameOf}
             locOf={locOf}
             isToday={cell.iso === today}
+            onEdit={setEditingDay}
           />
         ))}
       </div>
+
+      <Modal
+        open={editingDay !== null}
+        onClose={() => setEditingDay(null)}
+        title={editingDay ? t.dayEditor.title(formatDate(editingDay)) : ''}
+        description={t.dayEditor.hintShort}
+      >
+        {editingDay ? (
+          <DayEditor
+            date={editingDay}
+            shifts={byDay.get(editingDay) ?? []}
+            employees={employees.data ?? []}
+            locations={locations.data ?? []}
+            onClose={() => setEditingDay(null)}
+          />
+        ) : null}
+      </Modal>
     </>
   );
 }

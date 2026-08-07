@@ -88,6 +88,51 @@ export function useAddLocation() {
   });
 }
 
+/**
+ * Edit a location's name or working hours.
+ *
+ * The hours are not cosmetic: a day rate is **pro-rated against the location's working day**
+ * (see calculateSalaries), so `opensAt`/`closesAt` are a payroll input. The deployed locations
+ * still carry placeholder 09:00–21:00 hours precisely because there was no way to change them
+ * without hand-writing an API call.
+ */
+export function useUpdateLocation() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      name?: string;
+      opensAt?: string;
+      closesAt?: string;
+    }) => api.patch<Location>(`/api/locations/${id}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['locations'] });
+      // Changing the working day changes every future run's proration denominator.
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}
+
+/**
+ * Delete a location.
+ *
+ * Expected to fail with 409 once the location has revenue, shifts or slot windows — those are
+ * payroll history and the FK is deliberate. Callers surface the API's message rather than
+ * pre-checking, because the API is the only place that knows.
+ */
+export function useDeleteLocation() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ deleted: string }>(`/api/locations/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['locations'] }),
+  });
+}
+
 export function useLevels() {
   const api = useApi();
   return useQuery({ queryKey: ['levels'], queryFn: () => api.get<Level[]>('/api/levels') });
@@ -98,6 +143,32 @@ export function useAddLevel() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; ratePerDay: number }) => api.post<Level>('/api/levels', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['levels'] }),
+  });
+}
+
+/** Edit a level's name or day rate. The rate is what every hourly-pay figure derives from. */
+export function useUpdateLevel() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; ratePerDay?: number }) =>
+      api.patch<Level>(`/api/levels/${id}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['levels'] });
+      // Employees render their level's rate, and a run recomputes from it.
+      void qc.invalidateQueries({ queryKey: ['employees'] });
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}
+
+/** Delete a level. 409 while any employee still references it. */
+export function useDeleteLevel() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ deleted: string }>(`/api/levels/${id}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['levels'] }),
   });
 }
@@ -226,6 +297,108 @@ export function useShiftDecision() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['shifts'] });
       void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}
+
+/**
+ * Assign a shift by hand.
+ *
+ * The endpoint existed from the start; nothing in the UI called it, so the schedule was
+ * read-only and the only way in was a workbook import. That leaves real gaps: the import
+ * reports 148 *substitutions* (a covering person's name written where a location number
+ * belongs) which it deliberately refuses to guess at, so those shifts exist on paper and
+ * nowhere in the app — nobody is paid for them until someone enters them.
+ *
+ * `startsAt`/`endsAt` are optional: omitted, the API falls back to the location's own opening
+ * hours, which is the right default for a single-slot day.
+ */
+export function useAssignShift() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      employeeId: string;
+      locationId: string;
+      workDate: string;
+      startsAt?: string;
+      endsAt?: string;
+    }) => api.post<Shift>('/api/shifts', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['shifts'] });
+      // A salary run reads approved shifts, so a hand-entered shift changes what a run owes.
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}
+
+export function useDeleteShift() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ deleted: string }>(`/api/shifts/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['shifts'] });
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}
+
+export interface ShiftSlot {
+  locationId: string;
+  slotNumber: number;
+  startsAt: string;
+  endsAt: string;
+}
+
+/**
+ * A location's shift-slot windows.
+ *
+ * These are what the schedule importer maps a slot column onto, and — more importantly — the
+ * denominator for revenue-share proration. There was no UI for them at all, which is why the
+ * deployed locations still carry placeholder hours: a wrong window silently pays the wrong
+ * amount, because a day rate is pro-rated against the location's working day.
+ */
+export function useShiftSlots(locationId: string | undefined) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['shift-slots', locationId ?? null],
+    queryFn: () => api.get<ShiftSlot[]>(`/api/locations/${locationId}/slots`),
+    // No location chosen yet means there is nothing to fetch.
+    enabled: Boolean(locationId),
+  });
+}
+
+export function useSetShiftSlot() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      slotNumber,
+      ...body
+    }: {
+      locationId: string;
+      slotNumber: number;
+      startsAt: string;
+      endsAt: string;
+    }) => api.put<ShiftSlot>(`/api/locations/${locationId}/slots/${slotNumber}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['shift-slots'] });
+      // Slot windows decide the hours an imported shift gets, so a future import differs.
+      void qc.invalidateQueries({ queryKey: ['shifts'] });
+    },
+  });
+}
+
+export function useDeleteShiftSlot() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ locationId, slotNumber }: { locationId: string; slotNumber: number }) =>
+      api.del<{ deleted: number }>(`/api/locations/${locationId}/slots/${slotNumber}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['shift-slots'] });
     },
   });
 }
