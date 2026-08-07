@@ -17,6 +17,7 @@ import { createScheduleImportRoutes } from './routes/scheduleImports';
 import { createExtractionJobRoutes } from './routes/extractionJobs';
 import { createDayOffRoutes } from './routes/dayOffRequests';
 import { createAppSettingsRoutes } from './routes/appSettings';
+import { createSchedulePublicationRoutes } from './routes/schedulePublications';
 
 export interface AppDeps {
   db: Db;
@@ -73,6 +74,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/extraction-jobs', createExtractionJobRoutes(deps.db));
   app.route('/api/day-off-requests', createDayOffRoutes(deps.db));
   app.route('/api/settings', createAppSettingsRoutes(deps.db));
+  app.route('/api/schedule-publications', createSchedulePublicationRoutes(deps.db));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {
