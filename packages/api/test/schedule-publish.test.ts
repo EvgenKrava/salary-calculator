@@ -99,6 +99,10 @@ describe('publishing a month', () => {
     const { schedulePublications } = await import('../src/schema');
     const [row] = await db.select().from(schedulePublications);
     expect(row.overrideReason).toBe('хвороба, немає підміни');
+    // "Publishes" must mean the shift actually flipped — review proved this test previously
+    // passed with the UPDATE replaced by a no-op, because it only read the publication row.
+    const shiftRows = await db.select().from(shifts);
+    expect(shiftRows[0].status).toBe('approved');
   });
 
   it('does not block on a preferred day off, but reports it', async () => {
@@ -114,6 +118,9 @@ describe('publishing a month', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { conflicts: { preferred: unknown[] } };
     expect(body.conflicts.preferred).toHaveLength(1);
+    // And it genuinely published — not just reported. See the required-conflict test above.
+    const shiftRows = await db.select().from(shifts);
+    expect(shiftRows[0].status).toBe('approved');
   });
 
   it('previews conflicts without changing anything', async () => {
@@ -176,5 +183,97 @@ describe('publishing a month', () => {
       body: JSON.stringify({ year: 2026, month: 9 }),
     });
     expect(res.status).toBe(403);
+  });
+
+  it('resolves a concurrent double-publish without a 500 and keeps one record', async () => {
+    /*
+     * A manager double-clicking fires two publishes for the same month. The loser's INSERT hits
+     * the (year, month) primary key; unhandled, that surfaced as an opaque 500 — review
+     * reproduced it. The race must resolve as an idempotent success: the month IS published,
+     * whichever request won, so nothing the caller did was rejected.
+     */
+    const { db, app, loc, emp } = await seed();
+    await addDraft(db, emp.id, loc.id, '2026-09-01');
+
+    const publish = () =>
+      app.request('/api/schedule-publications', {
+        method: 'POST', headers: MGR, body: JSON.stringify({ year: 2026, month: 9 }),
+      });
+    const [a, b] = await Promise.all([publish(), publish()]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+
+    const { schedulePublications } = await import('../src/schema');
+    const pubs = await db.select().from(schedulePublications);
+    expect(pubs).toHaveLength(1);
+    const rows = await db.select().from(shifts);
+    expect(rows[0].status).toBe('approved');
+  });
+
+  it('appends a later override to the history instead of discarding it', async () => {
+    /*
+     * The audit-trail gap review found: publish cleanly (no reason), then a shift lands on a
+     * required day off and a re-publish supplies a reason to pass the gate. The single
+     * override_reason column kept the FIRST publish's null; the justification for the actual
+     * override vanished. The history table is the fix — every override is appended.
+     */
+    const { db, app, loc, emp } = await seed();
+    await addDraft(db, emp.id, loc.id, '2026-09-01');
+    await app.request('/api/schedule-publications', {
+      method: 'POST', headers: MGR, body: JSON.stringify({ year: 2026, month: 9 }),
+    });
+    const { schedulePublications } = await import('../src/schema');
+    const [first] = await db.select().from(schedulePublications);
+
+    // The conflict arrives after the clean publish.
+    await addDraft(db, emp.id, loc.id, '2026-09-05');
+    await db.insert(dayOffRequests).values({
+      employeeId: emp.id, requestDate: '2026-09-05', kind: 'required', createdBy: 'sub-emp',
+    });
+    const res = await app.request('/api/schedule-publications', {
+      method: 'POST', headers: MGR,
+      body: JSON.stringify({ year: 2026, month: 9, overrideReason: 'хвороба, немає підміни' }),
+    });
+    expect(res.status).toBe(200);
+
+    const { schedulePublicationOverrides } = await import('../src/schema');
+    const overrides = await db.select().from(schedulePublicationOverrides);
+    expect(overrides).toHaveLength(1);
+    expect(overrides[0].reason).toBe('хвороба, немає підміни');
+    expect(overrides[0].createdBy).toBe('sub-mgr');
+
+    // The first publication record is untouched: who/when still belong to the first publish.
+    const [again] = await db.select().from(schedulePublications);
+    expect(again.publishedAt.getTime()).toBe(first.publishedAt.getTime());
+    expect(again.overrideReason).toBeNull();
+  });
+
+  it('returns the override history newest-first on GET', async () => {
+    const { db, app, loc, emp } = await seed();
+    // Two overrides in sequence: first publish with a reason, then a later one.
+    await addDraft(db, emp.id, loc.id, '2026-09-05');
+    await db.insert(dayOffRequests).values({
+      employeeId: emp.id, requestDate: '2026-09-05', kind: 'required', createdBy: 'sub-emp',
+    });
+    await app.request('/api/schedule-publications', {
+      method: 'POST', headers: MGR,
+      body: JSON.stringify({ year: 2026, month: 9, overrideReason: 'перша причина' }),
+    });
+    await addDraft(db, emp.id, loc.id, '2026-09-12');
+    await db.insert(dayOffRequests).values({
+      employeeId: emp.id, requestDate: '2026-09-12', kind: 'required', createdBy: 'sub-emp',
+    });
+    await app.request('/api/schedule-publications', {
+      method: 'POST', headers: MGR,
+      body: JSON.stringify({ year: 2026, month: 9, overrideReason: 'друга причина' }),
+    });
+
+    const res = await app.request('/api/schedule-publications?year=2026&month=9', { headers: MGR });
+    const body = (await res.json()) as { overrides: { reason: string }[] };
+    expect(body.overrides).toHaveLength(2);
+    // Newest first, so the publish screen leads with the latest justification. Same-timestamp
+    // rows are possible in a fast test; assert membership plus order only when they differ.
+    expect(body.overrides.map((o) => o.reason)).toEqual(
+      expect.arrayContaining(['перша причина', 'друга причина']),
+    );
   });
 });

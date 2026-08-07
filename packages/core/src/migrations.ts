@@ -49,6 +49,9 @@ export const ENUM_TO_TEXT_SQL = read('0005_enum_to_text.sql');
 /** Draft shift status, day-off requests, publication state, and standing settings. */
 export const SCHEDULE_AUTHORING_SQL = read('0006_schedule_authoring.sql');
 
+/** History of override reasons for publishing over a required day-off conflict. */
+export const PUBLICATION_OVERRIDES_SQL = read('0007_publication_overrides.sql');
+
 /**
  * All migrations in apply order.
  *

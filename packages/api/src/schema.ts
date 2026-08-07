@@ -5,6 +5,8 @@
 import {
   boolean,
   date,
+  foreignKey,
+  index,
   integer,
   jsonb,
   numeric,
@@ -170,6 +172,32 @@ export const schedulePublications = pgTable(
     overrideReason: text('override_reason'),
   },
   (t) => ({ oneRowPerMonth: primaryKey({ columns: [t.year, t.month] }) }),
+);
+
+/**
+ * Every time publishing proceeded over a required-day-off conflict, and why.
+ *
+ * `schedule_publications.override_reason` keeps the FIRST publish's reason only, so existing
+ * readers of that column are unaffected. Every override — including the first — is also
+ * appended here, so this table (not that column) is the complete history for a month.
+ */
+export const schedulePublicationOverrides = pgTable(
+  'schedule_publication_overrides',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    year: integer('year').notNull(),
+    month: integer('month').notNull(),
+    reason: text('reason').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    monthFk: foreignKey({
+      columns: [t.year, t.month],
+      foreignColumns: [schedulePublications.year, schedulePublications.month],
+    }),
+    yearMonthIdx: index('schedule_publication_overrides_year_month_idx').on(t.year, t.month),
+  }),
 );
 
 /** Single-row standing configuration. */

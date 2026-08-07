@@ -1,13 +1,20 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, eq, gte, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { classifyConflicts, type DayOffKind, type DayOffRequestLike } from '@salary/core';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
 import { readJson } from '../http/validation';
-import { dayOffRequests, employees, schedulePublications, shifts } from '../schema';
+import { isUniqueViolation } from '../http/dbErrors';
+import {
+  dayOffRequests,
+  employees,
+  schedulePublicationOverrides,
+  schedulePublications,
+  shifts,
+} from '../schema';
 
 /**
  * Publishing turns a month's draft shifts into the live schedule.
@@ -68,6 +75,21 @@ export function createSchedulePublicationRoutes(db: Db): Hono<AppEnv> {
     return list.map((c) => ({ ...c, employeeName: nameById.get(c.employeeId) ?? '—' }));
   }
 
+  /** Every override on record for the month, newest first, for the publish screen's history view. */
+  async function overrideHistory(year: number, month: number) {
+    const rows = await db
+      .select()
+      .from(schedulePublicationOverrides)
+      .where(
+        and(
+          eq(schedulePublicationOverrides.year, year),
+          eq(schedulePublicationOverrides.month, month),
+        ),
+      )
+      .orderBy(desc(schedulePublicationOverrides.createdAt));
+    return rows.map((r) => ({ reason: r.reason, createdBy: r.createdBy, createdAt: r.createdAt }));
+  }
+
   routes.get('/', async (c) => {
     const year = Number(c.req.query('year'));
     const month = Number(c.req.query('month'));
@@ -78,12 +100,14 @@ export function createSchedulePublicationRoutes(db: Db): Hono<AppEnv> {
       .select()
       .from(schedulePublications)
       .where(and(eq(schedulePublications.year, year), eq(schedulePublications.month, month)));
-    if (rows.length === 0) return c.json({ published: false });
+    const overrides = await overrideHistory(year, month);
+    if (rows.length === 0) return c.json({ published: false, overrides });
     return c.json({
       published: true,
       publishedAt: rows[0].publishedAt,
       publishedBy: rows[0].publishedBy,
       overrideReason: rows[0].overrideReason,
+      overrides,
     });
   });
 
@@ -112,24 +136,66 @@ export function createSchedulePublicationRoutes(db: Db): Hono<AppEnv> {
     }
 
     const { from, to } = monthBounds(year, month);
-    const flipped = await db
-      .update(shifts)
-      .set({ status: 'approved' })
-      .where(and(eq(shifts.status, 'draft'), gte(shifts.workDate, from), lte(shifts.workDate, to)))
-      .returning();
+    const principal = c.get('principal').sub;
 
-    // Idempotent: re-publishing a month flips any new drafts but leaves the original
-    // publishedBy/publishedAt intact — the first publication is the event that mattered.
-    const existing = await db
-      .select()
-      .from(schedulePublications)
-      .where(and(eq(schedulePublications.year, year), eq(schedulePublications.month, month)));
-    if (existing.length === 0) {
-      await db.insert(schedulePublications).values({
-        year,
-        month,
-        publishedBy: c.get('principal').sub,
-        overrideReason: overrideReason ?? null,
+    /** Flip this month's remaining drafts. Idempotent: a second run matches nothing new. */
+    async function flip(dbOrTx: Db) {
+      return dbOrTx
+        .update(shifts)
+        .set({ status: 'approved' })
+        .where(
+          and(eq(shifts.status, 'draft'), gte(shifts.workDate, from), lte(shifts.workDate, to)),
+        )
+        .returning();
+    }
+
+    /**
+     * Append this call's override to the history — including the first publish, per Finding 3's
+     * "every time someone was scheduled on a required day off, and why". Skipped when there is
+     * no reason to record (no conflict was overridden).
+     */
+    async function recordOverride(dbOrTx: Db) {
+      if (!overrideReason) return;
+      await dbOrTx
+        .insert(schedulePublicationOverrides)
+        .values({ year, month, reason: overrideReason, createdBy: principal });
+    }
+
+    let flipped: Awaited<ReturnType<typeof flip>>;
+    try {
+      // Flip and the FIRST publication row commit together (Finding 2): if the insert below
+      // throws, the flip must not have happened either, or shifts would be live and payable
+      // with no record of who published them.
+      flipped = await db.transaction(async (tx) => {
+        const f = await flip(tx as unknown as Db);
+        // Always attempted, never pre-checked with a separate SELECT: a `year, month` row
+        // already existing (an earlier publish, or a concurrent request that committed first)
+        // surfaces here as a real unique-violation rather than a race window between "check"
+        // and "insert" (Finding 1).
+        await tx.insert(schedulePublications).values({
+          year,
+          month,
+          publishedBy: principal,
+          overrideReason: overrideReason ?? null,
+        });
+        await recordOverride(tx as unknown as Db);
+        return f;
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // The transaction above rolled back in FULL, including its own flip attempt — Postgres
+      // aborts the whole transaction on a constraint violation, so nothing from it was
+      // committed. That is exactly why this catch sits OUTSIDE db.transaction rather than
+      // around the single insert inside it: catching inside would still lose the flip to the
+      // same rollback, and mask it. Out here, the database is known-clean, so it's safe to
+      // redo the flip as its own atomic unit and treat the whole request as the idempotent
+      // success it is — the month IS published, whether by an earlier call or by whoever won
+      // this race, and that satisfies the caller's intent. A 409 would be wrong: nothing the
+      // caller did was rejected.
+      flipped = await db.transaction(async (tx) => {
+        const f = await flip(tx as unknown as Db);
+        await recordOverride(tx as unknown as Db);
+        return f;
       });
     }
 
