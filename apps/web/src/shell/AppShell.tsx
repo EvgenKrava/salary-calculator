@@ -52,7 +52,8 @@ export function AppShell() {
                 <RailLink to="/" label={t.nav.today} />
                 <RailLink to="/revenue" label={t.nav.revenue} />
                 <RailLink to="/shifts" label={t.nav.shifts} badge={<PendingShiftsBadge />} />
-                <RailLink to="/schedule" label={t.nav.schedule} />
+                <RailLink to="/schedule" label={t.nav.schedule} exact />
+                <RailLink to="/schedule/edit" label={t.nav.scheduleEdit} />
               </RailGroup>
 
               <RailGroup label={t.nav.groupPayroll}>
@@ -104,11 +105,27 @@ function RailGroup({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function RailLink({ to, label, badge }: { to: string; label: string; badge?: ReactNode }) {
+function RailLink({
+  to,
+  label,
+  badge,
+  exact,
+}: {
+  to: string;
+  label: string;
+  badge?: ReactNode;
+  /**
+   * Match this path only, not its children.
+   *
+   * Needed by any link that is a path prefix of another: `/schedule` would otherwise render as
+   * active while the manager is on `/schedule/edit`, showing two highlighted rail items.
+   */
+  exact?: boolean;
+}) {
   return (
-    // `exact` only for "/" — otherwise the index route matches every path as a prefix and
+    // `exact` for "/" too — otherwise the index route matches every path as a prefix and
     // Today would render as active on every screen in the app.
-    <Link to={to} className="rail__link" activeOptions={{ exact: to === '/' }}>
+    <Link to={to} className="rail__link" activeOptions={{ exact: exact ?? to === '/' }}>
       <span className="rail__linkText">{label}</span>
       {badge}
     </Link>

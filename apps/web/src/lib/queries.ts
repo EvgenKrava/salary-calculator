@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { createApiClient, type ApiClient } from './api';
 import { config } from './config';
@@ -312,6 +312,10 @@ export function useShiftDecision() {
  *
  * `startsAt`/`endsAt` are optional: omitted, the API falls back to the location's own opening
  * hours, which is the right default for a single-slot day.
+ *
+ * `status` is optional and defaults to `approved` on the server, so existing callers are
+ * unchanged. The schedule grid passes `draft` — a month being built, invisible to staff and
+ * uncounted by payroll until it is published.
  */
 export function useAssignShift() {
   const api = useApi();
@@ -323,6 +327,7 @@ export function useAssignShift() {
       workDate: string;
       startsAt?: string;
       endsAt?: string;
+      status?: 'draft' | 'requested' | 'approved';
     }) => api.post<Shift>('/api/shifts', body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['shifts'] });
@@ -366,6 +371,47 @@ export function useShiftSlots(locationId: string | undefined) {
     queryFn: () => api.get<ShiftSlot[]>(`/api/locations/${locationId}/slots`),
     // No location chosen yet means there is nothing to fetch.
     enabled: Boolean(locationId),
+  });
+}
+
+/**
+ * Slot windows for several locations at once, keyed by `locationId`.
+ *
+ * The schedule grid needs every location's own windows, not one location's applied to all of them:
+ * `location_shift_slots` is keyed `(location_id, slot_number)` and each café has its own opening
+ * hours, so slot 1 is 08:00–14:00 at one and 09:00–15:00 at another. Reading only the first
+ * location's windows and writing them for every cell records the wrong hours — and hours are pay,
+ * since a day rate prorates against the working day.
+ *
+ * One request per location. The chain has a handful of locations, so the alternative (a batch
+ * endpoint) would be new API surface for no measurable gain.
+ */
+export function useShiftSlotsByLocation(locationIds: string[]) {
+  const api = useApi();
+  return useQueries({
+    queries: locationIds.map((id) => ({
+      queryKey: ['shift-slots', id],
+      queryFn: () => api.get<ShiftSlot[]>(`/api/locations/${id}/slots`),
+    })),
+    // `combine` rather than a useMemo over the results array: the array is a fresh object every
+    // render, so memoising it correctly means depending on derived strings, which is easy to get
+    // subtly wrong. React Query owns the memoisation here.
+    combine: (results) => {
+      const byLocation = new Map<string, ShiftSlot[]>();
+      locationIds.forEach((id, i) => {
+        const data = results[i]?.data;
+        if (data) byLocation.set(id, data);
+      });
+      return {
+        byLocation,
+        /** Every distinct slot number across all locations — the grid's tabs. */
+        slotNumbers: [...new Set([...byLocation.values()].flat().map((s) => s.slotNumber))].sort(
+          (a, b) => a - b,
+        ),
+        isLoading: results.some((r) => r.isLoading),
+        error: (results.find((r) => r.error)?.error ?? null) as Error | null,
+      };
+    },
   });
 }
 
@@ -497,6 +543,27 @@ export interface PublishConflict {
 export interface PublishAssessment {
   draftCount: number;
   conflicts: { required: PublishConflict[]; preferred: PublishConflict[] };
+  /**
+   * Employee-days that would end up with two overlapping shifts.
+   *
+   * A hard blocker, unlike a day-off conflict: publishing these would pay someone twice for the
+   * same hours. Optional so the type does not lie about a deployment predating the guard.
+   */
+  overlaps?: PublishConflict[];
+}
+
+/** The publish-refused 409 body, shaped by `packages/api/src/routes/schedulePublications.ts`. */
+export interface PublishOverlapBody {
+  code: 'publish_overlaps';
+  overlaps: PublishConflict[];
+}
+
+export function isPublishOverlapBody(body: unknown): body is PublishOverlapBody {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    (body as { code?: unknown }).code === 'publish_overlaps'
+  );
 }
 
 /**

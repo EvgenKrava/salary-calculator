@@ -1,0 +1,382 @@
+/*
+ * People × days entry grid — the same shape as the client's workbook block.
+ *
+ * No virtualisation: 14 people × 31 days is 434 cells, well within what the browser handles, and
+ * virtualising would break keyboard navigation and in-page find for no measured gain.
+ */
+
+.grid__tabs {
+  display: flex;
+  gap: var(--s1);
+  margin-bottom: var(--s4);
+  flex-wrap: wrap;
+}
+
+.grid__tab {
+  appearance: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  min-height: var(--tap);
+  padding: 0 var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.grid__tab--active {
+  background: var(--amber-tint);
+  border-color: var(--amber-edge);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Horizontal scroll for 31 columns; the name column stays put so a row is always identifiable. */
+.grid__wrap {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.grid {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid__corner,
+.grid__name {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-raised);
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--text-sm);
+  padding: var(--s2) var(--s3);
+  min-width: 12ch;
+  white-space: nowrap;
+  box-shadow: inset -1px 0 0 var(--rule);
+}
+
+.grid__dayhead {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+  padding: var(--s2) 0;
+  min-width: var(--tap);
+  background: var(--surface-raised);
+}
+
+.grid__cellwrap {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--rule);
+}
+
+/*
+ * The cell is the interactive control, so it carries the tap target, not the row height.
+ *
+ * This was 34px — a value docs/design/system.md explicitly records as rejected and replaced,
+ * because it is below the 44px minimum and a manager builds the schedule on a phone. --row-h with
+ * a --tap floor keeps the month scannable on a laptop without failing touch.
+ */
+.grid__cell {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-width: var(--tap);
+  height: var(--row-h);
+  min-height: var(--tap);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.grid__cell:hover {
+  background: var(--surface-sunk);
+}
+.grid__cell--filled {
+  color: var(--ink);
+  font-weight: 500;
+}
+/* A published cell is settled; a draft is not. One tick rather than a colour, so the day-off
+   colours stay unambiguous. */
+.grid__cell--published {
+  box-shadow: inset 2px 0 0 var(--ok);
+}
+/* Required is --stop, preferred is --warn — the same colour language as the day-off picker. The
+   glyph in .grid__cellMark carries the meaning too: colour is never the only signal. */
+.grid__cell--required {
+  background: var(--stop-tint);
+}
+.grid__cell--preferred {
+  background: var(--warn-tint);
+}
+
+.grid__cellMark {
+  font-size: var(--text-xs);
+  line-height: 1;
+  color: var(--ink-muted);
+}
+.grid__cell--required .grid__cellMark {
+  color: var(--stop);
+}
+.grid__cell--preferred .grid__cellMark {
+  color: var(--warn);
+}
+
+/* Covers the page behind an open popover so any click outside dismisses it. Transparent, and
+   below the popover but above everything else. */
+.grid__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: default;
+}
+
+.grid__popover {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 0;
+  min-width: 8rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: var(--s1);
+}
+
+.grid__option {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.grid__option:hover {
+  background: var(--surface-sunk);
+}
+.grid__option--clear {
+  color: var(--stop);
+}
+
+.grid__total {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-align: center;
+  padding: var(--s2);
+  background: var(--surface-raised);
+}
+
+.grid__error {
+  margin: var(--s3) 0 0;
+  color: var(--stop);
+}
+
+/* Shared failure panel: a load error, or slot windows that could not be read. */
+.grid__failure {
+  padding: var(--s4);
+  border-color: var(--stop);
+  background: var(--stop-tint);
+  margin-bottom: var(--s4);
+}
+.grid__failureTitle {
+  color: var(--stop);
+  margin: 0 0 var(--s2);
+  font-weight: 600;
+}
+.grid__failureDetail {
+  margin: 0;
+}
+.grid__failureHint {
+  margin: var(--s2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+/*
+ * Below 720px the 31-column table cannot stay readable, and horizontal scroll is a fallback rather
+ * than the plan (docs/design/system.md § Responsive). The grid becomes one block per person: their
+ * name as a heading, then their days wrapping as a row of chips. Same data, same density rule, laid
+ * out for a 390px screen — where the desktop layout showed the sticky name column plus roughly one
+ * day. Same approach as .day-off__grid and .schedule__grid.
+ */
+@media (max-width: 720px) {
+  .grid__wrap {
+    overflow-x: visible;
+    border: 0;
+    background: none;
+  }
+  .grid,
+  .grid tbody,
+  .grid tfoot,
+  .grid tr,
+  .grid__cellwrap,
+  .grid__name,
+  .grid__total {
+    display: block;
+    width: 100%;
+  }
+  /* The column headers are the day numbers; each cell states its own day below instead. */
+  .grid thead {
+    display: none;
+  }
+  .grid tbody tr,
+  .grid tfoot tr {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    padding: var(--s2);
+    margin-bottom: var(--s3);
+    /* The person's days flow as a wrapping row of chips. */
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1);
+  }
+  .grid__name {
+    position: static;
+    box-shadow: none;
+    background: none;
+    flex: 0 0 100%;
+    min-width: 0;
+    padding: 0 0 var(--s2);
+    font-weight: 600;
+    font-size: var(--text-base);
+  }
+  .grid__cellwrap {
+    /* A chip wide enough for the day number plus the value, at the tap minimum. */
+    flex: 0 0 auto;
+    width: auto;
+    min-width: calc(var(--tap) + var(--s3));
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+  }
+  /* The day number, which the hidden thead used to carry. */
+  .grid__cellwrap::before {
+    content: attr(data-day);
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--ink-muted);
+    text-align: center;
+    padding-top: 2px;
+  }
+  .grid__cell {
+    height: auto;
+    padding: 0 var(--s1) var(--s1);
+  }
+  /* Totals read as a labelled figure, not a bare number in a chip grid. */
+  .grid tbody tr .grid__total,
+  .grid tfoot tr .grid__total {
+    flex: 0 0 100%;
+    text-align: left;
+    background: none;
+    padding: var(--s2) 0 0;
+    border-top: 1px solid var(--rule);
+    margin-top: var(--s1);
+  }
+  .grid tbody tr .grid__total::before {
+    content: attr(data-label);
+  }
+  /* The per-day footer counts are noise at this width: the same figures are one tap away per
+     person, and 31 unlabelled chips at the bottom of a phone screen teach nothing. */
+  .grid tfoot .grid__total[data-day] {
+    display: none;
+  }
+  .grid__popover {
+    /* Anchored to the chip would overflow a narrow viewport. */
+    position: fixed;
+    top: auto;
+    bottom: var(--s4);
+    left: var(--s4);
+    right: var(--s4);
+    min-width: 0;
+  }
+  .grid__option {
+    text-align: center;
+  }
+}
+
+/*
+ * Publish panel. Lives here rather than in its own stylesheet because the panel only ever appears
+ * beneath the grid, and a second file for six rules is the drift the Card primitive exists to stop.
+ */
+
+.publish__blocker {
+  margin-bottom: var(--s3);
+}
+.publish__blockerTitle {
+  color: var(--stop);
+  margin: 0;
+  font-weight: 500;
+}
+.publish__blockerHint {
+  margin: var(--s1) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+.publish__warn {
+  color: var(--warn);
+}
+.publish__ok {
+  color: var(--ok);
+}
+.publish__error {
+  color: var(--stop);
+}
+
+.publish__list {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s6);
+  font-size: var(--text-xs);
+}
+
+.publish__history {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+.publish__historyTitle {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  margin: 0 0 var(--s2);
+}
+/* Each entry is when/who on one line and the reason on the next, so a list of them stays scannable
+   rather than reading as a paragraph. */
+.publish__history .publish__list {
+  list-style: none;
+  padding-left: 0;
+  font-size: var(--text-sm);
+}
+.publish__history li + li {
+  margin-top: var(--s2);
+}
+.publish__historyMeta {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.publish__historyReason {
+  display: block;
+}

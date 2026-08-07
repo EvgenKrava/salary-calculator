@@ -10,6 +10,7 @@ import { TodayRoute } from './routes/TodayRoute';
 import { RevenueRoute } from './routes/RevenueRoute';
 import { ShiftsRoute } from './routes/ShiftsRoute';
 import { ScheduleRoute } from './routes/ScheduleRoute';
+import { ScheduleGrid } from './routes/ScheduleGrid';
 import { ReviewRoute } from './routes/ReviewRoute';
 import { RunsRoute } from './routes/RunsRoute';
 import { MyShiftsRoute } from './routes/MyShiftsRoute';
@@ -85,6 +86,16 @@ const scheduleRoute = createRoute({
   component: ScheduleRoute,
 });
 
+/**
+ * Building the schedule, as distinct from reading it: `/schedule` is the read-only month calendar,
+ * this is the people x days editor that writes drafts.
+ */
+const scheduleEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/schedule/edit',
+  component: ScheduleGrid,
+});
+
 const reviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/review',
@@ -134,6 +145,7 @@ export const routeTree = rootRoute.addChildren([
     revenueRoute,
     shiftsRoute,
     scheduleRoute,
+    scheduleEditRoute,
     reviewRoute,
     runsRoute,
     employeesRoute,

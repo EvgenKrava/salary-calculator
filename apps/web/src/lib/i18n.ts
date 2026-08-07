@@ -449,7 +449,28 @@ export const t = {
     draftBadge: (n: number) => `${n} ${plural(n, 'чернетка', 'чернетки', 'чернеток')}`,
     conflictRequired: 'Обов\'язковий вихідний',
     conflictPreferred: 'Бажаний вихідний',
+    /**
+     * Accessible name for a cell.
+     *
+     * Carries the day-off request and what is already assigned, because the grid signals both with
+     * colour alone otherwise — and the design system forbids meaning in colour only (managers
+     * print these, and a screen-reader user got no signal at all).
+     */
     cellLabel: (name: string, day: number) => `${name}, ${day} число`,
+    cellLabelFilled: (name: string, day: number, location: string) =>
+      `${name}, ${day} число — локація ${location}`,
+    cellLabelDayOff: (name: string, day: number, kind: string) =>
+      `${name}, ${day} число — ${kind}`,
+    cellLabelFilledDayOff: (name: string, day: number, location: string, kind: string) =>
+      `${name}, ${day} число — локація ${location}, ${kind}`,
+    /** Visible glyph pairing the day-off colours with a mark, for print and colour-blindness. */
+    markRequired: '✕',
+    markPreferred: '·',
+    chooseLocation: 'Виберіть локацію',
+    /** Empty-cell placeholder: nothing assigned, not a missing value. */
+    emptyCell: '—',
+    slotsFailed: 'Не вдалося завантажити зміни локацій, тому години зміни невідомі.',
+    slotsFailedHint: 'Оновіть сторінку — інакше графік запише неправильні години.',
   },
 
   daysOff: {
@@ -485,6 +506,18 @@ export const t = {
     reasonRequired: 'Вкажіть причину, щоб опублікувати попри обов\'язкові вихідні.',
     confirmOverride: 'Підтвердити і опублікувати',
     alreadyPublished: (date: string) => `Опубліковано ${date}`,
+    /** Past tense — the month IS published. Distinct from `willPublish`, which is a forecast. */
+    publishedNow: (n: number) => `Опубліковано ${n} ${plural(n, 'зміну', 'зміни', 'змін')}.`,
+    /*
+     * Overlapping shifts block publishing outright and cannot be overridden: two approved shifts
+     * in the same hours pay the person twice. The copy says what to do, not just what is wrong.
+     */
+    overlapsTitle: (n: number) =>
+      `${n} ${plural(n, 'людина працює', 'людини працюють', 'людей працюють')} у дві зміни водночас`,
+    overlapsHint: 'Публікацію зупинено: за ці години заплатили б двічі. Приберіть зайву зміну в графіку.',
+    // The override audit trail.
+    historyTitle: 'Історія причин',
+    historyEntry: (date: string, who: string) => `${date} · ${who}`,
   },
 
   /** Editing one day's shifts by hand, from the calendar. */
