@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
-import { classifyConflicts, type DayOffKind, type DayOffRequestLike } from '@salary/core';
+import {
+  classifyConflicts,
+  findOverlaps,
+  type DayOffKind,
+  type DayOffRequestLike,
+} from '@salary/core';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
 import { requireRole } from '../auth/middleware';
@@ -64,7 +69,26 @@ export function createSchedulePublicationRoutes(db: Db): Hono<AppEnv> {
       drafts.map((s) => ({ employeeId: s.employeeId, workDate: s.workDate })),
       byEmployee,
     );
-    return { drafts, conflicts };
+
+    /*
+     * Employee-days where flipping these drafts would leave one person working two overlapping
+     * windows — i.e. paid twice for the same hours.
+     *
+     * Checked here rather than only on write because `assertNoOverlap` on assign is
+     * 'approved'-only by design (a draft must not report a phantom conflict against a real shift),
+     * so two drafts in the same window pass every check on the way in. The flip is the moment they
+     * become payable, which makes it the last place to catch them. Compared against already-
+     * approved shifts in the month as well as against each other.
+     */
+    const approved = await db
+      .select()
+      .from(shifts)
+      .where(
+        and(eq(shifts.status, 'approved'), gte(shifts.workDate, from), lte(shifts.workDate, to)),
+      );
+    const overlaps = findOverlaps(drafts, approved);
+
+    return { drafts, conflicts, overlaps };
   }
 
   /** Attach names so the publish screen can say who, not just which uuid. */
@@ -113,19 +137,46 @@ export function createSchedulePublicationRoutes(db: Db): Hono<AppEnv> {
 
   routes.post('/preview', async (c) => {
     const { year, month } = await readJson(c, periodSchema);
-    const { drafts, conflicts } = await assess(year, month);
+    const { drafts, conflicts, overlaps } = await assess(year, month);
     return c.json({
       draftCount: drafts.length,
       conflicts: {
         required: await withNames(conflicts.required),
         preferred: await withNames(conflicts.preferred),
       },
+      // Preview never writes, so it reports the blocker rather than refusing — the manager sees
+      // it before pressing publish instead of hitting a 409.
+      overlaps: await withNames(overlaps),
     });
   });
 
   routes.post('/', async (c) => {
     const { year, month, overrideReason } = await readJson(c, periodSchema);
-    const { drafts, conflicts } = await assess(year, month);
+    const { drafts, conflicts, overlaps } = await assess(year, month);
+
+    /*
+     * An overlap is a hard refusal — no override, unlike a required day off.
+     *
+     * A day-off conflict is a judgement call a manager may legitimately make (emergency cover is
+     * real). Paying someone twice for the same hours is not a judgement call, so `overrideReason`
+     * must not unlock it. Checked before any write, so a refused publish changes nothing.
+     */
+    if (overlaps.length > 0) {
+      /*
+       * Returned directly rather than thrown as an HTTPException: `app.onError` renders only
+       * `{ error: message }`, which would drop the `overlaps` list. Same shape and reasoning as
+       * the day-off limit 409 — a structured body the Ukrainian client can render as its own copy,
+       * naming the days to fix instead of a count the manager has to go hunting for.
+       */
+      return c.json(
+        {
+          error: `${overlaps.length} employee-day(s) would have two overlapping shifts; fix the schedule before publishing`,
+          code: 'publish_overlaps',
+          overlaps: await withNames(overlaps),
+        },
+        409,
+      );
+    }
 
     // Required conflicts stop the publish unless the manager states a reason. Checked before any
     // write, so a refused publish changes nothing at all.

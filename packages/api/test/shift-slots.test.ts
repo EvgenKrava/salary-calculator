@@ -8,11 +8,13 @@ const verifier: TokenVerifier = {
   async verify(token) {
     if (token === 'admin') return { sub: 'u-admin', groups: ['admin'] };
     if (token === 'mgr') return { sub: 'u-mgr', groups: ['manager'] };
+    if (token === 'emp') return { sub: 'u-emp', groups: ['employee'] };
     throw new Error('bad');
   },
 };
 const ADMIN = { Authorization: 'Bearer admin' };
 const MGR = { Authorization: 'Bearer mgr' };
+const EMP = { Authorization: 'Bearer emp' };
 const JSONH = { 'content-type': 'application/json' };
 
 async function seed() {
@@ -25,6 +27,32 @@ async function seed() {
 }
 
 describe('location shift slots', () => {
+  /*
+   * Reading a slot window is a manager's job, writing one is an admin's.
+   *
+   * The whole route group was admin-only, which silently broke the schedule grid: the grid is a
+   * manager screen and needs the windows to know what hours a cell writes. A 403 there left the
+   * grid with no window at all, so it fell back to the location's full opening hours and recorded
+   * a 6-hour morning shift as a 12-hour day — a wrong payroll figure, not a cosmetic failure.
+   */
+  it('lets a manager READ slot windows — the schedule grid needs them to write correct hours', async () => {
+    const { app, loc } = await seed();
+    await app.request(`/api/locations/${loc.id}/slots/1`, {
+      method: 'PUT',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({ startsAt: '08:00', endsAt: '14:00' }),
+    });
+    const res = await app.request(`/api/locations/${loc.id}/slots`, { headers: MGR });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject([{ slotNumber: 1, startsAt: '08:00', endsAt: '14:00' }]);
+  });
+
+  it('still forbids an employee from reading slot windows (403)', async () => {
+    const { app, loc } = await seed();
+    const res = await app.request(`/api/locations/${loc.id}/slots`, { headers: EMP });
+    expect(res.status).toBe(403);
+  });
+
   it('forbids a manager from configuring slots (403)', async () => {
     const { app, loc } = await seed();
     const res = await app.request(`/api/locations/${loc.id}/slots/1`, {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canAdd, classifyConflicts, countInMonth } from '../src/dayOffLimits';
+import { canAdd, classifyConflicts, countInMonth, findOverlaps } from '../src/dayOffLimits';
 
 const LIMITS = { required: 2, preferred: 4 };
 
@@ -97,5 +97,78 @@ describe('classifyConflicts', () => {
   it('reports nothing when no shift lands on a requested day', () => {
     const out = classifyConflicts([{ employeeId: 'e1', workDate: '2026-09-09' }], new Map());
     expect(out).toEqual({ required: [], preferred: [] });
+  });
+});
+
+describe('findOverlaps', () => {
+  /*
+   * The rule that stops double pay. Two approved shifts for one person in overlapping hours means
+   * the same hours are paid twice: measured on a 600.00/day level, one 6-hour shift priced 300.00
+   * and a duplicated pair priced 600.00.
+   */
+  const shift = (employeeId: string, workDate: string, startsAt: string, endsAt: string) => ({
+    employeeId,
+    workDate,
+    startsAt,
+    endsAt,
+  });
+
+  it('finds two shifts for one person in the same window', () => {
+    const out = findOverlaps([shift('e1', '2026-09-07', '08:00', '14:00')], [
+      shift('e1', '2026-09-07', '08:00', '14:00'),
+    ]);
+    expect(out).toEqual([{ employeeId: 'e1', workDate: '2026-09-07' }]);
+  });
+
+  it('finds a partial overlap, which no unique constraint catches', () => {
+    const out = findOverlaps([shift('e1', '2026-09-08', '13:00', '18:00')], [
+      shift('e1', '2026-09-08', '08:00', '14:00'),
+    ]);
+    expect(out).toEqual([{ employeeId: 'e1', workDate: '2026-09-08' }]);
+  });
+
+  it('finds an overlap between two candidates, not just against existing shifts', () => {
+    const out = findOverlaps(
+      [shift('e1', '2026-09-07', '08:00', '14:00'), shift('e1', '2026-09-07', '10:00', '16:00')],
+      [],
+    );
+    expect(out).toEqual([{ employeeId: 'e1', workDate: '2026-09-07' }]);
+  });
+
+  it('allows back-to-back windows that only touch', () => {
+    // Half-open comparison: 08:00-14:00 and 14:00-20:00 are a split day, not a clash.
+    const out = findOverlaps(
+      [shift('e1', '2026-09-09', '08:00', '14:00'), shift('e1', '2026-09-09', '14:00', '20:00')],
+      [],
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('does not confuse two different people, or one person on two days', () => {
+    const out = findOverlaps(
+      [shift('e1', '2026-09-09', '08:00', '14:00'), shift('e2', '2026-09-09', '08:00', '14:00')],
+      [shift('e1', '2026-09-10', '08:00', '14:00')],
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('reports one entry per employee-day however many shifts collide', () => {
+    // The manager needs to know which day to fix, not how many rows are involved.
+    const out = findOverlaps(
+      [
+        shift('e1', '2026-09-07', '08:00', '14:00'),
+        shift('e1', '2026-09-07', '09:00', '15:00'),
+        shift('e1', '2026-09-07', '10:00', '16:00'),
+      ],
+      [],
+    );
+    expect(out).toEqual([{ employeeId: 'e1', workDate: '2026-09-07' }]);
+  });
+
+  it('tolerates HH:MM:SS, which is what the TIME column returns', () => {
+    const out = findOverlaps([shift('e1', '2026-09-07', '08:00:00', '14:00:00')], [
+      shift('e1', '2026-09-07', '13:00:00', '18:00:00'),
+    ]);
+    expect(out).toEqual([{ employeeId: 'e1', workDate: '2026-09-07' }]);
   });
 });

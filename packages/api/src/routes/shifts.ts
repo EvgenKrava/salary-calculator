@@ -20,13 +20,21 @@ const requestSchema = z.object({
   startsAt: timeString.optional(),
   endsAt: timeString.optional(),
 });
+/**
+ * `draft` is accepted because the schedule grid writes drafts — a month being built, invisible to
+ * staff and uncounted by payroll until it is published. The enum was ['requested', 'approved'],
+ * which meant nothing in the app could create a draft at all: the grid's every cell came back 400,
+ * even though drafts are isolated from payroll and published by their own routes.
+ *
+ * The default stays `approved`, so existing callers (the day editor, the tests) are unchanged.
+ */
 const assignSchema = z.object({
   employeeId: z.string().uuid(),
   locationId: z.string().uuid(),
   workDate: dateString,
   startsAt: timeString.optional(),
   endsAt: timeString.optional(),
-  status: z.enum(['requested', 'approved']).default('approved'),
+  status: z.enum(['draft', 'requested', 'approved']).default('approved'),
 });
 
 type ShiftRow = typeof shifts.$inferSelect;

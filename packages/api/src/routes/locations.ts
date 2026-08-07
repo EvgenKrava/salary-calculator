@@ -52,10 +52,17 @@ export function createLocationRoutes(db: Db): Hono<AppEnv> {
     return c.json(toDto(getOr404(rows, 'location not found')));
   });
 
-  // Everything below mutates setup data and remains admin-only.
-  routes.use('*', requireRole('admin'));
-
-  routes.post('/', async (c) => {
+  /*
+   * The mutating routes are admin-only, guarded individually.
+   *
+   * This was `routes.use('*', requireRole('admin'))`, which reads as "everything below" but is
+   * actually scoped by PATH, not by position — and this group is mounted at `/api/locations`, a
+   * prefix of the separately-mounted `/api/locations/:locationId/slots`. So the wildcard also
+   * gated the nested slots group to admin, invisibly, from outside the file that defines it: a
+   * manager reading slot windows got a 403 that no rule in shiftSlots.ts accounted for. Per-route
+   * guards cannot reach into another router.
+   */
+  routes.post('/', requireRole('admin'), async (c) => {
     const body = await readJson(c, createSchema);
     const existing = await db.select().from(locations).where(eq(locations.name, body.name));
     if (existing.length > 0) throw new HTTPException(409, { message: 'location name already exists' });
@@ -66,7 +73,7 @@ export function createLocationRoutes(db: Db): Hono<AppEnv> {
     return c.json(toDto(row), 201);
   });
 
-  routes.patch('/:id', async (c) => {
+  routes.patch('/:id', requireRole('admin'), async (c) => {
     const id = c.req.param('id');
     const body = await readJson(c, updateSchema);
     const patch: Partial<typeof locations.$inferInsert> = {};
@@ -85,7 +92,7 @@ export function createLocationRoutes(db: Db): Hono<AppEnv> {
     return c.json(toDto(row));
   });
 
-  routes.delete('/:id', async (c) => {
+  routes.delete('/:id', requireRole('admin'), async (c) => {
     try {
       const [row] = await db.delete(locations).where(eq(locations.id, c.req.param('id'))).returning();
       if (!row) throw new HTTPException(404, { message: 'location not found' });

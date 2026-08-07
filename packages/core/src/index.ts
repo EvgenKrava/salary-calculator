@@ -10,8 +10,10 @@ export {
   canAdd,
   classifyConflicts,
   countInMonth,
+  findOverlaps,
   type DayOffKind,
   type DayOffLimits,
   type DayOffRequestLike,
   type ShiftLike,
+  type ShiftWindowLike,
 } from './dayOffLimits';

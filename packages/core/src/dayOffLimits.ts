@@ -95,3 +95,55 @@ export function classifyConflicts(
   }
   return { required, preferred };
 }
+
+export interface ShiftWindowLike extends ShiftLike {
+  /** 'HH:MM' or 'HH:MM:SS' — a TIME column returns seconds, the API's DTOs trim them. */
+  startsAt: string;
+  endsAt: string;
+}
+
+/**
+ * Employee-days where publishing would leave one person working two overlapping windows.
+ *
+ * This is the double-pay guard. Two approved shifts for the same person in overlapping hours pay
+ * the same hours twice — measured on a 600.00/day level, one 6-hour shift priced 300.00 and a
+ * duplicated pair priced 600.00 — and they also inflate the proration denominator at whichever
+ * location they claim to also be working, underpaying everyone else on that day.
+ *
+ * Checked at publish time as well as on write, because `assertNoOverlap` on assign is
+ * 'approved'-only by design: two DRAFTS in the same window pass every check on the way in, and the
+ * flip to 'approved' is the moment they become payable. `candidates` collide with each other as
+ * well as with `existing`, since a month's drafts are flipped together.
+ *
+ * Comparison is half-open, matching assertNoOverlap: 08:00-14:00 and 14:00-20:00 are a split day,
+ * not a clash. One entry per employee-day, because the manager needs to know which day to fix
+ * rather than how many rows are involved.
+ */
+export function findOverlaps(
+  candidates: ShiftWindowLike[],
+  existing: ShiftWindowLike[],
+): ShiftLike[] {
+  // Times are zero-padded 24-hour, so lexicographic comparison IS chronological — the same reason
+  // the route-level checks slice to HH:MM rather than parsing to minutes.
+  const hhmm = (t: string) => t.slice(0, 5);
+  const found = new Map<string, ShiftLike>();
+
+  for (let i = 0; i < candidates.length; i++) {
+    const a = candidates[i];
+    // Every later candidate, plus everything already on the books for that person and day.
+    const others = [
+      ...candidates.slice(i + 1),
+      ...existing.filter((e) => e.employeeId === a.employeeId && e.workDate === a.workDate),
+    ];
+    for (const b of others) {
+      if (b.employeeId !== a.employeeId || b.workDate !== a.workDate) continue;
+      if (hhmm(a.startsAt) < hhmm(b.endsAt) && hhmm(b.startsAt) < hhmm(a.endsAt)) {
+        found.set(`${a.employeeId}|${a.workDate}`, {
+          employeeId: a.employeeId,
+          workDate: a.workDate,
+        });
+      }
+    }
+  }
+  return [...found.values()];
+}

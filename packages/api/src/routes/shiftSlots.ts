@@ -26,7 +26,20 @@ function toDto(row: SlotRow) {
 
 export function createShiftSlotRoutes(db: Db): Hono<AppEnv> {
   const routes = new Hono<AppEnv>();
-  routes.use('*', requireRole('admin'));
+  /*
+   * Reading a window is a manager's job; configuring one is an admin's.
+   *
+   * The whole group was admin-only, which broke the schedule grid silently. The grid is a manager
+   * screen and needs each location's windows to know what hours a cell writes; a 403 left it with
+   * no window, so it fell back to the location's full opening hours and recorded a 6-hour morning
+   * shift as a 12-hour day. A slot window is a payroll input — a day rate prorates against the
+   * working day — so that was a wrong figure, not a cosmetic failure.
+   */
+  routes.use('*', async (c, next) => {
+    const guard =
+      c.req.method === 'GET' ? requireRole('manager', 'admin') : requireRole('admin');
+    return guard(c, next);
+  });
 
   async function requireLocation(locationId: string): Promise<void> {
     if (!z.string().uuid().safeParse(locationId).success) {

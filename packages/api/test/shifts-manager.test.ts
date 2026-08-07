@@ -63,6 +63,52 @@ describe('manager scheduling', () => {
     expect(second.status).toBe(201);
   });
 
+  /*
+   * The schedule grid writes drafts, so `draft` has to be an accepted status on assign.
+   *
+   * It was not: the enum was ['requested', 'approved'], so every cell the grid wrote came back
+   * 400. Nothing else in the app could create a draft either — Task 2 isolates drafts from
+   * payroll and Task 5 publishes them, but no route could produce one.
+   */
+  it('assigns a draft shift, which the grid needs to build a schedule', async () => {
+    const { app, loc, alice } = await seed();
+    const res = await assign(app, {
+      employeeId: alice.id, locationId: loc.id, workDate: '2026-08-14',
+      startsAt: '08:00', endsAt: '14:00', status: 'draft',
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ status: 'draft', source: 'native' });
+  });
+
+  it('does not show a newly drafted shift to the employee it belongs to', async () => {
+    // The companion guarantee to accepting `draft`: a draft is a schedule the manager is still
+    // building, so creating one must not reveal it to the person until the month is published.
+    const { app, loc, alice } = await seed();
+    await assign(app, {
+      employeeId: alice.id, locationId: loc.id, workDate: '2026-08-15',
+      startsAt: '08:00', endsAt: '14:00', status: 'draft',
+    });
+    const mine = await app.request('/api/shifts/me', { headers: ALICE });
+    expect(mine.status).toBe(200);
+    expect(await mine.json()).toEqual([]);
+  });
+
+  it('does not let a draft block a later approved shift in the same window', async () => {
+    // The overlap check is 'approved'-only by design (Task 2). Pinned here because adding `draft`
+    // to the assign enum is exactly the change that would tempt someone to widen that check.
+    const { app, loc, alice } = await seed();
+    const draft = await assign(app, {
+      employeeId: alice.id, locationId: loc.id, workDate: '2026-08-17',
+      startsAt: '08:00', endsAt: '14:00', status: 'draft',
+    });
+    expect(draft.status).toBe(201);
+    const real = await assign(app, {
+      employeeId: alice.id, locationId: loc.id, workDate: '2026-08-17',
+      startsAt: '09:00', endsAt: '15:00', status: 'approved',
+    });
+    expect(real.status).toBe(201);
+  });
+
   it('409s an assign duplicating the same window', async () => {
     const { app, loc, alice } = await seed();
     const body = { employeeId: alice.id, locationId: loc.id, workDate: '2026-08-11', startsAt: '08:00', endsAt: '12:00' };
