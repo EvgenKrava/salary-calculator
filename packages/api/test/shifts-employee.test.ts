@@ -92,11 +92,13 @@ describe('employee scheduling', () => {
   });
 
   it("lists only the caller's own shifts", async () => {
-    const { app, loc } = await seed();
-    await app.request('/api/shifts/requests', {
+    const { app, loc, alice } = await seed();
+    // Create an approved shift — /me only shows approved shifts (fixes the bug where it
+    // leaked rejected shifts and would leak draft schedules).
+    await app.request('/api/shifts', {
       method: 'POST',
-      headers: { ...ALICE, ...JSONH },
-      body: JSON.stringify({ locationId: loc.id, workDate: '2026-08-12' }),
+      headers: { ...MGR, ...JSONH },
+      body: JSON.stringify({ employeeId: alice.id, locationId: loc.id, workDate: '2026-08-12', status: 'approved' }),
     });
     const res = await app.request('/api/shifts/me', { headers: ALICE });
     expect(res.status).toBe(200);

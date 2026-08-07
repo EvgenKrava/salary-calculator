@@ -162,6 +162,8 @@ export function createScheduleImportRoutes(db: Db): Hono<AppEnv> {
         and(
           eq(shifts.employeeId, employeeId),
           eq(shifts.workDate, workDate),
+          // 'approved' only: a draft is a schedule still being built and must not report a
+          // phantom conflict against a real shift.
           eq(shifts.status, 'approved'),
         ),
       );

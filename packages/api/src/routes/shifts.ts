@@ -95,6 +95,8 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
         and(
           eq(shifts.employeeId, employeeId),
           eq(shifts.workDate, workDate),
+          // 'approved' only: a draft is a schedule still being built and must not report a
+          // phantom conflict against a real shift.
           eq(shifts.status, 'approved'),
         ),
       );
@@ -137,7 +139,15 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
 
   routes.get('/me', requireRole('employee'), async (c) => {
     const employee = await currentEmployee(db, c);
-    const rows = await db.select().from(shifts).where(eq(shifts.employeeId, employee.id));
+    /*
+     * `approved` only. This had NO status filter, so it served an employee their `rejected`
+     * shifts as if they were real — and a `draft` shift is a schedule the manager is still
+     * building, which nobody should be planning their week around.
+     */
+    const rows = await db
+      .select()
+      .from(shifts)
+      .where(and(eq(shifts.employeeId, employee.id), eq(shifts.status, 'approved')));
     return c.json(rows.map(toDto));
   });
 
