@@ -73,7 +73,17 @@ export function ScheduleGrid() {
     return () => window.removeEventListener('keydown', onKey);
   }, [openCell]);
 
-  if (anyLoading(shifts, employees, locations)) return <p className="mono">{t.common.loading}</p>;
+  /*
+   * The slot windows gate the whole screen, not just the tabs.
+   *
+   * A cell written while the windows are unknown POSTs no startsAt/endsAt, and the API falls back
+   * to the location's full opening hours — a 6-hour shift recorded as a 12-hour day, which is a pay
+   * figure. Showing a banner above a still-clickable table left that write reachable, and so did
+   * rendering the table during the ordinary gap before these queries resolve: they cannot start
+   * until `locations` has told them which locations to ask about. So the grid does not exist until
+   * the hours are known.
+   */
+  if (anyLoading(shifts, employees, locations, slots)) return <p className="mono">{t.common.loading}</p>;
   const loadError = firstError(shifts, employees, locations);
   if (loadError) {
     return (
@@ -81,6 +91,16 @@ export function ScheduleGrid() {
         <h2 className="grid__failureTitle">{t.common.couldNotLoad(t.scheduleGrid.title.toLowerCase())}</h2>
         <p className="mono grid__failureDetail">{loadError.message}</p>
         <p className="grid__failureHint">{t.common.reload}</p>
+      </div>
+    );
+  }
+  // Its own message rather than the generic one: a failed read means the hours are UNKNOWN, which
+  // is a different fix from "an admin has not configured any slots yet".
+  if (slots.error) {
+    return (
+      <div className="panel grid__failure">
+        <h2 className="grid__failureTitle">{t.scheduleGrid.slotsFailed}</h2>
+        <p className="grid__failureHint">{t.scheduleGrid.slotsFailedHint}</p>
       </div>
     );
   }
@@ -191,17 +211,7 @@ export function ScheduleGrid() {
         />
       </Toolbar>
 
-      {/*
-        A failed slots read and "no slots configured" are different facts, and conflating them sent
-        the manager to the wrong fix. Unknown hours matter: a cell written without a window falls
-        back to the location's full opening hours, recording a 6-hour shift as a 12-hour day.
-      */}
-      {slots.error ? (
-        <div className="panel grid__failure">
-          <p className="grid__failureTitle">{t.scheduleGrid.slotsFailed}</p>
-          <p className="grid__failureHint">{t.scheduleGrid.slotsFailedHint}</p>
-        </div>
-      ) : slotNumbers.length === 0 ? (
+      {slotNumbers.length === 0 ? (
         <p className="muted">{t.scheduleGrid.noSlots}</p>
       ) : (
         <div className="grid__tabs" role="tablist">
@@ -311,7 +321,9 @@ export function ScheduleGrid() {
                       </td>
                     );
                   })}
-                  <td className="grid__total mono">{count}</td>
+                  {/* data-label carries the column heading into the ≤720px layout, where thead is
+                      hidden and the figure would otherwise read as a bare number. */}
+                  <td className="grid__total mono" data-label={t.scheduleGrid.shiftsPerPerson}>{count}</td>
                 </tr>
               );
             })}

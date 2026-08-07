@@ -56,6 +56,14 @@ interface Fixture {
   publication?: unknown;
   slotsL1?: unknown;
   slotsL2?: unknown;
+  /**
+   * Slot reads that never settle — the ordinary window between `locations` resolving and the
+   * per-location slot queries coming back, since the slot queries cannot start until they know
+   * which locations to ask about.
+   */
+  slotsPending?: boolean;
+  /** Slot reads that fail with this status, e.g. a role that may not read them. */
+  slotsStatus?: number;
   preview?: unknown;
   onPublish?: () => Response;
 }
@@ -72,6 +80,11 @@ function stubFetch(fx: Fixture = {}) {
     calls.push({ method, url, body: init?.body ? JSON.parse(init.body as string) : undefined });
 
     if (url.includes('/api/employees')) return jsonResponse(EMPLOYEES);
+    if (url.includes('/slots')) {
+      // A request that never resolves, so the component is observed mid-load rather than after it.
+      if (fx.slotsPending) return new Promise<Response>(() => {});
+      if (fx.slotsStatus) return jsonResponse({ error: 'forbidden' }, fx.slotsStatus);
+    }
     if (url.includes('/api/locations/l1/slots')) return jsonResponse(fx.slotsL1 ?? SLOTS_L1);
     if (url.includes('/api/locations/l2/slots')) return jsonResponse(fx.slotsL2 ?? SLOTS_L2);
     if (url.includes('/api/locations')) return jsonResponse(LOCATIONS);
@@ -286,22 +299,61 @@ describe('ScheduleGrid', () => {
      * them up; a failed request means the hours are UNKNOWN, and writing a cell anyway falls back
      * to the location's full opening hours — recording a 6-hour shift as a 12-hour day.
      */
-    stubFetch({ slotsL1: null });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string, init?: RequestInit) => {
-        if (url.includes('/slots')) return jsonResponse({ error: 'forbidden' }, 403);
-        if (url.includes('/api/employees')) return jsonResponse(EMPLOYEES);
-        if (url.includes('/api/locations')) return jsonResponse(LOCATIONS);
-        if (url.includes('/api/day-off-requests')) return jsonResponse([]);
-        if (url.includes('/api/schedule-publications')) return jsonResponse({ published: false, overrides: [] });
-        if (url.includes('/api/shifts')) return jsonResponse([]);
-        throw new Error(`unstubbed: ${init?.method ?? 'GET'} ${url}`);
-      }),
-    );
+    stubFetch({ slotsStatus: 403 });
     renderGrid();
     expect(await screen.findByText(t.scheduleGrid.slotsFailed)).toBeInTheDocument();
     expect(screen.queryByText(t.scheduleGrid.noSlots)).not.toBeInTheDocument();
+  });
+
+  /*
+   * Unknown slot windows must make the WRITE PATH unreachable, not merely visible as a banner.
+   *
+   * Review found the degrade still reachable through this screen: the banner rendered above a
+   * fully clickable table, and separately the slot queries cannot even start until `locations`
+   * resolves, so there is an ordinary window where the grid is interactive and the windows are not
+   * yet known. Either way a cell click POSTs without startsAt/endsAt and the API falls back to the
+   * location's full opening hours — a 6-hour shift recorded as a 12-hour day, which is a pay
+   * figure. Both states are asserted, and both assert *no write can be fired*, so an
+   * implementation that renders disabled cells instead of gating also passes.
+   */
+  async function expectNoCellCanWrite(calls: { method: string; url: string }[]) {
+    /*
+     * Walk the real write path rather than clicking blindly: a cell opens the location popover, an
+     * option commits. If either step is missing the write is unreachable, which is the point — so
+     * both a gate that removes the table and cells left rendered but inert satisfy this.
+     *
+     * Verified to bite by restoring the reviewed bug (banner above a live table): the flow reaches
+     * the option and the POST assertion below is what fails.
+     */
+    const cell = screen.queryByRole('button', { name: t.scheduleGrid.cellLabel('Олена', 3) });
+    if (cell) {
+      await userEvent.click(cell);
+      const option = screen.queryByRole('button', { name: /^1$/ });
+      if (option) await userEvent.click(option);
+    }
+    const writes = calls.filter((c) => c.method === 'POST' && c.url.includes('/api/shifts'));
+    // A write here would carry no startsAt/endsAt, so the API records the location's whole day.
+    expect(writes).toEqual([]);
+  }
+
+  it('shows no interactive cell while the slot windows are still loading', async () => {
+    const calls = stubFetch({ slotsPending: true });
+    renderGrid();
+
+    // The other queries have settled; only the windows are outstanding.
+    await waitFor(() => expect(calls.some((c) => c.url.includes('/slots'))).toBe(true));
+    expect(screen.getByText(t.common.loading)).toBeInTheDocument();
+    await expectNoCellCanWrite(calls);
+  });
+
+  it('blocks the grid when the slot windows cannot be read, not just the tabs', async () => {
+    const calls = stubFetch({ slotsStatus: 403 });
+    renderGrid();
+
+    // The failure is stated...
+    expect(await screen.findByText(t.scheduleGrid.slotsFailed)).toBeInTheDocument();
+    // ...and the table underneath is gone rather than left clickable.
+    await expectNoCellCanWrite(calls);
   });
 
   it('closes the location popover on Escape', async () => {

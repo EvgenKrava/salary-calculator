@@ -286,7 +286,8 @@
     height: auto;
     padding: 0 var(--s1) var(--s1);
   }
-  /* Totals read as a labelled figure, not a bare number in a chip grid. */
+  /* Totals read as a labelled figure, not a bare number in a chip grid. Same data-label idiom as
+     .table .td in ui/table.css: the label sits left, the figure right. */
   .grid tbody tr .grid__total,
   .grid tfoot tr .grid__total {
     flex: 0 0 100%;
@@ -296,8 +297,21 @@
     border-top: 1px solid var(--rule);
     margin-top: var(--s1);
   }
-  .grid tbody tr .grid__total::before {
+  .grid tbody tr .grid__total[data-label] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s4);
+  }
+  .grid tbody tr .grid__total[data-label]::before {
     content: attr(data-label);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    /* No letter-spacing, unlike .table .td's label: this copy is Cyrillic and the design system
+       forbids tracking Cyrillic. */
+    color: var(--ink-muted);
   }
   /* The per-day footer counts are noise at this width: the same figures are one tap away per
      person, and 31 unlabelled chips at the bottom of a phone screen teach nothing. */
