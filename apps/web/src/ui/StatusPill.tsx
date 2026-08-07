@@ -6,6 +6,7 @@ const LABEL: Record<string, string> = {
   requested: t.shifts.requested,
   approved: t.shifts.approved,
   rejected: t.shifts.rejected,
+  draft: t.shifts.draft,
   needs_review: t.common.statusNeedsReview,
   processing: t.common.statusProcessing,
   blocked: t.common.statusBlocked,

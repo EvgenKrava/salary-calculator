@@ -206,6 +206,41 @@ describe('ScheduleGrid', () => {
     expect(shiftCalls[1].body).toMatchObject({ locationId: 'l2' });
   });
 
+  it('keeps an approved cell approved when it is edited to a different location', async () => {
+    /*
+     * A published month's cell is a live shift, not a schedule still being built. Replacing it
+     * with a hardcoded 'draft' would demote a real, paid day into one that payroll skips and the
+     * employee's own /me no longer shows — the grid would still render the cell as filled while
+     * the shift behind it had silently stopped counting. Spec §4: "Editing a published cell keeps
+     * it `approved` — a mid-month change is real, not a draft."
+     */
+    const calls = stubFetch({ shifts: [draftShift({ status: 'approved' })] });
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: /Олена, 3 число/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /^2$/ }));
+
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.includes('/api/shifts'))).toBe(true));
+    const post = calls.find((c) => c.method === 'POST' && c.url.includes('/api/shifts'))!;
+    expect(post.body).toMatchObject({ locationId: 'l2', status: 'approved' });
+  });
+
+  it('keeps a draft cell a draft when it is edited to a different location', async () => {
+    // The companion case: an unpublished cell being edited must still write 'draft', so a
+    // month being built does not accidentally leak an approved shift before it is published.
+    const calls = stubFetch({ shifts: [draftShift({ status: 'draft' })] });
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: /Олена, 3 число/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /^2$/ }));
+
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.includes('/api/shifts'))).toBe(true));
+    const post = calls.find((c) => c.method === 'POST' && c.url.includes('/api/shifts'))!;
+    expect(post.body).toMatchObject({ locationId: 'l2', status: 'draft' });
+  });
+
   it('does not delete anything when filling an empty cell', async () => {
     const calls = stubFetch();
     renderGrid();

@@ -164,7 +164,14 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
   routes.get('/', requireRole('manager', 'admin'), async (c) => {
     const filters: SQL[] = [];
     const status = c.req.query('status');
-    if (status === 'requested' || status === 'approved' || status === 'rejected') {
+    // Draft is a legitimate filter now that the schedule grid writes drafts — a manager builds
+    // a month in that state before publishing. An unknown value 400s rather than falling through
+    // silently: this whitelist used to let anything unrecognised return EVERY shift regardless of
+    // status, so a typo'd filter looked like "show all" instead of failing loudly.
+    if (status !== undefined && status !== '') {
+      if (status !== 'draft' && status !== 'requested' && status !== 'approved' && status !== 'rejected') {
+        throw new HTTPException(400, { message: 'invalid "status" filter' });
+      }
       filters.push(eq(shifts.status, status));
     }
     const from = c.req.query('from');

@@ -160,6 +160,13 @@ export function ScheduleGrid() {
    * Not atomic, and deliberately not pretended to be: if the insert fails after the delete, the
    * error is shown and the month refetched, so the manager sees the cell is now empty rather than
    * a stale value that is no longer in the database.
+   *
+   * The replacement carries the existing shift's status forward rather than hardcoding `draft`.
+   * Per spec §4, editing a published cell keeps it `approved` — a mid-month change to a live
+   * month is real, not a draft. Hardcoding `draft` here silently demoted the shift: it stopped
+   * counting in payroll and disappeared from the employee's /me, with the grid showing a filled
+   * cell for a day that no longer paid anyone. The API's overlap check runs only for `approved`
+   * inserts, so a re-approved cell is still checked against the rest of that day, as it must be.
    */
   async function setCell(employeeId: string, iso: string, locationId: string, existing?: Shift) {
     setError(null);
@@ -176,8 +183,9 @@ export function ScheduleGrid() {
         workDate: iso,
         startsAt: window?.startsAt,
         endsAt: window?.endsAt,
-        // A draft is invisible to staff and uncounted by payroll until the month is published.
-        status: 'draft',
+        // A draft is invisible to staff and uncounted by payroll until the month is published;
+        // an approved cell being edited stays approved rather than reverting to draft.
+        status: existing?.status === 'approved' ? 'approved' : 'draft',
       });
     } catch (err) {
       setError((err as Error).message);

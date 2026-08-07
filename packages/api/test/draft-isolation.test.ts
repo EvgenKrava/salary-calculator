@@ -120,6 +120,27 @@ describe('draft isolation', () => {
     expect(res.status).toBe(201);
   });
 
+  it('lets a manager filter the list down to drafts', async () => {
+    // The schedule grid needs this to show a manager only the month they are still building.
+    // The whitelist used to omit `draft`, and an unrecognised status fell through silently and
+    // returned every shift regardless of status.
+    const { db, app, loc, emp } = await seed();
+    await db.insert(shifts).values([
+      { employeeId: emp.id, locationId: loc.id, workDate: '2026-09-06', startsAt: '08:00:00', endsAt: '14:00:00', status: 'draft' },
+      { employeeId: emp.id, locationId: loc.id, workDate: '2026-09-07', startsAt: '08:00:00', endsAt: '14:00:00', status: 'approved' },
+    ]);
+    const res = await app.request('/api/shifts?status=draft', { headers: { Authorization: 'Bearer mgr' } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { workDate: string; status: string }[];
+    expect(body.map((s) => s.workDate)).toEqual(['2026-09-06']);
+  });
+
+  it('400s the manager list on an unrecognised status filter', async () => {
+    const { app } = await seed();
+    const res = await app.request('/api/shifts?status=bogus', { headers: { Authorization: 'Bearer mgr' } });
+    expect(res.status).toBe(400);
+  });
+
   it('every employee-facing and payroll shifts query filters on status', async () => {
     /*
      * A source-level assertion, because it is the only kind that can catch the NEXT query
@@ -128,9 +149,13 @@ describe('draft isolation', () => {
      *
      * Scoped to the two query shapes where a missing filter LEAKS or MISPAYS, rather than to
      * every `.from(shifts)`. A blanket rule flags four call sites today and only one is a bug:
-     * the idempotency lookup, the manager list (whose status filter is optional by design) and
-     * the fetch-by-id in `/:id/approve` are all correct without one. A test that fails on
-     * correct code gets deleted by the next person, taking the real guard with it.
+     * the idempotency lookup, the manager list, and the fetch-by-id in `/:id/approve` are all
+     * correct without a literal `shifts.status` in the statement. The manager list now accepts
+     * an explicit `?status=draft` filter and 400s on anything else unrecognised (see the tests
+     * below) — but leaving the filter off is still a manager choosing to see every shift
+     * including drafts, which is correct for that role and not a leak this scan needs to catch.
+     * A test that fails on correct code gets deleted by the next person, taking the real guard
+     * with it.
      *
      * The two shapes that matter:
      *   - `employees.cognitoSub` / `employeeId` scoping → an employee reading their own data

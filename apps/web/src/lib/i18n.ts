@@ -279,6 +279,7 @@ export const t = {
     requested: 'заявка',
     approved: 'підтверджено',
     rejected: 'відхилено',
+    draft: 'чернетка',
     source: 'Джерело',
     decision: 'Рішення',
     couldNotLoad: 'Не вдалося завантажити зміни',

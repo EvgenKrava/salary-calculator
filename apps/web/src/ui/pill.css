@@ -35,10 +35,13 @@
   border-color: rgb(26 107 72 / 22%);
 }
 
-/* Inactive is neutral, not a failure: the person simply no longer works here. */
+/* Inactive is neutral, not a failure: the person simply no longer works here. A draft shift is
+   the same "not settled yet" state as requested — invisible to the employee and uncounted by
+   payroll until published — so it shares the muted treatment rather than inventing a new tint. */
 .pill--requested,
 .pill--processing,
-.pill--inactive {
+.pill--inactive,
+.pill--draft {
   color: var(--ink-muted);
   background: var(--surface-sunk);
   border-color: var(--rule);
