@@ -476,3 +476,124 @@ export function useMyPay() {
       >('/api/salary-runs/me'),
   });
 }
+
+export interface DayOffRequest {
+  employeeId: string;
+  requestDate: string;
+  kind: 'required' | 'preferred';
+}
+
+export interface AppSettingsDto {
+  requiredDaysOffPerMonth: number;
+  preferredDaysOffPerMonth: number;
+}
+
+export interface PublishConflict {
+  employeeId: string;
+  employeeName: string;
+  workDate: string;
+}
+
+export interface PublishAssessment {
+  draftCount: number;
+  conflicts: { required: PublishConflict[]; preferred: PublishConflict[] };
+}
+
+/**
+ * Day-off requests for a month.
+ *
+ * `employeeId` omitted means "everyone" for a manager and "me" for an employee — the API decides,
+ * so the grid and the cabinet share one hook.
+ */
+export function useDayOffRequests(params: { employeeId?: string; year: number; month: number }) {
+  const api = useApi();
+  const qs = new URLSearchParams({ year: String(params.year), month: String(params.month) });
+  if (params.employeeId) qs.set('employeeId', params.employeeId);
+  return useQuery({
+    queryKey: ['day-off-requests', params.employeeId ?? null, params.year, params.month],
+    queryFn: () => api.get<DayOffRequest[]>(`/api/day-off-requests?${qs}`),
+  });
+}
+
+export function useSetDayOff() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { employeeId?: string; requestDate: string; kind: 'required' | 'preferred' }) =>
+      api.put<DayOffRequest>('/api/day-off-requests', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['day-off-requests'] }),
+  });
+}
+
+export function useClearDayOff() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, date }: { employeeId: string; date: string }) =>
+      api.del<{ deleted: boolean }>(
+        `/api/day-off-requests?employeeId=${employeeId}&date=${date}`,
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['day-off-requests'] }),
+  });
+}
+
+export function useAppSettings() {
+  const api = useApi();
+  return useQuery({ queryKey: ['app-settings'], queryFn: () => api.get<AppSettingsDto>('/api/settings') });
+}
+
+export function useUpdateAppSettings() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<AppSettingsDto>) => api.patch<AppSettingsDto>('/api/settings', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['app-settings'] });
+      // The remaining-allowance figures in the picker derive from these limits.
+      void qc.invalidateQueries({ queryKey: ['day-off-requests'] });
+    },
+  });
+}
+
+export function usePublicationState(params: { year: number; month: number }) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['schedule-publication', params.year, params.month],
+    queryFn: () =>
+      api.get<{
+        published: boolean;
+        publishedAt?: string;
+        publishedBy?: string;
+        overrideReason?: string;
+        // A fix landing in parallel with this task adds the override history to the response;
+        // optional so this hook's shape does not lie about older/unpatched deployments.
+        overrides?: { reason: string; createdBy: string; createdAt: string }[];
+      }>(`/api/schedule-publications?year=${params.year}&month=${params.month}`),
+  });
+}
+
+export function usePublishPreview() {
+  const api = useApi();
+  return useMutation({
+    mutationFn: (body: { year: number; month: number }) =>
+      api.post<PublishAssessment>('/api/schedule-publications/preview', body),
+  });
+}
+
+export function usePublishMonth() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { year: number; month: number; overrideReason?: string }) =>
+      api.post<{ published: number; conflicts: PublishAssessment['conflicts'] }>(
+        '/api/schedule-publications',
+        body,
+      ),
+    onSuccess: () => {
+      // Publishing changes shift statuses, closes the day-off picker, and makes shifts payable.
+      void qc.invalidateQueries({ queryKey: ['shifts'] });
+      void qc.invalidateQueries({ queryKey: ['schedule-publication'] });
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}

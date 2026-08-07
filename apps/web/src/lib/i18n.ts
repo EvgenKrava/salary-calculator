@@ -154,6 +154,8 @@ export const t = {
     setup: 'Налаштування',
     myShifts: 'Мої зміни',
     myPay: 'Моя зарплата',
+    scheduleEdit: 'Скласти графік',
+    myDaysOff: 'Мої вихідні',
   },
 
   login: {
@@ -432,6 +434,56 @@ export const t = {
       count === 0
         ? `${day} — додати зміну`
         : `${day} — ${count} ${plural(count, 'зміна', 'зміни', 'змін')}, редагувати`,
+  },
+
+  scheduleGrid: {
+    title: 'Скласти графік',
+    hint: 'Клітинка — номер локації. Зміни зберігаються одразу, але графік не видно працівникам до публікації.',
+    slotTab: (n: number, from: string, to: string) => `Зміна ${n} · ${from}–${to}`,
+    noSlots: 'Для локацій ще не налаштовано зміни — графік використає час роботи локації.',
+    clearCell: 'Прибрати',
+    shiftsPerPerson: 'Змін',
+    peoplePerDay: 'Людей',
+    published: 'Опубліковано',
+    draftBadge: (n: number) => `${n} ${plural(n, 'чернетка', 'чернетки', 'чернеток')}`,
+    conflictRequired: 'Обов\'язковий вихідний',
+    conflictPreferred: 'Бажаний вихідний',
+    cellLabel: (name: string, day: number) => `${name}, ${day} число`,
+  },
+
+  daysOff: {
+    title: 'Бажані вихідні',
+    myTitle: 'Мої бажані вихідні',
+    hint: 'Натисніть на день, щоб позначити його: бажаний → обов\'язковий → без позначки.',
+    required: 'Обов\'язковий',
+    preferred: 'Бажаний',
+    requiredShort: 'обов\'язкових',
+    preferredShort: 'бажаних',
+    used: (used: number, limit: number) => `${used}/${limit}`,
+    monthPublished: 'Графік на цей місяць уже опубліковано — зміни закриті.',
+    limitReached: (limit: number, kind: string) =>
+      `Ліміт: не більше ${limit} ${kind} вихідних на місяць.`,
+    // Settings panel
+    limitsTitle: 'Ліміти бажаних вихідних',
+    limitsHint: 'Діє для всіх працівників, доки не зміните. Не застосовується до вже опублікованих місяців.',
+    requiredPerMonth: 'Обов\'язкових на місяць',
+    preferredPerMonth: 'Бажаних на місяць',
+  },
+
+  publish: {
+    title: (month: string) => `Опублікувати ${month}`,
+    button: 'Опублікувати',
+    publishing: 'Публікуємо…',
+    nothingToPublish: 'Немає чернеток для публікації.',
+    willPublish: (n: number) => `${n} ${plural(n, 'зміну', 'зміни', 'змін')} буде опубліковано.`,
+    requiredConflicts: (n: number) =>
+      `${n} ${plural(n, 'зміна', 'зміни', 'змін')} на обов'язкових вихідних`,
+    preferredConflicts: (n: number) =>
+      `${n} ${plural(n, 'зміна', 'зміни', 'змін')} на бажаних вихідних (не блокує)`,
+    reasonLabel: 'Причина',
+    reasonRequired: 'Вкажіть причину, щоб опублікувати попри обов\'язкові вихідні.',
+    confirmOverride: 'Підтвердити і опублікувати',
+    alreadyPublished: (date: string) => `Опубліковано ${date}`,
   },
 
   /** Editing one day's shifts by hand, from the calendar. */

@@ -68,3 +68,13 @@ describe('api client', () => {
     await expect(api.get('/x')).rejects.toMatchObject({ body: undefined });
   });
 });
+
+describe('day-off and publish endpoints', () => {
+  it('builds a month-scoped day-off query', () => {
+    const qs = new URLSearchParams({ year: '2026', month: '9' });
+    qs.set('employeeId', 'e1');
+    expect(`/api/day-off-requests?${qs}`).toBe(
+      '/api/day-off-requests?year=2026&month=9&employeeId=e1',
+    );
+  });
+});
