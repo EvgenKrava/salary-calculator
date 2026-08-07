@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { t } from '../src/lib/i18n';
+import { ApiError } from '../src/lib/api';
 
 const setDayOff = { mutateAsync: vi.fn(async (_b: unknown) => ({})), isPending: false };
 const clearDayOff = { mutateAsync: vi.fn(async (_b: unknown) => ({})), isPending: false };
@@ -78,14 +79,30 @@ describe('DayOffPicker', () => {
     expect(setDayOff.mutateAsync).not.toHaveBeenCalled();
   });
 
-  it('surfaces the API limit message instead of failing silently', async () => {
+  it('renders the Ukrainian limit-reached copy from the structured 409 body', async () => {
     setDayOff.mutateAsync.mockRejectedValueOnce(
-      new Error('limit reached: at most 2 required days off per month'),
+      new ApiError('limit reached: at most 2 required days off per month', 409, {
+        error: 'limit reached: at most 2 required days off per month',
+        code: 'limit_reached',
+        limit: 2,
+        kind: 'required',
+      }),
     );
     render(<DayOffPicker employeeId="e1" year={2026} month={9} />);
     await userEvent.click(screen.getByRole('button', { name: /(^|\s)5(\s|$)/ }));
     expect(
-      await screen.findByText('limit reached: at most 2 required days off per month'),
+      await screen.findByText(t.daysOff.limitReached(2, t.daysOff.requiredShort)),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an unrelated error message verbatim, not the limit-reached copy', async () => {
+    setDayOff.mutateAsync.mockRejectedValueOnce(
+      new Error('the schedule for that month is already published'),
+    );
+    render(<DayOffPicker employeeId="e1" year={2026} month={9} />);
+    await userEvent.click(screen.getByRole('button', { name: /(^|\s)5(\s|$)/ }));
+    expect(
+      await screen.findByText('the schedule for that month is already published'),
     ).toBeInTheDocument();
   });
 

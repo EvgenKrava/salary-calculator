@@ -98,3 +98,34 @@
   color: var(--stop);
   font-size: var(--text-sm);
 }
+
+/* Same collapse as .schedule__grid in schedule.css: below 720px the seven-column grid cannot
+   stay readable at this row height, so the month becomes a single-column list of day rows.
+   Unlike the schedule grid the cell here IS the interactive control, so min-height keeps the
+   44px tap target explicitly rather than going to `unset`. */
+@media (max-width: 720px) {
+  .day-off__grid {
+    grid-template-columns: 1fr;
+  }
+  .day-off__weekday {
+    display: none;
+  }
+  .day-off__cell {
+    min-height: var(--tap);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s3);
+    padding: var(--s2) var(--s4);
+  }
+  .day-off__daynum {
+    flex: 0 0 auto;
+    min-width: 2ch;
+  }
+  .day-off__mark {
+    flex: 0 0 auto;
+  }
+  .day-off__cell--outside {
+    display: none;
+  }
+}

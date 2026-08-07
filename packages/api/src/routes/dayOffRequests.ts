@@ -129,9 +129,18 @@ export function createDayOffRoutes(db: Db): Hono<AppEnv> {
       },
     );
     if (!verdict.ok) {
-      throw new HTTPException(409, {
-        message: `limit reached: at most ${verdict.limit} ${verdict.kind} days off per month`,
-      });
+      // A structured `code` (plus `limit`/`kind`) alongside the English `message` lets the
+      // Ukrainian-language client render its own copy for this specific case while every other
+      // error still falls back to showing `message` verbatim.
+      return c.json(
+        {
+          error: `limit reached: at most ${verdict.limit} ${verdict.kind} days off per month`,
+          code: 'limit_reached',
+          limit: verdict.limit,
+          kind: verdict.kind,
+        },
+        409,
+      );
     }
 
     const createdBy = c.get('principal').sub;

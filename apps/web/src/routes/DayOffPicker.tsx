@@ -8,8 +8,30 @@ import {
   useSetDayOff,
   type DayOffRequest,
 } from '../lib/queries';
+import { ApiError } from '../lib/api';
 import { t } from '../lib/i18n';
 import './dayOffPicker.css';
+
+/**
+ * The limit-reached 409 body, shaped by `packages/api/src/routes/dayOffRequests.ts`.
+ *
+ * Every other error surfaces `err.message` (English, from the API) as-is, but this one has
+ * Ukrainian copy purpose-built for it (`t.daysOff.limitReached`), so it needs its own fields
+ * rather than the message string.
+ */
+interface LimitReachedBody {
+  code: 'limit_reached';
+  limit: number;
+  kind: 'required' | 'preferred';
+}
+
+function isLimitReachedBody(body: unknown): body is LimitReachedBody {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    (body as { code?: unknown }).code === 'limit_reached'
+  );
+}
 
 /**
  * Pick the days an employee wants off, one month at a time.
@@ -63,8 +85,19 @@ export function DayOffPicker({
         await clearDayOff.mutateAsync({ employeeId: target, date: iso });
       }
     } catch (err) {
-      // The API owns the limit rule, so its message is the one worth showing.
-      setError((err as Error).message);
+      // The limit-reached 409 carries a structured `code` so it can be rendered in Ukrainian
+      // via `t.daysOff.limitReached`; every other error only has an API-authored English
+      // message, so it's shown as-is — the API owns those messages, not this component.
+      const body = err instanceof ApiError ? err.body : undefined;
+      if (isLimitReachedBody(body)) {
+        // `limitReached`'s `kind` slots into a Ukrainian genitive-plural phrase ("не більше 2
+        // обов'язкових вихідних"), so it takes `requiredShort`/`preferredShort`, not the raw
+        // English `kind` value from the API.
+        const kindWord = body.kind === 'required' ? t.daysOff.requiredShort : t.daysOff.preferredShort;
+        setError(t.daysOff.limitReached(body.limit, kindWord));
+      } else {
+        setError((err as Error).message);
+      }
     }
   }
 

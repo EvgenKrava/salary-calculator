@@ -88,7 +88,13 @@ describe('day-off requests', () => {
       body: JSON.stringify({ requestDate: '2026-09-02', kind: 'required' }),
     });
     expect(res.status).toBe(409);
-    expect(((await res.json()) as { error: string }).error).toContain('1');
+    const body = (await res.json()) as { error: string; code: string; limit: number; kind: string };
+    // The message stays for backward compat, but the client renders its own Ukrainian copy off
+    // the structured fields instead of showing this English sentence.
+    expect(body.error).toContain('1');
+    expect(body.code).toBe('limit_reached');
+    expect(body.limit).toBe(1);
+    expect(body.kind).toBe('required');
   });
 
   it('changes the kind on a date already requested rather than erroring', async () => {
