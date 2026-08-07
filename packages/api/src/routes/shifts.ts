@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, eq, gte, lte, type SQL } from 'drizzle-orm';
+import { and, eq, gte, lte, notInArray, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/testDb';
 import type { AppEnv } from '../auth/types';
@@ -140,14 +140,16 @@ export function createShiftRoutes(db: Db): Hono<AppEnv> {
   routes.get('/me', requireRole('employee'), async (c) => {
     const employee = await currentEmployee(db, c);
     /*
-     * `approved` only. This had NO status filter, so it served an employee their `rejected`
-     * shifts as if they were real — and a `draft` shift is a schedule the manager is still
-     * building, which nobody should be planning their week around.
+     * Exclude `draft` and `rejected` only — `requested` must stay visible so an employee can see
+     * their own pending shift requests. This had NO status filter, so it served an employee
+     * their `rejected` shifts as if they were real, and a `draft` shift is a schedule the
+     * manager is still building — neither is a shift the person actually works, but a
+     * `requested` shift is still theirs to track while it awaits a decision.
      */
     const rows = await db
       .select()
       .from(shifts)
-      .where(and(eq(shifts.employeeId, employee.id), eq(shifts.status, 'approved')));
+      .where(and(eq(shifts.employeeId, employee.id), notInArray(shifts.status, ['draft', 'rejected'])));
     return c.json(rows.map(toDto));
   });
 

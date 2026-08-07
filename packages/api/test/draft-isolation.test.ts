@@ -58,6 +58,21 @@ describe('draft isolation', () => {
     expect((await res.json()) as unknown[]).toEqual([]);
   });
 
+  it('does show a requested shift — it is still awaiting a decision, not draft or rejected', async () => {
+    // The fix for the draft/rejected leak must not narrow the filter down to `approved` only:
+    // a `requested` shift is the employee's own pending request and they need to see it on
+    // /me while it awaits a manager's decision.
+    const { db, app, loc, emp } = await seed();
+    await db.insert(shifts).values({
+      employeeId: emp.id, locationId: loc.id, workDate: '2026-09-05',
+      startsAt: '08:00:00', endsAt: '14:00:00', status: 'requested',
+    });
+    const res = await app.request('/api/shifts/me', { headers: { Authorization: 'Bearer emp' } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { workDate: string }[];
+    expect(body.map((s) => s.workDate)).toEqual(['2026-09-05']);
+  });
+
   it('never counts a draft shift in a salary run', async () => {
     const { db, app, loc, emp } = await seed();
     await db.insert(dailyRevenue).values({
