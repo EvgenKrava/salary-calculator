@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIGRATIONS, INIT_SQL, HOURS_MODEL_SQL, SCHEDULE_IMPORT_SQL, DAY_RATE_SQL, ENUM_TO_TEXT_SQL } from '../src/migrations';
+import {
+  MIGRATIONS,
+  INIT_SQL,
+  HOURS_MODEL_SQL,
+  SCHEDULE_IMPORT_SQL,
+  DAY_RATE_SQL,
+  ENUM_TO_TEXT_SQL,
+  SCHEDULE_AUTHORING_SQL,
+} from '../src/migrations';
 import { MIGRATION_SQL, MIGRATION_NAMES } from '../src/migrations.generated';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -39,7 +47,14 @@ describe('migrations', () => {
   });
 
   it('exposes every migration in filename order', () => {
-    expect(MIGRATIONS).toEqual([INIT_SQL, HOURS_MODEL_SQL, SCHEDULE_IMPORT_SQL, DAY_RATE_SQL, ENUM_TO_TEXT_SQL]);
+    expect(MIGRATIONS).toEqual([
+      INIT_SQL,
+      HOURS_MODEL_SQL,
+      SCHEDULE_IMPORT_SQL,
+      DAY_RATE_SQL,
+      ENUM_TO_TEXT_SQL,
+      SCHEDULE_AUTHORING_SQL,
+    ]);
     expect(MIGRATIONS).toHaveLength(sqlFilesOnDisk().length);
   });
 

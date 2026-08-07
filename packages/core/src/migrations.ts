@@ -46,6 +46,9 @@ export const DAY_RATE_SQL = read('0004_day_rate.sql');
 /** Enum columns become TEXT + CHECK so the RDS Data API can write them. */
 export const ENUM_TO_TEXT_SQL = read('0005_enum_to_text.sql');
 
+/** Draft shift status, day-off requests, publication state, and standing settings. */
+export const SCHEDULE_AUTHORING_SQL = read('0006_schedule_authoring.sql');
+
 /**
  * All migrations in apply order.
  *
