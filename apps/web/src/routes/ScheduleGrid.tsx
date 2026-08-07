@@ -10,6 +10,7 @@ import {
   useDeleteShift,
   useEmployees,
   useLocations,
+  usePublicationState,
   useShiftSlotsByLocation,
   useShifts,
   type DayOffRequest,
@@ -62,6 +63,15 @@ export function ScheduleGrid() {
   );
   const slots = useShiftSlotsByLocation(locationIds);
 
+  /*
+   * Whether the displayed month is already published — the same query `PublishPanel` reads
+   * further down this tree. A cell write needs this to know whether to write `approved` or
+   * `draft`: writing into a published month as `draft` recreates the payroll-invisible state
+   * this whole feature exists to close, whether the cell was previously empty or is being
+   * corrected after a refused re-insert.
+   */
+  const publication = usePublicationState({ year, month });
+
   // Escape closes the location popover — a click-anywhere-else dismissal alone leaves a keyboard
   // user with no way out.
   useEffect(() => {
@@ -82,9 +92,14 @@ export function ScheduleGrid() {
    * rendering the table during the ordinary gap before these queries resolve: they cannot start
    * until `locations` has told them which locations to ask about. So the grid does not exist until
    * the hours are known.
+   *
+   * `publication` gates the same way, for the same reason: `setCell` below decides `approved` vs
+   * `draft` from whether the month is published, and while that query is pending the answer is
+   * unknown — a write in that window would default to the wrong status exactly like an unknown
+   * slot window defaults to the wrong hours.
    */
-  if (anyLoading(shifts, employees, locations, slots)) return <p className="mono">{t.common.loading}</p>;
-  const loadError = firstError(shifts, employees, locations);
+  if (anyLoading(shifts, employees, locations, slots, publication)) return <p className="mono">{t.common.loading}</p>;
+  const loadError = firstError(shifts, employees, locations, publication);
   if (loadError) {
     return (
       <div className="panel grid__failure">
@@ -161,12 +176,22 @@ export function ScheduleGrid() {
    * error is shown and the month refetched, so the manager sees the cell is now empty rather than
    * a stale value that is no longer in the database.
    *
-   * The replacement carries the existing shift's status forward rather than hardcoding `draft`.
-   * Per spec §4, editing a published cell keeps it `approved` — a mid-month change to a live
-   * month is real, not a draft. Hardcoding `draft` here silently demoted the shift: it stopped
-   * counting in payroll and disappeared from the employee's /me, with the grid showing a filled
-   * cell for a day that no longer paid anyone. The API's overlap check runs only for `approved`
-   * inserts, so a re-approved cell is still checked against the rest of that day, as it must be.
+   * The write's status is driven by whether the DISPLAYED MONTH is published, not just by
+   * `existing?.status`. Carrying only the existing shift's status forward left two reachable
+   * paths writing an invisible draft into an already-live month:
+   *
+   *   1. An approved re-insert that 409s on overlap leaves the delete committed and the insert
+   *      refused — the cell is now empty. The manager's natural recovery is to click it and
+   *      re-pick a location, which reads `existing` as undefined and fell through to `draft`.
+   *   2. Any empty cell in a published month falls through to `draft` on the very first write,
+   *      with nothing on screen distinguishing it from the live shifts around it.
+   *
+   * Both reproduce exactly the payroll-invisible state this feature exists to close. So the
+   * publication flag comes first: published → `approved` for any write, new or edited. The
+   * `existing?.status === 'approved'` fallback stays as a second line — it should be
+   * unreachable before publish, since nothing else in the app creates an approved draft-month
+   * shift — but a write must never regress an already-approved cell to draft even if that
+   * invariant is ever violated elsewhere.
    */
   async function setCell(employeeId: string, iso: string, locationId: string, existing?: Shift) {
     setError(null);
@@ -183,9 +208,11 @@ export function ScheduleGrid() {
         workDate: iso,
         startsAt: window?.startsAt,
         endsAt: window?.endsAt,
-        // A draft is invisible to staff and uncounted by payroll until the month is published;
-        // an approved cell being edited stays approved rather than reverting to draft.
-        status: existing?.status === 'approved' ? 'approved' : 'draft',
+        // A draft is invisible to staff and uncounted by payroll until the month is published.
+        // A write into an already-published month is a real, live change — the spec's own
+        // words are "a mid-month change is real, not a draft" — so it goes straight to
+        // `approved`, which also means the API's overlap check runs against it.
+        status: publication.data?.published || existing?.status === 'approved' ? 'approved' : 'draft',
       });
     } catch (err) {
       setError((err as Error).message);

@@ -66,6 +66,11 @@ interface Fixture {
   slotsStatus?: number;
   preview?: unknown;
   onPublish?: () => Response;
+  /**
+   * The publication-state GET that never resolves — the same kind of ordinary loading window as
+   * `slotsPending`, since a write's status depends on knowing whether the month is published.
+   */
+  publicationPending?: boolean;
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -96,6 +101,9 @@ function stubFetch(fx: Fixture = {}) {
     }
     if (url.includes('/api/schedule-publications')) {
       if (method === 'POST') return fx.onPublish ? fx.onPublish() : jsonResponse({ published: 0, conflicts: { required: [], preferred: [] } });
+      // A request that never resolves, so the component is observed mid-load rather than after
+      // it — the same technique as `slotsPending`.
+      if (fx.publicationPending) return new Promise<Response>(() => {});
       return jsonResponse(fx.publication ?? { published: false, overrides: [] });
     }
     if (url.includes('/api/shifts')) {
@@ -388,6 +396,55 @@ describe('ScheduleGrid', () => {
     // The failure is stated...
     expect(await screen.findByText(t.scheduleGrid.slotsFailed)).toBeInTheDocument();
     // ...and the table underneath is gone rather than left clickable.
+    await expectNoCellCanWrite(calls);
+  });
+
+  it('writes an approved shift into an empty cell when the displayed month is already published', async () => {
+    /*
+     * Review found two paths that wrote an invisible `draft` into an already-live month: a
+     * refused approved re-insert leaves the cell empty, and the manager's natural recovery
+     * (click, re-pick a location) reads `existing` as undefined; separately, ANY empty cell in
+     * a published month fell through to `draft` on its very first write. Both reproduce the
+     * payroll-invisible state the whole feature exists to close, with nothing on screen telling
+     * the manager the cell they just filled does not actually count. Fixed by reading the same
+     * `usePublicationState` query `PublishPanel` already reads: a published month writes
+     * `approved` for ANY cell, new or edited.
+     */
+    const calls = stubFetch({ publication: { published: true, publishedAt: '2026-08-01T09:00:00.000Z', overrides: [] } });
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: t.scheduleGrid.cellLabel('Олена', 4) }));
+    await userEvent.click(await screen.findByRole('button', { name: /^1$/ }));
+
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.includes('/api/shifts'))).toBe(true));
+    const post = calls.find((c) => c.method === 'POST' && c.url.includes('/api/shifts'))!;
+    expect(post.body).toMatchObject({ locationId: 'l1', status: 'approved' });
+  });
+
+  it('still writes a draft into an empty cell when the displayed month is not published', async () => {
+    // The other direction, guarded so a fix for the published case cannot silently make every
+    // write 'approved' regardless of the month's state.
+    const calls = stubFetch({ publication: { published: false, overrides: [] } });
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: t.scheduleGrid.cellLabel('Олена', 4) }));
+    await userEvent.click(await screen.findByRole('button', { name: /^1$/ }));
+
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.includes('/api/shifts'))).toBe(true));
+    const post = calls.find((c) => c.method === 'POST' && c.url.includes('/api/shifts'))!;
+    expect(post.body).toMatchObject({ locationId: 'l1', status: 'draft' });
+  });
+
+  it('shows no interactive cell while the publication state is still loading', async () => {
+    // Whether the month is published decides the write's status, so a write fired before that
+    // answer is known is exactly as unsafe as one fired before the slot windows are known.
+    const calls = stubFetch({ publicationPending: true });
+    renderGrid();
+
+    await waitFor(() => expect(calls.some((c) => c.url.includes('/api/schedule-publications'))).toBe(true));
+    expect(screen.getByText(t.common.loading)).toBeInTheDocument();
     await expectNoCellCanWrite(calls);
   });
 
