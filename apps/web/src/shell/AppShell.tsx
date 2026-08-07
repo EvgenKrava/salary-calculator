@@ -73,6 +73,7 @@ export function AppShell() {
             <RailGroup label={t.nav.groupOps}>
               <RailLink to="/me/shifts" label={t.nav.myShifts} />
               <RailLink to="/me/pay" label={t.nav.myPay} />
+              <RailLink to="/me/days-off" label={t.nav.myDaysOff} />
             </RailGroup>
           ) : null}
         </nav>

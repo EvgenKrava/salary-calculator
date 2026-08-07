@@ -15,6 +15,7 @@ import {
   type Employee,
   type Level,
 } from '../lib/queries';
+import { DayOffPicker } from './DayOffPicker';
 import { t } from '../lib/i18n';
 
 /**
@@ -208,6 +209,8 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
   const [percent, setPercent] = useState(fractionToPercent(emp.revenuePercent));
   const [levelId, setLevelId] = useState(emp.levelId);
   const [error, setError] = useState<string | null>(null);
+  const [daysOffOpen, setDaysOffOpen] = useState(false);
+  const monthNow = { year: new Date().getUTCFullYear(), month: new Date().getUTCMonth() + 1 };
 
   const levelName = levels.find((l) => l.id === emp.levelId)?.name ?? '—';
 
@@ -242,45 +245,59 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
 
   if (!editing) {
     return (
-      <tr>
-        <Td label={t.employees.name}>{emp.name}</Td>
-        <Td label={t.common.level}>{levelName}</Td>
-        <NumCell label={t.employees.revenuePercentShort}>
-          {fractionToPercent(emp.revenuePercent)}%
-        </NumCell>
-        <Td label={t.employees.login}>
-          {emp.cognitoSub ? (
-            <span className="mono">{t.employees.canSignIn}</span>
-          ) : inviting ? (
-            <InviteEmployee emp={emp} onDone={() => setInviting(false)} />
-          ) : (
+      <>
+        <tr>
+          <Td label={t.employees.name}>{emp.name}</Td>
+          <Td label={t.common.level}>{levelName}</Td>
+          <NumCell label={t.employees.revenuePercentShort}>
+            {fractionToPercent(emp.revenuePercent)}%
+          </NumCell>
+          <Td label={t.employees.login}>
+            {emp.cognitoSub ? (
+              <span className="mono">{t.employees.canSignIn}</span>
+            ) : inviting ? (
+              <InviteEmployee emp={emp} onDone={() => setInviting(false)} />
+            ) : (
+              <span className="row-actions">
+                <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
+                {emp.active ? (
+                  <Button size="sm" onClick={() => setInviting(true)}>{t.employees.invite}</Button>
+                ) : null}
+              </span>
+            )}
+          </Td>
+          <Td label={t.common.status}><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
+          <Td label={t.common.actions}>
+            {/*
+             * `sm` + `quiet` for edit: two identically-outlined full-size buttons gave the manager
+             * no cue which was the ordinary action, and at 40px they inflated the row. Edit is the
+             * routine one and stays quiet; activate/deactivate keeps its border because it changes
+             * whether a person can be paid.
+             */}
             <span className="row-actions">
-              <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
-              {emp.active ? (
-                <Button size="sm" onClick={() => setInviting(true)}>{t.employees.invite}</Button>
-              ) : null}
+              <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
+                {t.common.edit}
+              </Button>
+              <Button size="sm" onClick={toggleActive} disabled={update.isPending}>
+                {emp.active ? t.employees.deactivate : t.employees.reactivate}
+              </Button>
+              <Button size="sm" onClick={() => setDaysOffOpen((v) => !v)}>
+                {t.employees.daysOff}
+              </Button>
             </span>
-          )}
-        </Td>
-        <Td label={t.common.status}><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
-        <Td label={t.common.actions}>
-          {/*
-           * `sm` + `quiet` for edit: two identically-outlined full-size buttons gave the manager
-           * no cue which was the ordinary action, and at 40px they inflated the row. Edit is the
-           * routine one and stays quiet; activate/deactivate keeps its border because it changes
-           * whether a person can be paid.
-           */}
-          <span className="row-actions">
-            <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
-              {t.common.edit}
-            </Button>
-            <Button size="sm" onClick={toggleActive} disabled={update.isPending}>
-              {emp.active ? t.employees.deactivate : t.employees.reactivate}
-            </Button>
-          </span>
-          {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
-        </Td>
-      </tr>
+            {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
+          </Td>
+        </tr>
+        {daysOffOpen ? (
+          <tr className="setup__detailRow">
+            <td className="td" colSpan={6}>
+              <h3 className="sr-only">{t.daysOff.title}</h3>
+              {/* Admin write path: staff with no login, or who tell the manager verbally. */}
+              <DayOffPicker employeeId={emp.id} year={monthNow.year} month={monthNow.month} />
+            </td>
+          </tr>
+        ) : null}
+      </>
     );
   }
 

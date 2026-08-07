@@ -211,6 +211,7 @@ export const t = {
     roleFor: (name: string) => `Роль для ${name}`,
     levelFor: (name: string) => `Рівень для ${name}`,
     revenuePercentFor: (name: string) => `Відсоток від виручки для ${name}`,
+    daysOff: 'Вихідні',
   },
 
   /** Photographing a hand-written document for AI extraction. */

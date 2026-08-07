@@ -8,10 +8,12 @@ import { Toolbar } from '../ui/Toolbar';
 import {
   useAddLevel,
   useAddLocation,
+  useAppSettings,
   useDeleteLevel,
   useDeleteLocation,
   useLevels,
   useLocations,
+  useUpdateAppSettings,
   useUpdateLevel,
   useUpdateLocation,
   type Level,
@@ -431,6 +433,67 @@ function LevelsPanel() {
   );
 }
 
+/** Standing day-off limits. Admin-only, and they apply to every month until changed. */
+export function DayOffLimitsPanel() {
+  const settings = useAppSettings();
+  const update = useUpdateAppSettings();
+  const [required, setRequired] = useState('');
+  const [preferred, setPreferred] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const current = settings.data;
+  if (settings.isLoading || !current) return <p className="mono">{t.common.loading}</p>;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const body: { requiredDaysOffPerMonth?: number; preferredDaysOffPerMonth?: number } = {};
+    if (required.trim() !== '') body.requiredDaysOffPerMonth = Number(required);
+    if (preferred.trim() !== '') body.preferredDaysOffPerMonth = Number(preferred);
+    if (Object.keys(body).length === 0) return;
+    try {
+      await update.mutateAsync(body);
+      setRequired('');
+      setPreferred('');
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <form className="panel" style={{ padding: 'var(--s5)', marginTop: 'var(--s6)' }} onSubmit={submit}>
+      <h2 style={{ marginBottom: 'var(--s2)' }}>{t.daysOff.limitsTitle}</h2>
+      <p className="muted">{t.daysOff.limitsHint}</p>
+      <div className="field-row">
+        <Field
+          label={t.daysOff.requiredPerMonth}
+          name="requiredDaysOffPerMonth"
+          type="number"
+          min="0"
+          numeric
+          placeholder={String(current.requiredDaysOffPerMonth)}
+          value={required}
+          onChange={(e) => setRequired(e.target.value)}
+        />
+        <Field
+          label={t.daysOff.preferredPerMonth}
+          name="preferredDaysOffPerMonth"
+          type="number"
+          min="0"
+          numeric
+          placeholder={String(current.preferredDaysOffPerMonth)}
+          value={preferred}
+          onChange={(e) => setPreferred(e.target.value)}
+        />
+      </div>
+      {error ? <p className="setup__rowError">{error}</p> : null}
+      <Button type="submit" variant="primary" disabled={update.isPending}>
+        {update.isPending ? t.common.saving : t.common.save}
+      </Button>
+    </form>
+  );
+}
+
 /** Admin one-time setup: locations with their working hours, and levels with their pay rate. */
 export function SetupRoute() {
   return (
@@ -438,6 +501,7 @@ export function SetupRoute() {
       <Toolbar title={t.setup.title} />
       <LocationsPanel />
       <LevelsPanel />
+      <DayOffLimitsPanel />
     </>
   );
 }

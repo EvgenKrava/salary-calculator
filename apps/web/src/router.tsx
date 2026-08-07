@@ -16,6 +16,7 @@ import { MyShiftsRoute } from './routes/MyShiftsRoute';
 import { MyPayRoute } from './routes/MyPayRoute';
 import { SetupRoute } from './routes/SetupRoute';
 import { EmployeesRoute } from './routes/EmployeesRoute';
+import { DaysOffRoute } from './routes/DaysOffRoute';
 
 /**
  * The route tree. Auth is enforced in `beforeLoad` against the router context rather than
@@ -120,6 +121,12 @@ const myPayRoute = createRoute({
   component: MyPayRoute,
 });
 
+const myDaysOffRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/me/days-off',
+  component: DaysOffRoute,
+});
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -133,6 +140,7 @@ export const routeTree = rootRoute.addChildren([
     setupRoute,
     myShiftsRoute,
     myPayRoute,
+    myDaysOffRoute,
   ]),
 ]);
 
