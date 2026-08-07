@@ -4,7 +4,7 @@ export interface PayPeriod {
   end: string;
 }
 
-export type ShiftStatus = 'requested' | 'approved' | 'rejected';
+export type ShiftStatus = 'draft' | 'requested' | 'approved' | 'rejected';
 export type ShiftSource = 'native' | 'extracted' | 'imported';
 export type RevenueSource = 'manual' | 'extracted';
 export type RevenueStatus = 'pending' | 'needs_review' | 'approved' | 'rejected';

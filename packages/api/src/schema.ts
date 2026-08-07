@@ -10,6 +10,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   time,
   timestamp,
@@ -17,7 +18,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-export const shiftStatus = pgEnum('shift_status', ['requested', 'approved', 'rejected']);
+export const shiftStatus = pgEnum('shift_status', ['draft', 'requested', 'approved', 'rejected']);
 export const shiftSource = pgEnum('shift_source', ['native', 'extracted', 'imported']);
 export const revenueSource = pgEnum('revenue_source', ['manual', 'extracted']);
 export const revenueStatus = pgEnum('revenue_status', ['pending', 'needs_review', 'approved', 'rejected']);
@@ -135,4 +136,45 @@ export const scheduleNameMap = pgTable('schedule_name_map', {
   employeeId: uuid('employee_id').references(() => employees.id, { onDelete: 'cascade' }),
   ignored: boolean('ignored').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A day an employee asked to have off.
+ *
+ * `required` blocks publishing until the manager confirms; `preferred` only warns. Recorded by
+ * the employee in their cabinet or by an admin on their card — hence `createdBy`.
+ */
+export const dayOffRequests = pgTable(
+  'day_off_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => employees.id),
+    requestDate: date('request_date').notNull(),
+    kind: text('kind').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ oneKindPerDay: unique().on(t.employeeId, t.requestDate) }),
+);
+
+/** Months whose schedule is live. A row here closes the employee day-off picker for that month. */
+export const schedulePublications = pgTable(
+  'schedule_publications',
+  {
+    year: integer('year').notNull(),
+    month: integer('month').notNull(),
+    publishedBy: text('published_by').notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+    overrideReason: text('override_reason'),
+  },
+  (t) => ({ oneRowPerMonth: primaryKey({ columns: [t.year, t.month] }) }),
+);
+
+/** Single-row standing configuration. */
+export const appSettings = pgTable('app_settings', {
+  id: boolean('id').primaryKey().default(true),
+  requiredDaysOffPerMonth: integer('required_days_off_per_month').notNull().default(2),
+  preferredDaysOffPerMonth: integer('preferred_days_off_per_month').notNull().default(4),
 });
