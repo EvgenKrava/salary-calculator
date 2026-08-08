@@ -71,6 +71,8 @@ interface Fixture {
    * `slotsPending`, since a write's status depends on knowing whether the month is published.
    */
   publicationPending?: boolean;
+  /** The publication-state GET failing outright, mirroring `slotsStatus`. */
+  publicationStatus?: number;
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -104,6 +106,7 @@ function stubFetch(fx: Fixture = {}) {
       // A request that never resolves, so the component is observed mid-load rather than after
       // it — the same technique as `slotsPending`.
       if (fx.publicationPending) return new Promise<Response>(() => {});
+      if (fx.publicationStatus) return jsonResponse({ error: 'failed' }, fx.publicationStatus);
       return jsonResponse(fx.publication ?? { published: false, overrides: [] });
     }
     if (url.includes('/api/shifts')) {
@@ -435,6 +438,25 @@ describe('ScheduleGrid', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.includes('/api/shifts'))).toBe(true));
     const post = calls.find((c) => c.method === 'POST' && c.url.includes('/api/shifts'))!;
     expect(post.body).toMatchObject({ locationId: 'l1', status: 'draft' });
+  });
+
+  it('blocks the grid when the publication state cannot be read', async () => {
+    /*
+     * The error-gate twin of the pending test above, and it exists because a review mutation
+     * deleted `publication` from `firstError(...)` and the whole suite stayed green: with the
+     * publication read failing, the grid stayed interactive and a write could fire without
+     * knowing whether the month is published — the same unknown-state write the loading gate
+     * blocks. The behaviour was correct; nothing pinned it.
+     */
+    const calls = stubFetch({ publicationStatus: 500 });
+    renderGrid();
+
+    // Wait for the loading gate to settle first — asserting against the still-loading screen
+    // passes vacuously in either build, which is exactly how the gap this test closes survived
+    // the suite. Once loading is over, the correct build shows the failure panel and the broken
+    // one shows a live table; the walk below tells them apart.
+    await waitFor(() => expect(screen.queryByText(t.common.loading)).not.toBeInTheDocument());
+    await expectNoCellCanWrite(calls);
   });
 
   it('shows no interactive cell while the publication state is still loading', async () => {
