@@ -48,6 +48,22 @@ describe('migration journal', () => {
     expect(result.skipped).toBe(MIGRATION_NAMES.length);
   });
 
+  it('rejects a partially-migrated pre-journal database instead of guessing', async () => {
+    /* Simulates a DB restored from an old snapshot: only the first five migrations ran
+     * (0001-0005), no journal. `levels` exists (0001) but `schedule_publication_overrides`
+     * does not (0007) — the adoption probe must detect this straddle and refuse to seed
+     * the journal, rather than assuming 0006/0007 also ran. */
+    const db = new PGlite();
+    const { MIGRATIONS } = await import('@salary/core/migrations');
+    const { splitSqlStatements } = await import('@salary/core');
+    for (const sql of MIGRATIONS.slice(0, 5)) for (const s of splitSqlStatements(sql)) await db.query(s);
+
+    await expect(runMigrations(pgliteExecutor(db))).rejects.toThrow(/partially migrated/);
+
+    const rows = await db.query<{ name: string }>('SELECT name FROM schema_migrations');
+    expect(rows.rows).toEqual([]);
+  });
+
   it('applies only the tail when the journal is behind', async () => {
     const db = new PGlite();
     await runMigrations(pgliteExecutor(db));
