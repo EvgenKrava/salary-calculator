@@ -422,6 +422,18 @@ export const t = {
     slotNumberInvalid: 'Номер зміни має бути цілим числом від 1.',
   },
 
+  /** The (level, location) pay matrix — the single source of what a shift is worth. */
+  payMatrix: {
+    title: 'Оплата по локаціях',
+    hint: 'Ставка за день і відсоток від виручки для кожного рівня на кожній локації. Порожня клітинка блокує розрахунок зарплати для цієї комбінації.',
+    ratePerDay: 'Ставка, грн/день',
+    revenuePercent: '% від виручки',
+    notConfigured: 'не задано',
+    clearConfirm: 'Прибрати оплату для цієї комбінації? Розрахунок зарплати буде заблоковано, поки її не задано знову.',
+    missingTitle: 'Не задано оплату',
+    missingHint: 'Розрахунок заблоковано: для цих комбінацій рівня і локації не задано ставку.',
+  },
+
   schedule: {
     title: 'Графік',
     /** Monday-first, per Ukrainian convention — this order is the point, not Sunday-first. */

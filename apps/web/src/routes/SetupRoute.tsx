@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Table, Th, Td, NumCell } from '../ui/Table';
-import { Money } from '../ui/Money';
+import { Table, Th, Td } from '../ui/Table';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
@@ -252,29 +251,22 @@ function LocationsPanel() {
 }
 
 /**
- * One level row: name and day rate, editable inline.
+ * One level row: name, editable inline. Pay lives on the (level, location) matrix, not here.
  *
- * The rate is the single largest input to a payslip — hourly pay is this figure pro-rated by hours
- * worked — so it needs to be correctable without a redeploy. Deleting is expected to 409 while any
- * employee still references the level; the API's message is surfaced rather than second-guessed.
+ * Deleting is expected to 409 while any employee still references the level; the API's message
+ * is surfaced rather than second-guessed.
  */
 export function LevelRow({ level }: { level: Level }) {
   const update = useUpdateLevel();
   const remove = useDeleteLevel();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(level.name);
-  const [rate, setRate] = useState(String(level.ratePerDay));
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     setError(null);
-    const ratePerDay = Number(rate);
-    if (!Number.isFinite(ratePerDay) || ratePerDay < 0) {
-      setError(t.setup.rateInvalid);
-      return;
-    }
     try {
-      await update.mutateAsync({ id: level.id, name, ratePerDay });
+      await update.mutateAsync({ id: level.id, name });
       setEditing(false);
     } catch (err) {
       setError((err as Error).message);
@@ -294,7 +286,6 @@ export function LevelRow({ level }: { level: Level }) {
     return (
       <tr>
         <Td label={t.setup.levelName}>{level.name}</Td>
-        <NumCell money label={t.setup.ratePerDay}><Money value={level.ratePerDay} /></NumCell>
         <Td label={t.common.actions}>
           <span className="row-actions">
             <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
@@ -326,17 +317,6 @@ export function LevelRow({ level }: { level: Level }) {
           onChange={(e) => setName(e.target.value)}
         />
       </Td>
-      <Td label={t.setup.ratePerDay}>
-        <input
-          className="field__input mono"
-          type="number"
-          step="0.01"
-          min="0"
-          aria-label={t.setup.rateFor(level.name)}
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
-        />
-      </Td>
       <Td label={t.common.actions}>
         <span className="row-actions">
           <Button size="sm" variant="primary" onClick={() => void save()} disabled={update.isPending}>
@@ -347,7 +327,6 @@ export function LevelRow({ level }: { level: Level }) {
             variant="quiet"
             onClick={() => {
               setName(level.name);
-              setRate(String(level.ratePerDay));
               setError(null);
               setEditing(false);
             }}
@@ -365,7 +344,6 @@ function LevelsPanel() {
   const levels = useLevels();
   const add = useAddLevel();
   const [name, setName] = useState('');
-  const [ratePerDay, setRatePerHour] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -374,9 +352,8 @@ function LevelsPanel() {
     setError(null);
     setBusy(true);
     try {
-      await add.mutateAsync({ name, ratePerDay: Number(ratePerDay) });
+      await add.mutateAsync({ name });
       setName('');
-      setRatePerHour('');
     } catch (err) {
       // e.g. "level name already exists"
       setError((err as Error).message);
@@ -398,7 +375,6 @@ function LevelsPanel() {
           <thead>
             <tr>
               <Th>{t.setup.levelName}</Th>
-              <Th numeric>{t.setup.ratePerDay}</Th>
               <Th>{t.common.actions}</Th>
             </tr>
           </thead>
@@ -412,17 +388,12 @@ function LevelsPanel() {
 
       <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s4)' }} onSubmit={submit}>
         <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.addLevel}</h2>
-        <Field label={t.setup.levelName} name="name" required value={name} onChange={(e) => setName(e.target.value)} />
         <Field
-          label={t.setup.ratePerDay}
-          name="ratePerDay"
-          type="number"
-          step="0.01"
-          min="0"
-          numeric
+          label={t.setup.levelName}
+          name="name"
           required
-          value={ratePerDay}
-          onChange={(e) => setRatePerHour(e.target.value)}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           error={error ?? undefined}
         />
         <Button type="submit" variant="primary" disabled={busy}>

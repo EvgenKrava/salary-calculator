@@ -21,6 +21,9 @@ const {
   usePublicationState,
   usePublishPreview,
   usePublishMonth,
+  usePayRates,
+  useSetPayRate,
+  useClearPayRate,
 } = await import('../src/lib/queries');
 
 function jsonResponse(body: unknown, status = 200) {
@@ -216,5 +219,104 @@ describe('usePublishMonth', () => {
       month: 9,
       overrideReason: 'covering a call-out',
     });
+  });
+});
+
+describe('usePayRates', () => {
+  it('GETs /api/pay-rates', async () => {
+    fetchMock = vi.fn(async () => jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => usePayRates(), { wrapper: wrapper(newClient()) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const req = requestSent(fetchMock);
+    expect(req.method).toBe('GET');
+    expect(req.url).toBe('https://api.test/api/pay-rates');
+  });
+});
+
+describe('useSetPayRate', () => {
+  it('PUTs the full cell — levelId, locationId, ratePerDay, revenuePercent', async () => {
+    fetchMock = vi.fn(async () =>
+      jsonResponse({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600, revenuePercent: 0.05 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useSetPayRate(), { wrapper: wrapper(newClient()) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600, revenuePercent: 0.05 });
+    });
+
+    const req = requestSent(fetchMock);
+    expect(req.method).toBe('PUT');
+    expect(req.url).toBe('https://api.test/api/pay-rates');
+    expect(req.body).toEqual({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600, revenuePercent: 0.05 });
+  });
+
+  it('omits revenuePercent from the body when the caller does not pass one, leaving the API default to apply', async () => {
+    fetchMock = vi.fn(async () =>
+      jsonResponse({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600, revenuePercent: 0 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useSetPayRate(), { wrapper: wrapper(newClient()) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600 });
+    });
+
+    const req = requestSent(fetchMock);
+    expect(req.body).toEqual({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600 });
+    expect(req.body).not.toHaveProperty('revenuePercent');
+  });
+
+  it('invalidates both pay-rates and salary-runs, since a changed cell changes what a future run pays', async () => {
+    fetchMock = vi.fn(async () =>
+      jsonResponse({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600, revenuePercent: 0 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = newClient();
+    client.setQueryData(['pay-rates'], []);
+    client.setQueryData(['salary-runs'], []);
+    const { result } = renderHook(() => useSetPayRate(), { wrapper: wrapper(client) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ levelId: 'lv1', locationId: 'loc1', ratePerDay: 600 });
+    });
+
+    expect(client.getQueryState(['pay-rates'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['salary-runs'])?.isInvalidated).toBe(true);
+  });
+});
+
+describe('useClearPayRate', () => {
+  it('DELETEs with levelId and locationId as query params', async () => {
+    fetchMock = vi.fn(async () => jsonResponse({ deleted: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useClearPayRate(), { wrapper: wrapper(newClient()) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ levelId: 'lv1', locationId: 'loc1' });
+    });
+
+    const req = requestSent(fetchMock);
+    expect(req.method).toBe('DELETE');
+    expect(req.url).toBe('https://api.test/api/pay-rates?levelId=lv1&locationId=loc1');
+    expect(req.body).toBeUndefined();
+  });
+
+  it('invalidates both pay-rates and salary-runs', async () => {
+    fetchMock = vi.fn(async () => jsonResponse({ deleted: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = newClient();
+    client.setQueryData(['pay-rates'], []);
+    client.setQueryData(['salary-runs'], []);
+    const { result } = renderHook(() => useClearPayRate(), { wrapper: wrapper(client) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ levelId: 'lv1', locationId: 'loc1' });
+    });
+
+    expect(client.getQueryState(['pay-rates'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['salary-runs'])?.isInvalidated).toBe(true);
   });
 });

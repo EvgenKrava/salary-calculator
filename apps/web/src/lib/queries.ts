@@ -13,13 +13,11 @@ export interface Location {
 export interface Level {
   id: string;
   name: string;
-  ratePerDay: number;
 }
 export interface Employee {
   id: string;
   name: string;
   levelId: string;
-  revenuePercent: number;
   cognitoSub: string | null;
   active: boolean;
 }
@@ -142,17 +140,17 @@ export function useAddLevel() {
   const api = useApi();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; ratePerDay: number }) => api.post<Level>('/api/levels', body),
+    mutationFn: (body: { name: string }) => api.post<Level>('/api/levels', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['levels'] }),
   });
 }
 
-/** Edit a level's name or day rate. The rate is what every hourly-pay figure derives from. */
+/** Edit a level's name. Pay now lives on the (level, location) matrix, not here. */
 export function useUpdateLevel() {
   const api = useApi();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; name?: string; ratePerDay?: number }) =>
+    mutationFn: ({ id, ...body }: { id: string; name?: string }) =>
       api.patch<Level>(`/api/levels/${id}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['levels'] });
@@ -170,6 +168,47 @@ export function useDeleteLevel() {
   return useMutation({
     mutationFn: (id: string) => api.del<{ deleted: string }>(`/api/levels/${id}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['levels'] }),
+  });
+}
+
+export interface PayRateDto {
+  levelId: string;
+  locationId: string;
+  ratePerDay: number;
+  revenuePercent: number;
+}
+
+/** The (level, location) pay matrix — every configured cell. */
+export function usePayRates() {
+  const api = useApi();
+  return useQuery({ queryKey: ['pay-rates'], queryFn: () => api.get<PayRateDto[]>('/api/pay-rates') });
+}
+
+/** Upsert one matrix cell. The body is the full cell state, not a patch. */
+export function useSetPayRate() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { levelId: string; locationId: string; ratePerDay: number; revenuePercent?: number }) =>
+      api.put<PayRateDto>('/api/pay-rates', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pay-rates'] });
+      // The matrix is a payroll input: a changed cell changes what a future run pays.
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
+  });
+}
+
+export function useClearPayRate() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ levelId, locationId }: { levelId: string; locationId: string }) =>
+      api.del<{ deleted: boolean }>(`/api/pay-rates?levelId=${levelId}&locationId=${locationId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['pay-rates'] });
+      void qc.invalidateQueries({ queryKey: ['salary-runs'] });
+    },
   });
 }
 
@@ -214,7 +253,6 @@ export function useAddEmployee() {
     mutationFn: (body: {
       name: string;
       levelId: string;
-      revenuePercent: number;
       cognitoSub?: string | null;
       active?: boolean;
     }) => api.post<Employee>('/api/employees', body),
@@ -243,7 +281,6 @@ export function useUpdateEmployee() {
       id: string;
       name?: string;
       levelId?: string;
-      revenuePercent?: number;
       cognitoSub?: string | null;
       active?: boolean;
     }) => api.patch<Employee>(`/api/employees/${id}`, body),
@@ -492,6 +529,7 @@ export function useSalaryRunPreview() {
         periodEnd: string;
         lines: SalaryRunLine[];
         gaps: { employeeId: string; locationId: string; date: string }[];
+        missingRates: { levelId: string; locationId: string }[];
         blocked: boolean;
       }>('/api/salary-runs/preview', body),
   });

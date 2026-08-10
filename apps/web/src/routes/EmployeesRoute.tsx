@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Th, Td, NumCell } from '../ui/Table';
+import { Table, Th, Td } from '../ui/Table';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
@@ -52,7 +52,6 @@ function AddEmployee({ levels }: { levels: Level[] }) {
   const add = useAddEmployee();
   const [name, setName] = useState('');
   const [levelId, setLevelId] = useState('');
-  const [percent, setPercent] = useState('0');
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -62,16 +61,10 @@ function AddEmployee({ levels }: { levels: Level[] }) {
       setError(t.employees.chooseLevelFirst);
       return;
     }
-    const fraction = percentToFraction(percent);
-    if (fraction === null) {
-      setError(t.employees.badPercent);
-      return;
-    }
     try {
       await add.mutateAsync({
         name: name.trim(),
         levelId,
-        revenuePercent: fraction,
         // Blank means "not linked yet" — send null, not an empty string, which the API rejects.
         // Deliberately NOT sent: the login is created by the Invite action, which sets this
         // from Cognito's own response. Asking a manager to paste a UUID was an internal
@@ -79,7 +72,6 @@ function AddEmployee({ levels }: { levels: Level[] }) {
         // employee to nobody.
       });
       setName('');
-      setPercent('0');
     } catch (err) {
       setError((err as Error).message);
     }
@@ -115,19 +107,11 @@ function AddEmployee({ levels }: { levels: Level[] }) {
             <option value="">{t.employees.chooseLevel}</option>
             {levels.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.name} — {l.ratePerDay} ₴/{t.employees.perDay}
+                {l.name}
               </option>
             ))}
           </select>
         </div>
-        <Field
-          label={t.employees.revenuePercent}
-          name="revenuePercent"
-          numeric
-          inputMode="decimal"
-          value={percent}
-          onChange={(e) => setPercent(e.target.value)}
-        />
       </div>
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
       <Button type="submit" variant="primary" disabled={add.isPending || levels.length === 0}>
@@ -206,7 +190,6 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
   const update = useUpdateEmployee();
   const [editing, setEditing] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const [percent, setPercent] = useState(fractionToPercent(emp.revenuePercent));
   const [levelId, setLevelId] = useState(emp.levelId);
   const [error, setError] = useState<string | null>(null);
   const [daysOffOpen, setDaysOffOpen] = useState(false);
@@ -216,16 +199,10 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
 
   async function save() {
     setError(null);
-    const fraction = percentToFraction(percent);
-    if (fraction === null) {
-      setError(t.employees.badPercent);
-      return;
-    }
     try {
       await update.mutateAsync({
         id: emp.id,
         levelId,
-        revenuePercent: fraction,
         // cognitoSub is managed by Invite, not hand-edited.
       });
       setEditing(false);
@@ -249,9 +226,6 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
         <tr>
           <Td label={t.employees.name}>{emp.name}</Td>
           <Td label={t.common.level}>{levelName}</Td>
-          <NumCell label={t.employees.revenuePercentShort}>
-            {fractionToPercent(emp.revenuePercent)}%
-          </NumCell>
           <Td label={t.employees.login}>
             {emp.cognitoSub ? (
               <span className="mono">{t.employees.canSignIn}</span>
@@ -290,7 +264,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
         </tr>
         {daysOffOpen ? (
           <tr className="setup__detailRow">
-            <td className="td" colSpan={6}>
+            <td className="td" colSpan={5}>
               <h3 className="sr-only">{t.daysOff.title}</h3>
               {/* Admin write path: staff with no login, or who tell the manager verbally. */}
               <DayOffPicker employeeId={emp.id} year={monthNow.year} month={monthNow.month} />
@@ -311,16 +285,6 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
           ))}
         </select>
       </Td>
-      <NumCell>
-        <input
-          className="field__input"
-          style={{ textAlign: 'right', maxWidth: '8ch' }}
-          inputMode="decimal"
-          aria-label={t.employees.revenuePercentFor(emp.name)}
-          value={percent}
-          onChange={(e) => setPercent(e.target.value)}
-        />
-      </NumCell>
       {/* Login state is read-only here: it is set by Invite from Cognito's own response, so
           there is nothing for a manager to type or mistype. */}
       <Td>
@@ -379,7 +343,6 @@ export function EmployeesRoute() {
             <tr>
               <Th>{t.employees.name}</Th>
               <Th>{t.common.level}</Th>
-              <Th numeric>{t.employees.revenuePercentShort}</Th>
               <Th>{t.employees.login}</Th>
               <Th>{t.common.status}</Th>
               <Th>{t.common.actions}</Th>

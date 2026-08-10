@@ -181,33 +181,20 @@ describe('LocationRow', () => {
 });
 
 describe('LevelRow', () => {
-  const LEVEL = { id: 'lv1', name: 'Бариста', ratePerDay: 600 };
+  const LEVEL = { id: 'lv1', name: 'Бариста' };
 
-  it('saves an edited day rate as a number, not a string', async () => {
+  it('saves an edited name', async () => {
     inTable(<LevelRow level={LEVEL as never} />);
     await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
-    const rate = screen.getByLabelText(t.setup.rateFor('Бариста'));
-    await userEvent.clear(rate);
-    await userEvent.type(rate, '750');
+    const name = screen.getByLabelText(t.setup.levelNameFor('Бариста'));
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Бариста-2');
     await userEvent.click(screen.getByRole('button', { name: t.common.save }));
 
     expect(updateLevel.mutateAsync).toHaveBeenCalledWith({
       id: 'lv1',
-      name: 'Бариста',
-      ratePerDay: 750,
+      name: 'Бариста-2',
     });
-  });
-
-  it('rejects a negative rate locally rather than sending it', async () => {
-    inTable(<LevelRow level={LEVEL as never} />);
-    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
-    const rate = screen.getByLabelText(t.setup.rateFor('Бариста'));
-    await userEvent.clear(rate);
-    await userEvent.type(rate, '-5');
-    await userEvent.click(screen.getByRole('button', { name: t.common.save }));
-
-    expect(updateLevel.mutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByText(t.setup.rateInvalid)).toBeInTheDocument();
   });
 
   it('surfaces the API 409 when an employee still uses the level', async () => {
