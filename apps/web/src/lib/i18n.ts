@@ -181,7 +181,7 @@ export const t = {
      * label has to say: the old 'Рівень (визначає ставку за день)' was a promise the data model
      * stopped keeping, and it would have an admin looking for a rate on the level.
      */
-    levelWithRate: 'Рівень (з локацією визначає оплату)',
+    level: 'Рівень (з локацією визначає оплату)',
     chooseLevel: 'Виберіть рівень…',
     adding: 'Додаємо…',
     addButton: 'Додати працівника',

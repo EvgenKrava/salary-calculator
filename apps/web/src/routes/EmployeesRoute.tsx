@@ -82,7 +82,7 @@ function AddEmployee({ levels }: { levels: Level[] }) {
           required
         />
         <div className="field field--month">
-          <label className="field__label" htmlFor="levelId">{t.employees.levelWithRate}</label>
+          <label className="field__label" htmlFor="levelId">{t.employees.level}</label>
           <select
             id="levelId"
             className="field__input field__select"
