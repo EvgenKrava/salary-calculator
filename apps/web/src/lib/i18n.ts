@@ -175,17 +175,18 @@ export const t = {
     title: 'Працівники',
     addTitle: 'Додати працівника',
     name: "Ім'я",
-    levelWithRate: 'Рівень (визначає ставку за день)',
+    /*
+     * A level no longer carries a rate — it selects the row of the pay matrix, and the shift's
+     * location selects the column. Both together decide what a day is worth, which is what this
+     * label has to say: the old 'Рівень (визначає ставку за день)' was a promise the data model
+     * stopped keeping, and it would have an admin looking for a rate on the level.
+     */
+    levelWithRate: 'Рівень (з локацією визначає оплату)',
     chooseLevel: 'Виберіть рівень…',
-    revenuePercent: 'Відсоток від виручки (0–100)',
-    /** Short form for a table header, where the long label would not fit. */
-    revenuePercentShort: '% виручки',
-    /** Unit suffix on a rate, e.g. "600 ₴/день". */
-    perDay: 'день',
     adding: 'Додаємо…',
     addButton: 'Додати працівника',
     noLevels:
-      'Ще немає жодного рівня. Адміністратор має спочатку створити рівень із погодинною ставкою.',
+      'Ще немає жодного рівня. Адміністратор має спочатку створити рівень і задати оплату по локаціях.',
     empty: 'Ще немає працівників.',
     emptyAction: 'Додайте першого вище.',
     login: 'Вхід',
@@ -205,12 +206,10 @@ export const t = {
     inactive: 'неактивний',
     deactivate: 'Деактивувати',
     reactivate: 'Активувати',
-    badPercent: 'Відсоток від виручки має бути числом від 0 до 100.',
-    chooseLevelFirst: 'Виберіть рівень — він визначає ставку за день.',
+    chooseLevelFirst: 'Виберіть рівень — разом із локацією він визначає оплату.',
     loginEmailFor: (name: string) => `Пошта для входу для ${name}`,
     roleFor: (name: string) => `Роль для ${name}`,
     levelFor: (name: string) => `Рівень для ${name}`,
-    revenuePercentFor: (name: string) => `Відсоток від виручки для ${name}`,
     daysOff: 'Вихідні',
   },
 
@@ -347,6 +346,15 @@ export const t = {
     periodStart: 'Початок періоду',
     periodEnd: 'Кінець періоду',
     created: 'Створено',
+    /*
+     * Last-resort blocked message: the API refused and named no cause.
+     *
+     * Cannot happen today (a run is only blocked by revenue gaps or unconfigured pay, and both
+     * come with their own worklist), but the two worklists render conditionally — so without this
+     * a future cause would show the preview heading over an empty screen.
+     */
+    blockedUnknown:
+      'Розрахунок заблоковано, але причину не вказано. Оновіть сторінку і спробуйте ще раз; якщо повторюється — зверніться до адміністратора.',
     blockedTitle: 'Розрахунок заблоковано — немає виручки',
     blockedHint:
       'Додайте підтверджену виручку за кожен день нижче, потім запустіть розрахунок знову. Нічого не збережено.',
@@ -385,7 +393,15 @@ export const t = {
     levels: 'Рівні',
     addLevel: 'Додати рівень',
     levelName: 'Назва рівня',
-    ratePerDay: 'Ставка за день, ₴',
+    /*
+     * A level is a pure LABEL now — no rate of its own.
+     *
+     * Pay moved to the (level, location) matrix below, because the same level is paid
+     * differently at different cafés. The hint says so on the panel that used to own the rate,
+     * so an admin who remembers a rate field here is told where it went rather than concluding
+     * it was lost. `ratePerDay`/`rateFor`/`rateInvalid` were deleted along with the field.
+     */
+    levelsHint: 'Рівень — це лише назва. Ставку за день і відсоток від виручки задають у «Оплата по локаціях» нижче, окремо для кожної локації.',
     noLocations: 'Ще немає локацій.',
     noLocationsAction: 'Додайте одну нижче.',
     noLevels: 'Ще немає рівнів.',
@@ -401,8 +417,6 @@ export const t = {
     opensAtFor: (name: string) => `Час відкриття, ${name}`,
     closesAtFor: (name: string) => `Час закриття, ${name}`,
     levelNameFor: (name: string) => `Назва рівня (зараз ${name})`,
-    rateFor: (name: string) => `Ставка за день, ${name}`,
-    rateInvalid: 'Ставка має бути числом не менше 0.',
 
     /*
      * Shift slots. The hint states the payroll consequence rather than describing the fields:
@@ -432,6 +446,46 @@ export const t = {
     clearConfirm: 'Прибрати оплату для цієї комбінації? Розрахунок зарплати буде заблоковано, поки її не задано знову.',
     missingTitle: 'Не задано оплату',
     missingHint: 'Розрахунок заблоковано: для цих комбінацій рівня і локації не задано ставку.',
+
+    caption: 'Оплата за рівнем і локацією',
+    /*
+     * Unit affixes, printed beside every input.
+     *
+     * A matrix repeats the same two figures in every cell, so the full labels
+     * ('Ставка, грн/день') would print once per cell — sixteen labels on a 4x4 matrix, which
+     * buries the figures they describe. The unit alone says which box is which, and the row and
+     * column headers supply the level and the location. The accessible names below CONTAIN these
+     * strings so the visible label is part of the announced one (WCAG 2.5.3 Label in Name).
+     */
+    rateUnit: '₴/день',
+    percentUnit: '%',
+    rateFor: (level: string, location: string) => `Ставка ₴/день — ${level}, ${location}`,
+    percentFor: (level: string, location: string) => `% від виручки — ${level}, ${location}`,
+    /*
+     * Errors name the figure and the rule, never a generic "invalid". The rate one also states
+     * why a bare percent is refused: a day rate of 0 is a real, payable configuration, so it
+     * has to be typed rather than arrived at by leaving the box empty.
+     */
+    rateInvalid: 'Вкажіть ставку за день — число 0 або більше. Порожня ставка не зберігається.',
+    percentInvalid: 'Відсоток від виручки має бути числом від 0 до 100.',
+    /*
+     * Confirmation that a cell was written.
+     *
+     * This screen commits on leaving a cell, so a corrected figure looks identical saved or not —
+     * unlike every other write in the app, where something visibly moves. A failure says so, so
+     * without this the only indistinguishable outcome would be silent success.
+     */
+    saved: 'збережено',
+    clearTitle: 'Прибрати оплату',
+    clearFor: (level: string, location: string) => `${level} — ${location}`,
+    clear: 'Прибрати оплату',
+    needsSetup: 'Немає рівнів або локацій, тому оплату задати ще нічому.',
+    needsSetupAction: 'Спочатку додайте локацію і рівень вище.',
+
+    /** One blocked combination, and the accessible name of the link that fixes it. */
+    missingCell: (level: string, location: string) => `${level} — ${location}`,
+    missingCellLink: (level: string, location: string) => `Задати оплату: ${level} — ${location}`,
+    missingCount: (n: number) => `${n} ${plural(n, 'комбінація', 'комбінації', 'комбінацій')}`,
   },
 
   schedule: {

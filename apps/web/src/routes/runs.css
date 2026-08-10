@@ -1,0 +1,55 @@
+/*
+ * A blocked salary run's worklist.
+ *
+ * "A *blocked* state names the blocker and links to it — a blocked salary run lists the missing
+ * location-days as links, because that is the manager's next action" (docs/design/system.md
+ * § Empty vs blocked). So each blocker is a full-width row that behaves like a real link target,
+ * not a bullet with a word in it.
+ */
+
+.blocker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.blocker__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  /* Full-width target at the tap minimum: this is a row a manager hits on a phone, having just
+     been told payroll will not run. */
+  min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.blocker__link:hover {
+  background: var(--surface-sunk);
+  border-color: var(--rule-strong);
+}
+
+/* Never outline: none — the keyboard path through a blocker has to be visible. */
+.blocker__link:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The arrow nudges on hover, so the row reads as going somewhere. Not the only affordance:
+   the border and the accessible name both say it is a link. */
+.blocker__link > [aria-hidden] {
+  color: var(--ink-muted);
+  transition: transform var(--transition);
+}
+.blocker__link:hover > [aria-hidden] {
+  transform: translateX(2px);
+}

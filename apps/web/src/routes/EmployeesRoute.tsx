@@ -21,32 +21,17 @@ import { t } from '../lib/i18n';
 /**
  * Manage employees — the screen the nav has always linked to.
  *
- * Two fields here decide what people are paid, so both are shown explicitly rather than
- * hidden behind defaults:
- * - **Level** sets the hourly rate.
- * - **Revenue %** is that person's share of a location-day's revenue, prorated by the hours
- *   they worked (design §3).
+ * **Level is the only pay input here, and it is half of one.** Pay lives on the (level,
+ * location) matrix in Setup: the level picks the row, the shift's location picks the column, and
+ * the cell holds both the day rate and the revenue percent. So this screen decides *which* pay
+ * row a person is on, and the matrix decides what that row is worth — which is why the revenue-%
+ * field that used to sit beside the level is gone rather than moved.
  *
  * The Cognito link (`cognitoSub`) is NOT editable here. It is written by the Invite action from
  * Cognito's own response — asking a manager to paste a UUID leaked an implementation detail into
  * the UI, and a typo would silently link an employee to no login at all, leaving them unable to
  * see their own shifts or pay (those endpoints key off the verified JWT `sub`).
  */
-
-/** Percent shown to humans (12.5) vs. the fraction the API stores (0.125). */
-export function percentToFraction(text: string): number | null {
-  const trimmed = text.trim();
-  if (trimmed === '') return 0;
-  const value = Number(trimmed);
-  if (!Number.isFinite(value) || value < 0 || value > 100) return null;
-  // Round to 4 decimal places — the column is NUMERIC(6,4), so more precision than that is
-  // silently discarded by the database and the UI would misreport what was saved.
-  return Math.round((value / 100) * 10_000) / 10_000;
-}
-
-export function fractionToPercent(fraction: number): string {
-  return String(Math.round(fraction * 100 * 10_000) / 10_000);
-}
 
 function AddEmployee({ levels }: { levels: Level[] }) {
   const add = useAddEmployee();

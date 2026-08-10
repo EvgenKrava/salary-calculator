@@ -1,7 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { RunBreakdown, BlockedRun, parseBonuses } from '../src/routes/RunsRoute';
+import type { ReactNode } from 'react';
 import { t, formatDate } from '../src/lib/i18n';
+
+// A blocked run's next action is a LINK to the screen that fixes it, so these components pull in
+// the router. Stubbed to a plain anchor: what matters here is that the destination is named.
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to }: { children?: ReactNode; to?: string }) => <a href={to}>{children}</a>,
+}));
+
+const { RunBreakdown, BlockedRun, MissingRates, parseBonuses } = await import('../src/routes/RunsRoute');
 
 const LINES = [
   { employeeId: 'e1', hourlyPay: 160, revenueShare: 50, bonus: 25, total: 235 },
@@ -70,6 +78,63 @@ describe('blocked run', () => {
     // text so this checks the blocker names its cause, not just that the word occurs once.
     // The heading must say WHY the run is blocked, not just that it is.
     expect(screen.getByText(t.runs.blockedTitle)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The second blocker: a (level, location) combination with no configured pay.
+ *
+ * It blocks the run exactly like a revenue gap, and the API already refuses — so what this
+ * component owes the manager is the same thing `BlockedRun` owes them: the NAMES of what is
+ * wrong, each one a link to where it is fixed. The API sends ids, and a screen reading
+ * "lv1 — loc2 is not configured" is a dead end.
+ */
+describe('missing pay rates', () => {
+  const LEVELS = [
+    { id: 'lv1', name: 'Бариста' },
+    { id: 'lv2', name: 'Старший бариста' },
+  ];
+  const LOCS = [
+    { id: 'l1', name: 'Центр', opensAt: '08:00', closesAt: '20:00' },
+    { id: 'l2', name: 'Поділ', opensAt: '09:00', closesAt: '21:00' },
+  ];
+
+  it('names the level and the location of every unconfigured cell', () => {
+    render(
+      <MissingRates
+        missing={[
+          { levelId: 'lv1', locationId: 'l2' },
+          { levelId: 'lv2', locationId: 'l1' },
+        ]}
+        levels={LEVELS}
+        locations={LOCS}
+      />,
+    );
+    expect(screen.getByText(t.payMatrix.missingTitle)).toBeInTheDocument();
+    expect(screen.getByText(t.payMatrix.missingHint)).toBeInTheDocument();
+
+    const entries = screen.getAllByRole('listitem').map((li) => li.textContent);
+    expect(entries[0]).toContain('Бариста');
+    expect(entries[0]).toContain('Поділ');
+    expect(entries[1]).toContain('Старший бариста');
+    expect(entries[1]).toContain('Центр');
+    // Ids are an implementation detail; a manager cannot act on one.
+    expect(screen.queryByText(/lv1|loc2/)).not.toBeInTheDocument();
+  });
+
+  it('links each one to the setup screen where the pay is configured', () => {
+    render(
+      <MissingRates
+        missing={[{ levelId: 'lv1', locationId: 'l2' }]}
+        levels={LEVELS}
+        locations={LOCS}
+      />,
+    );
+    // A blocked state names the blocker AND links to it — docs/design/system.md § Empty vs
+    // blocked. Naming it without the link leaves the manager hunting for the screen.
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', '/setup');
+    expect(link.textContent).toContain('Бариста');
   });
 });
 

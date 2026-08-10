@@ -1,0 +1,305 @@
+/*
+ * The (level, location) pay matrix.
+ *
+ * A table whose cells are INPUTS, not figures — so it deliberately does not inherit `.table`.
+ * Two 40px controls plus their units do not fit a 40px ledger row, and forcing them to would
+ * either clip the boxes or silently shrink the tap target on the one screen where a mistyped
+ * digit is a payroll dispute. This is a Form-archetype screen (docs/design/system.md § Page
+ * archetypes): the grid is here because the data is two-dimensional, not because it is dense.
+ */
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* The corner above the level names: structurally an empty cell, visually nothing. */
+.matrix__corner {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--rule);
+}
+
+.matrix__colhead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-raised);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  padding: var(--s3);
+  white-space: nowrap;
+  /* Same reason as .th: a sticky element's border-bottom does not paint reliably while content
+     scrolls beneath it, leaving the header visually detached. */
+  box-shadow: inset 0 -1px 0 var(--rule), 0 1px 2px rgb(21 24 27 / 4%);
+}
+
+/*
+ * The level name. Sticky horizontally, because with four or more cafés the matrix scrolls and a
+ * column of pay figures with the level scrolled off the left edge is unreadable — worse than
+ * unreadable, it invites entering a rate against the wrong level.
+ */
+.matrix__rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
+  padding: var(--s3);
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  /* Casts over the scrolling cells so the boundary is visible mid-scroll. */
+  box-shadow: 1px 0 2px rgb(21 24 27 / 4%);
+}
+
+.matrix__cellwrap {
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  /*
+   * Floor wide enough for both figures and their units on ONE line.
+   *
+   * Without it the columns share width by content, so opening the clear-confirmation in one cell
+   * inflated that column and squeezed the rest until the rate and the percent wrapped onto
+   * separate lines — two stacked boxes with a "%" under a "₴/день", which is exactly the reading
+   * of "which box is which?" this layout exists to make impossible. Caught in a screenshot, not
+   * by a test: every assertion was about values and requests, which stayed correct.
+   *
+   * Past ~4 locations the table exceeds its container and `.table-wrap` scrolls it, which is the
+   * designed fallback (the level stays put — `.matrix__rowhead` is sticky) and is strictly better
+   * than silently rearranging the figures.
+   */
+  min-width: 17rem;
+}
+
+/* The container draws the closing rule; one on the final row doubles it. */
+.matrix tbody tr:last-child .matrix__cellwrap,
+.matrix tbody tr:last-child .matrix__rowhead {
+  border-bottom: 0;
+}
+
+.matrix__cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/*
+ * Unconfigured: muted, NOT --stop.
+ *
+ * This cell does block payroll for its combination, and it is marked — but `--stop` belongs to a
+ * run that is blocked right now (§ Color). A never-configured matrix painted entirely red would
+ * spend the loudest signal in the app on the ordinary opening state of a setup screen, and by
+ * the time a run is genuinely blocked the colour would mean nothing. A recessed ground plus the
+ * word "не задано" carries it: never colour alone.
+ */
+/*
+ * The wash goes on the <td>, not on the inner flex box.
+ *
+ * Tried and rejected: styling the inner `.matrix__cell` with a negative margin and `height: 100%`.
+ * A percentage height on a child of a table cell has no definite containing block to resolve
+ * against, so the wash only ever covered its own content — with a taller neighbour in the row (an
+ * error line, an open confirmation) it floated as a short band above plain white, reading as a
+ * rendering artefact instead of a state. The cell IS the td; painting it there fills the row by
+ * construction, at any row height.
+ */
+.matrix__cellwrap--unset {
+  background: var(--surface-sunk);
+  box-shadow: inset 2px 0 0 var(--rule-strong);
+}
+
+/* An input and its unit read as one figure, so they do not wrap apart. */
+.matrix__figure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  white-space: nowrap;
+}
+
+/*
+ * Sized to the data: a rate is at most "12345.00" and a percent "12.5". Left at the fields'
+ * default full width these two boxes would each fill half the cell, so a four-location matrix
+ * would be ~1400px of mostly empty input.
+ */
+.matrix__input {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-base);
+  /* Figures are read down a column, so they align on their right edge. */
+  text-align: right;
+  width: 9ch;
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  min-height: var(--control-h);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+@media (pointer: coarse) {
+  .matrix__input {
+    min-height: var(--tap);
+  }
+}
+
+.matrix__input:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+
+/* Same amber focus ring as every other input in the app. */
+.matrix__input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-tint);
+}
+
+.matrix__input[aria-invalid='true'] {
+  border-color: var(--stop);
+}
+.matrix__input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--stop-tint);
+}
+
+.matrix__input:disabled {
+  background: var(--surface-sunk);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+/*
+ * The unit, in place of a per-cell label. Sixteen copies of "Ставка, грн/день" on a 4x4 matrix
+ * would bury the figures; the unit says which box is which, and the row/column headers say
+ * which level and location. The full label survives in each input's accessible name.
+ */
+.matrix__unit {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+}
+
+.matrix__unsetNote {
+  flex: 0 0 100%;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.matrix__error {
+  flex: 0 0 100%;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--stop);
+}
+
+/*
+ * "збережено" — the only signal that a commit landed, since committing on cell-exit leaves the
+ * figure looking identical either way. `--ok`, which is the token for verified/paid, and the word
+ * carries it rather than the colour.
+ */
+.matrix__saved {
+  flex: 0 0 100%;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ok);
+}
+
+/*
+ * Clearing a cell: the one destructive action here, so it is confirmed in place with the cell
+ * still visible, and it is the one spot where --stop is right — this WILL block a run.
+ */
+.matrix__confirm {
+  flex: 0 0 100%;
+  /* Does not widen its column: the confirmation is transient, and letting it set the column width
+     rearranged the figures in every OTHER column while it was open. */
+  width: 0;
+  min-width: 100%;
+  margin-top: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--stop);
+  border-radius: var(--radius);
+  background: var(--stop-tint);
+}
+
+.matrix__confirmText {
+  margin: 0 0 var(--s1);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  max-width: 44ch;
+}
+
+.matrix__confirmWhich {
+  margin: 0 0 var(--s2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+/*
+ * Below 720px the matrix becomes one block per level, with the locations as labelled rows inside
+ * it — the same collapse as .grid (scheduleGrid.css), .day-off__grid and .schedule__grid, and
+ * for the same reason: horizontal scroll is a fallback, not the plan (§ Responsive). At 390px the
+ * desktop layout shows the sticky level column plus roughly one café, and a rate entered against
+ * a location whose header has scrolled out of view is exactly the payroll error this screen
+ * exists to prevent.
+ */
+@media (max-width: 720px) {
+  .matrix,
+  .matrix tbody,
+  .matrix tr,
+  .matrix__rowhead,
+  .matrix__cellwrap {
+    display: block;
+    width: 100%;
+  }
+  /* The column headers are the location names; each cell states its own below instead. */
+  .matrix thead {
+    display: none;
+  }
+  .matrix tbody tr {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--s3);
+    overflow: hidden;
+  }
+  .matrix tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  /* The level becomes the block's heading rather than a sticky left column. */
+  .matrix__rowhead {
+    position: static;
+    box-shadow: none;
+    border-right: 0;
+    background: var(--surface-sunk);
+    font-size: var(--text-base);
+    padding: var(--s2) var(--s3);
+  }
+  .matrix__cellwrap {
+    /* The location's own name, which the hidden thead used to carry. */
+    padding: var(--s3);
+  }
+  .matrix__cellwrap::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: var(--s1);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .matrix tbody tr:last-child .matrix__cellwrap:not(:last-child) {
+    border-bottom: 1px solid var(--rule);
+  }
+  /* Both figures fit one 390px line with room for the units; they must not wrap to a column. */
+  .matrix__input {
+    width: 8ch;
+  }
+}

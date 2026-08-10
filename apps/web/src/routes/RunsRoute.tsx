@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Table, Th, Td, NumCell } from '../ui/Table';
 import { Money } from '../ui/Money';
 import { Button } from '../ui/Button';
@@ -14,12 +15,15 @@ import {
   useCreateSalaryRun,
   useSalaryRunPreview,
   useEmployees,
+  useLevels,
   useLocations,
   useSalaryRuns,
   type Employee,
+  type Level,
   type Location,
   type SalaryRunLine,
 } from '../lib/queries';
+import './runs.css';
 
 export function RunBreakdown({
   lines,
@@ -144,6 +148,61 @@ export function BlockedRun({
   );
 }
 
+/**
+ * The other blocker: a (level, location) combination with nobody's pay configured for it.
+ *
+ * It stops a run exactly like a missing revenue day, and it needs the same treatment — name the
+ * blocker and link to it (docs/design/system.md § Empty vs blocked). Two things make this more
+ * than a message:
+ *
+ * - **Names, not ids.** The API sends `{levelId, locationId}`; a manager cannot act on
+ *   "lv1 — loc2". The names come from the levels/locations lists this screen already loads, so
+ *   resolving them costs no extra request.
+ * - **A link per line.** The fix is one specific screen, and a manager who has just been told
+ *   their payroll will not run should not have to go find it.
+ */
+export function MissingRates({
+  missing,
+  levels,
+  locations,
+}: {
+  missing: { levelId: string; locationId: string }[];
+  levels: Level[];
+  locations: Location[];
+}) {
+  /*
+   * An unresolvable id still gets a line.
+   *
+   * Falling back to '—' rather than dropping the row: a level deleted between the run attempt
+   * and this render is a real (if rare) state, and silently showing fewer blockers than the API
+   * reported would have the manager fix everything listed and get refused again.
+   */
+  const levelOf = (id: string) => levels.find((l) => l.id === id)?.name ?? '—';
+  const locOf = (id: string) => locations.find((l) => l.id === id)?.name ?? '—';
+
+  return (
+    <Card tone="stop" title={t.payMatrix.missingTitle} description={t.payMatrix.missingHint}>
+      <ul className="blocker__list">
+        {missing.map((m) => {
+          const label = t.payMatrix.missingCell(levelOf(m.levelId), locOf(m.locationId));
+          return (
+            <li key={`${m.levelId}-${m.locationId}`}>
+              <Link
+                to="/setup"
+                className="blocker__link"
+                aria-label={t.payMatrix.missingCellLink(levelOf(m.levelId), locOf(m.locationId))}
+              >
+                <span className="mono">{label}</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
 /** Parse a bonus field. Blank means no bonus; anything unparseable is rejected, not zeroed. */
 export function parseBonuses(raw: Record<string, string>): { bonuses: Record<string, number>; invalid: string[] } {
   const bonuses: Record<string, number> = {};
@@ -164,6 +223,9 @@ export function RunsRoute() {
   const runs = useSalaryRuns();
   const employees = useEmployees();
   const locations = useLocations();
+  // Read so a `missingRates` id pair can be named. Cached by React Query — the setup and
+  // employees screens read the same key, so this is not an extra round trip in practice.
+  const levels = useLevels();
   const create = useCreateSalaryRun();
   const preview = useSalaryRunPreview();
   const now = new Date();
@@ -173,6 +235,14 @@ export function RunsRoute() {
   // Keyed by employee id, held as strings so a half-typed value is not coerced to a number.
   const [bonusText, setBonusText] = useState<Record<string, string>>({});
   const [gaps, setGaps] = useState<{ employeeId: string; locationId: string; date: string }[] | null>(null);
+  /**
+   * Unconfigured pay cells from a refused COMMIT.
+   *
+   * Held separately from `gaps` because they are independent causes: a period can be blocked by
+   * either, or both, and a manager who fixes only the one they were shown comes straight back to
+   * a second refusal.
+   */
+  const [missingRates, setMissingRates] = useState<{ levelId: string; locationId: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SalaryRunLine[] | null>(null);
   /**
@@ -189,6 +259,7 @@ export function RunsRoute() {
     periodEnd: string;
     lines: SalaryRunLine[];
     gaps: { employeeId: string; locationId: string; date: string }[];
+    missingRates: { levelId: string; locationId: string }[];
     blocked: boolean;
     inputs: string;
   } | null>(null);
@@ -239,6 +310,7 @@ export function RunsRoute() {
     e.preventDefault();
     setError(null);
     setGaps(null);
+    setMissingRates(null);
     setResult(null);
     const body = readForm();
     if (!body) return;
@@ -253,6 +325,7 @@ export function RunsRoute() {
   async function doCommit() {
     setError(null);
     setGaps(null);
+    setMissingRates(null);
     const body = readForm();
     if (!body) return;
     try {
@@ -261,12 +334,24 @@ export function RunsRoute() {
       setPreviewed(null);
       setBonusText({});
     } catch (err) {
-      // The API returns 409 with { error, gaps } when revenue is incomplete; ApiError.body
-      // carries that parsed JSON, so the gaps array is reachable here rather than lost with
-      // just the message string.
-      const body2 = err instanceof ApiError ? (err.body as { gaps?: typeof gaps } | undefined) : undefined;
-      if (body2?.gaps?.length) setGaps(body2.gaps);
-      else setError((err as Error).message);
+      /*
+       * The API returns 409 with { error, gaps, missingRates } when the period cannot be run;
+       * ApiError.body carries that parsed JSON, so both worklists are reachable here rather than
+       * lost with just the message string.
+       *
+       * A clean preview does not make this branch dead: the matrix is shared state, so an admin
+       * clearing a cell between preview and commit is enough to reach it, and `missingRates` is
+       * then the only thing that explains the refusal.
+       */
+      const refused =
+        err instanceof ApiError
+          ? (err.body as { gaps?: typeof gaps; missingRates?: typeof missingRates } | undefined)
+          : undefined;
+      if (refused?.gaps?.length) setGaps(refused.gaps);
+      if (refused?.missingRates?.length) setMissingRates(refused.missingRates);
+      // Only fall back to the raw message when neither worklist explains the failure — otherwise
+      // the API's English error prints alongside the Ukrainian explanation of the same thing.
+      if (!refused?.gaps?.length && !refused?.missingRates?.length) setError((err as Error).message);
     }
   }
 
@@ -369,11 +454,37 @@ export function RunsRoute() {
           </p>
 
           {previewed.blocked ? (
-            <BlockedRun
-              gaps={previewed.gaps}
-              employees={employees.data ?? []}
-              locations={locations.data ?? []}
-            />
+            /*
+             * Two independent blockers, and only the ones that actually apply are shown.
+             *
+             * Rendering `BlockedRun` unconditionally — as this did when revenue was the only way
+             * to block a run — printed "Розрахунок заблоковано — немає виручки" over an empty
+             * list whenever the real cause was unconfigured pay, sending the manager to fix days
+             * that were already complete.
+             */
+            <>
+              {previewed.gaps.length > 0 ? (
+                <BlockedRun
+                  gaps={previewed.gaps}
+                  employees={employees.data ?? []}
+                  locations={locations.data ?? []}
+                />
+              ) : null}
+              {previewed.missingRates.length > 0 ? (
+                <MissingRates
+                  missing={previewed.missingRates}
+                  levels={levels.data ?? []}
+                  locations={locations.data ?? []}
+                />
+              ) : null}
+              {/* Blocked with no cause named: unreachable today, but the alternative is a
+                  preview heading over an empty screen and no commit button. */}
+              {previewed.gaps.length === 0 && previewed.missingRates.length === 0 ? (
+                <Card tone="stop" title={t.common.statusBlocked}>
+                  <p style={{ margin: 0 }}>{t.runs.blockedUnknown}</p>
+                </Card>
+              ) : null}
+            </>
           ) : (
             <>
               <RunBreakdown
@@ -403,6 +514,13 @@ export function RunsRoute() {
 
       {gaps ? (
         <BlockedRun gaps={gaps} employees={employees.data ?? []} locations={locations.data ?? []} />
+      ) : null}
+      {missingRates ? (
+        <MissingRates
+          missing={missingRates}
+          levels={levels.data ?? []}
+          locations={locations.data ?? []}
+        />
       ) : null}
       {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
       {result ? (

@@ -19,6 +19,7 @@ import {
   type Location,
 } from '../lib/queries';
 import { SlotEditor } from './SlotEditor';
+import { PayMatrixPanel } from './PayMatrixPanel';
 import { t } from '../lib/i18n';
 
 /**
@@ -367,7 +368,15 @@ function LevelsPanel() {
 
   return (
     <>
-      <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>{t.setup.levels}</h2>
+      <h2 style={{ margin: 'var(--s8) 0 var(--s1)' }}>{t.setup.levels}</h2>
+      {/*
+        * A level is a pure LABEL now — the day rate and revenue percent moved to the (level,
+        * location) matrix below, because the same level is paid differently at different cafés.
+        * The hint says so here, on the panel that used to own the rate field: an admin who
+        * remembers entering a rate on a level needs to be told where it went, not left to
+        * conclude the setting was lost.
+        */}
+      <p className="muted" style={{ margin: '0 0 var(--s4)', maxWidth: '68ch' }}>{t.setup.levelsHint}</p>
       {rows.length === 0 ? (
         <EmptyState title={t.setup.noLevels} action={t.setup.noLevelsAction} />
       ) : (
@@ -465,13 +474,24 @@ export function DayOffLimitsPanel() {
   );
 }
 
-/** Admin one-time setup: locations with their working hours, and levels with their pay rate. */
+/**
+ * Admin one-time setup: locations and their working hours, levels, and what each level is paid
+ * at each location.
+ *
+ * Panel order is a dependency order, not a preference. The pay matrix's axes ARE the locations
+ * and levels above it, so it can only be filled in once both exist — and an admin who scrolls
+ * straight to it on a fresh install is told to add those first (`t.payMatrix.needsSetup`) rather
+ * than shown an empty grid.
+ */
 export function SetupRoute() {
   return (
     <>
       <Toolbar title={t.setup.title} />
       <LocationsPanel />
       <LevelsPanel />
+      <div style={{ marginTop: 'var(--s8)' }}>
+        <PayMatrixPanel />
+      </div>
       <DayOffLimitsPanel />
     </>
   );

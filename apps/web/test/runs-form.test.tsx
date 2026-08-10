@@ -15,6 +15,7 @@ const mutateAsync = vi.fn();
 const previewAsync = vi.fn();
 const employeesQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
 const locationsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
+const levelsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
 const runsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
 
 vi.mock('../src/lib/queries', () => ({
@@ -22,7 +23,15 @@ vi.mock('../src/lib/queries', () => ({
   useSalaryRunPreview: () => ({ mutateAsync: previewAsync, isPending: false }),
   useEmployees: () => employeesQuery,
   useLocations: () => locationsQuery,
+  // Levels are read to turn a `missingRates` id pair into the names a manager can act on.
+  useLevels: () => levelsQuery,
   useSalaryRuns: () => runsQuery,
+}));
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to }: { children?: unknown; to?: string }) => (
+    <a href={to as string}>{children as never}</a>
+  ),
 }));
 
 const { RunsRoute } = await import('../src/routes/RunsRoute');
@@ -34,18 +43,24 @@ const EMPLOYEES = [
   { id: 'e3', name: 'Former Staff', levelId: 'l', revenuePercent: 0.05, cognitoSub: null, active: false },
 ];
 
+const LEVELS = [{ id: 'lv1', name: 'Бариста' }];
+const LOCATIONS = [{ id: 'l1', name: 'Центр', opensAt: '08:00', closesAt: '20:00' }];
+
 beforeEach(() => {
   mutateAsync.mockReset();
   previewAsync.mockReset();
   previewAsync.mockResolvedValue({
-    periodStart: '2026-08-01', periodEnd: '2026-08-15', lines: [], gaps: [], blocked: false,
+    periodStart: '2026-08-01', periodEnd: '2026-08-15', lines: [], gaps: [], missingRates: [],
+    blocked: false,
   });
   mutateAsync.mockResolvedValue({ lines: [] });
   employeesQuery.data = EMPLOYEES;
   employeesQuery.isLoading = false;
   employeesQuery.error = null;
-  locationsQuery.data = [];
+  locationsQuery.data = LOCATIONS;
   locationsQuery.error = null;
+  levelsQuery.data = LEVELS;
+  levelsQuery.error = null;
   runsQuery.data = [];
   runsQuery.error = null;
 });
@@ -154,6 +169,7 @@ describe('preview before commit', () => {
   it('shows the revenue gaps instead of a breakdown when the period is blocked', async () => {
     previewAsync.mockResolvedValueOnce({
       periodStart: '2026-08-01', periodEnd: '2026-08-15', lines: [], blocked: true,
+      missingRates: [],
       gaps: [{ employeeId: 'e1', locationId: 'l1', date: '2026-08-03' }],
     });
     const user = userEvent.setup();
@@ -163,5 +179,88 @@ describe('preview before commit', () => {
     expect(await screen.findByText(t.runs.blockedTitle)).toBeInTheDocument();
     // No commit path out of a blocked preview.
     expect(screen.queryByRole('button', { name: t.runs.confirmRun })).not.toBeInTheDocument();
+  });
+
+  it('names the unconfigured pay cells when THEY are what blocks the run', async () => {
+    /*
+     * The second blocker, and the one with no revenue gap to explain it. Before the matrix
+     * existed a run could only be blocked by missing revenue, so a preview blocked purely on
+     * pay configuration would have shown the revenue heading over an empty list — telling the
+     * manager to go fix days that are already complete.
+     */
+    previewAsync.mockResolvedValueOnce({
+      periodStart: '2026-08-01', periodEnd: '2026-08-15', lines: [], blocked: true, gaps: [],
+      missingRates: [{ levelId: 'lv1', locationId: 'l1' }],
+    });
+    const user = userEvent.setup();
+    render(<RunsRoute />);
+    await user.click(screen.getByRole('button', { name: t.runs.calculate }));
+
+    expect(await screen.findByText(t.payMatrix.missingTitle)).toBeInTheDocument();
+    const entry = screen.getByRole('listitem');
+    expect(entry.textContent).toContain('Бариста');
+    expect(entry.textContent).toContain('Центр');
+    // The revenue blocker is a different cause and must not be claimed alongside it.
+    expect(screen.queryByText(t.runs.blockedTitle)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.runs.confirmRun })).not.toBeInTheDocument();
+  });
+
+  it('shows both blockers when revenue AND pay configuration are incomplete', async () => {
+    // They are independent causes; showing only the first sends the manager back for a second
+    // blocked run after they fix it.
+    previewAsync.mockResolvedValueOnce({
+      periodStart: '2026-08-01', periodEnd: '2026-08-15', lines: [], blocked: true,
+      gaps: [{ employeeId: 'e1', locationId: 'l1', date: '2026-08-03' }],
+      missingRates: [{ levelId: 'lv1', locationId: 'l1' }],
+    });
+    const user = userEvent.setup();
+    render(<RunsRoute />);
+    await user.click(screen.getByRole('button', { name: t.runs.calculate }));
+
+    expect(await screen.findByText(t.runs.blockedTitle)).toBeInTheDocument();
+    expect(screen.getByText(t.payMatrix.missingTitle)).toBeInTheDocument();
+  });
+
+  it('still says the run is blocked when the API names no cause at all', async () => {
+    /*
+     * Defence against a silent dead end rather than a bug seen in the wild: core sets
+     * `blocked` only when `gaps` or `missingRates` is non-empty, so today this cannot happen.
+     * But the two worklists are now rendered CONDITIONALLY, so if that invariant ever changed
+     * the manager would get the preview heading with nothing beneath it and no commit button —
+     * a screen that refuses to run payroll and declines to say why. Cheap to guarantee.
+     */
+    previewAsync.mockResolvedValueOnce({
+      periodStart: '2026-08-01', periodEnd: '2026-08-15', lines: [], blocked: true,
+      gaps: [], missingRates: [],
+    });
+    const user = userEvent.setup();
+    render(<RunsRoute />);
+    await user.click(screen.getByRole('button', { name: t.runs.calculate }));
+
+    expect(await screen.findByText(t.runs.blockedUnknown)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.runs.confirmRun })).not.toBeInTheDocument();
+  });
+
+  it('names the unconfigured pay cells when the COMMIT is the thing refused', async () => {
+    /*
+     * A preview can be clean and the commit still refused — the matrix is shared state, so an
+     * admin clearing a cell between the two is enough. The 409 carries `missingRates` for
+     * exactly this, and dropping it would surface the API's English error string instead.
+     */
+    const { ApiError } = await import('../src/lib/api');
+    mutateAsync.mockRejectedValueOnce(
+      new ApiError('revenue data incomplete for the period', 409, {
+        error: 'revenue data incomplete for the period',
+        gaps: [],
+        missingRates: [{ levelId: 'lv1', locationId: 'l1' }],
+      }),
+    );
+    const user = userEvent.setup();
+    render(<RunsRoute />);
+    await user.click(screen.getByRole('button', { name: t.runs.calculate }));
+    await user.click(await screen.findByRole('button', { name: t.runs.confirmRun }));
+
+    expect(await screen.findByText(t.payMatrix.missingTitle)).toBeInTheDocument();
+    expect(screen.getByRole('listitem').textContent).toContain('Бариста');
   });
 });
