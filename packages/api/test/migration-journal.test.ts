@@ -33,19 +33,27 @@ describe('migration journal', () => {
   });
 
   it('adopts a pre-journal database: schema exists, journal does not', async () => {
-    /* The deployed DB was migrated before the journal existed. The handler must detect
-     * an existing schema (levels table present, journal absent), seed the journal with
-     * every migration name WITHOUT re-running them, and then apply only what's new. */
+    /* The deployed DB was migrated before the journal existed. That state is 0001-0007 only:
+     * 0008_pay_matrix.sql ships in the SAME deploy as this journal, so a pre-journal database
+     * can never have it applied. The handler must detect an existing schema (levels table
+     * present, journal absent), seed the journal with only the pre-journal names WITHOUT
+     * re-running them, and then apply 0008 for real. */
     const db = new PGlite();
-    // Simulate the pre-journal world: run all migrations directly, no journal.
+    // Simulate the pre-journal world: run only 0001-0007 directly, no journal.
     const { MIGRATIONS } = await import('@salary/core/migrations');
     const { splitSqlStatements } = await import('@salary/core');
-    for (const sql of MIGRATIONS) for (const s of splitSqlStatements(sql)) await db.query(s);
+    const preJournalCutoff = MIGRATION_NAMES.indexOf('0007_publication_overrides.sql') + 1;
+    for (const sql of MIGRATIONS.slice(0, preJournalCutoff)) {
+      for (const s of splitSqlStatements(sql)) await db.query(s);
+    }
 
     const result = await runMigrations(pgliteExecutor(db));
     expect(result.errors).toEqual([]);
-    expect(result.applied).toBe(0);
-    expect(result.skipped).toBe(MIGRATION_NAMES.length);
+    expect(result.applied).toBe(1);
+    expect(result.skipped).toBe(preJournalCutoff);
+
+    const payRates = await db.query<{ to_regclass: string | null }>("SELECT to_regclass('public.pay_rates')");
+    expect(payRates.rows[0].to_regclass).toBe('pay_rates');
   });
 
   it('rejects a partially-migrated pre-journal database instead of guessing', async () => {

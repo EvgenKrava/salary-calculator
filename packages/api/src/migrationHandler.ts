@@ -5,6 +5,20 @@ import { readDbEnvConfig } from './db/prodDb';
 
 type Executor = (sql: string) => Promise<Record<string, unknown>[]>;
 
+/**
+ * The last migration that shipped BEFORE the journal existed. Everything through this name
+ * is safe to adopt sight-unseen on a pre-journal database (case 2 below); everything after it
+ * — starting with `0008_pay_matrix.sql`, which ships in the SAME deploy as this journal — must
+ * be applied for real even on an adopted database, because it never had a chance to run before
+ * the journal did.
+ *
+ * This name is also the migration that creates the `schedule_publication_overrides` table used
+ * as the "lastExists" adoption sentinel below. One const feeding both the seed-list slice and
+ * that sentinel's identity means they cannot drift apart — bump this the day a new pre-journal
+ * migration is (hypothetically) added, and both uses move together.
+ */
+const LAST_PRE_JOURNAL_MIGRATION = '0007_publication_overrides.sql';
+
 export interface MigrateResult {
   applied: number;
   skipped: number;
@@ -22,8 +36,11 @@ export interface MigrateResult {
  *     schema exists but the journal doesn't. Detected via `to_regclass('public.levels')`
  *     (created by 0001) AND `to_regclass('public.schedule_publication_overrides')`
  *     (created by 0007, the last migration shipped before the journal) both resolving.
- *     The journal is seeded with EVERY known name without re-running anything: those
- *     migrations are visibly already applied, and re-running 0001 fails loudly by design.
+ *     The journal is seeded with every PRE-JOURNAL name (through 0007) without re-running
+ *     anything: those migrations are visibly already applied, and re-running 0001 fails
+ *     loudly by design. Later migrations — 0008 onward — apply for real even on an adopted
+ *     database, because they ship in or after the same deploy as the journal and never had
+ *     a chance to run before it existed.
  *  3. Journal present: apply exactly the migrations whose names are not recorded.
  *  4. Partially-migrated pre-journal DB: `levels` exists but
  *     `schedule_publication_overrides` does not — e.g. a snapshot restored with only
@@ -33,10 +50,12 @@ export interface MigrateResult {
  *     no journal entry to reveal it). This case throws instead of guessing; the operator
  *     must restore a fully-migrated snapshot or recreate the schema from empty.
  *
- * The two sentinels (0001, 0007) are hardcoded rather than derived, and that's intentional:
- * adoption of a pre-journal DB is a ONE-TIME event for databases created before this journal
- * shipped. Every migration from 0008 onward lands with the journal already present, so it
- * goes through case 3 and never needs to be reflected in the adoption probe.
+ * The 0001 sentinel is hardcoded rather than derived, and that's intentional: adoption of a
+ * pre-journal DB is a ONE-TIME event for databases created before this journal shipped. The
+ * 0007 sentinel and the seed-list boundary both come from `LAST_PRE_JOURNAL_MIGRATION` so they
+ * cannot drift apart. Every migration from 0008 onward lands with the journal shipping in the
+ * same or an earlier deploy, so it goes through case 3 (or is applied for real during adoption)
+ * and never needs to be reflected in the adoption probe.
  *
  * Retry after a partial failure: if a migration fails partway through its statements, the
  * objects it already created are NOT recorded in the journal (the INSERT into
@@ -77,7 +96,12 @@ export async function runMigrations(execute: Executor): Promise<MigrateResult> {
     }
 
     if (firstExists && lastExists) {
-      for (const name of MIGRATION_NAMES) {
+      // Seed ONLY the pre-journal names (through LAST_PRE_JOURNAL_MIGRATION), never the full
+      // MIGRATION_NAMES list: anything after it — e.g. 0008_pay_matrix.sql, which ships in the
+      // same deploy as this journal — has never run on an adopted database and must fall
+      // through to the apply loop below instead of being journaled as already-applied.
+      const preJournalCutoff = MIGRATION_NAMES.indexOf(LAST_PRE_JOURNAL_MIGRATION) + 1;
+      for (const name of MIGRATION_NAMES.slice(0, preJournalCutoff)) {
         await execute(`INSERT INTO schema_migrations (name) VALUES ('${name}') ON CONFLICT (name) DO NOTHING`);
         recorded.add(name);
       }
