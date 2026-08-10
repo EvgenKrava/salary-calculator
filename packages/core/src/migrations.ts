@@ -60,3 +60,8 @@ export const PUBLICATION_OVERRIDES_SQL = read('0007_publication_overrides.sql');
  * therefore no way to add a migration that silently never runs.
  */
 export const MIGRATIONS: string[] = MIGRATION_NAMES.map(read);
+
+/** Migration filenames in apply order, re-exported so consumers outside `@salary/core`
+ *  (the migration journal) don't need the `./migrations.generated` subpath, which isn't
+ *  in this package's `exports` map. */
+export { MIGRATION_NAMES };
