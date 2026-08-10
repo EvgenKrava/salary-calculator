@@ -16,6 +16,7 @@ import { createUploadRoutes, type UploadSigner } from './routes/uploads';
 import { createScheduleImportRoutes } from './routes/scheduleImports';
 import { createExtractionJobRoutes } from './routes/extractionJobs';
 import { createDayOffRoutes } from './routes/dayOffRequests';
+import { createPayRateRoutes } from './routes/payRates';
 import { createAppSettingsRoutes } from './routes/appSettings';
 import { createSchedulePublicationRoutes } from './routes/schedulePublications';
 
@@ -73,6 +74,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   app.route('/api/schedule-imports', createScheduleImportRoutes(deps.db));
   app.route('/api/extraction-jobs', createExtractionJobRoutes(deps.db));
   app.route('/api/day-off-requests', createDayOffRoutes(deps.db));
+  app.route('/api/pay-rates', createPayRateRoutes(deps.db));
   app.route('/api/settings', createAppSettingsRoutes(deps.db));
   app.route('/api/schedule-publications', createSchedulePublicationRoutes(deps.db));
 

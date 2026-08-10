@@ -10,7 +10,7 @@ import { requireRole } from '../auth/middleware';
 import { readJson, getOr404 } from '../http/validation';
 import { isUniqueViolation } from '../http/dbErrors';
 import { currentEmployee } from '../http/employeeContext';
-import { employees, levels, locations, shifts, dailyRevenue, salaryRuns, salaryRunLines } from '../schema';
+import { employees, levels, locations, shifts, dailyRevenue, payRates, salaryRuns, salaryRunLines } from '../schema';
 
 const createSchema = z.object({
   year: z.number().int().min(2000).max(2100),
@@ -85,7 +85,7 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
     const [first, second] = payPeriodsForMonth(body.year, body.month);
     const period = body.half === 1 ? first : second;
 
-    const [emps, lvls, locs, shfts, revs] = await Promise.all([
+    const [emps, lvls, locs, shfts, revs, rates] = await Promise.all([
       db.select().from(employees),
       db.select().from(levels),
       db.select().from(locations),
@@ -103,6 +103,7 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
             lte(dailyRevenue.revenueDate, period.end),
           ),
         ),
+      db.select().from(payRates),
     ]);
 
     const input: CalcInput = {
@@ -110,11 +111,16 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
         id: e.id,
         name: e.name,
         levelId: e.levelId,
-        revenuePercent: Number(e.revenuePercent),
         cognitoSub: e.cognitoSub,
         active: e.active,
       })),
-      levels: lvls.map((l) => ({ id: l.id, name: l.name, ratePerDay: Number(l.ratePerDay) })),
+      levels: lvls.map((l) => ({ id: l.id, name: l.name })),
+      payRates: rates.map((r) => ({
+        levelId: r.levelId,
+        locationId: r.locationId,
+        ratePerDay: Number(r.ratePerDay),
+        revenuePercent: Number(r.revenuePercent),
+      })),
       locations: locs.map((l) => ({
         id: l.id,
         name: l.name,
@@ -158,6 +164,7 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
       periodEnd: period.end,
       lines: result.lines,
       gaps: result.gaps,
+      missingRates: result.missingRates,
       blocked: result.blocked,
     });
   });
@@ -167,7 +174,10 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
     const { period, result } = await computeRun(body);
 
     if (result.blocked) {
-      return c.json({ error: 'revenue data incomplete for the period', gaps: result.gaps }, 409);
+      return c.json(
+        { error: 'revenue data incomplete for the period', gaps: result.gaps, missingRates: result.missingRates },
+        409,
+      );
     }
 
     try {

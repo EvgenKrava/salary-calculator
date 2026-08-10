@@ -26,33 +26,36 @@ describe('levels routes', () => {
     expect(res.status).toBe(200);
   });
 
-  it('forbids a manager from WRITING levels (rates stay admin-only)', async () => {
+  it('forbids a manager from WRITING levels', async () => {
     const app = await makeApp();
     const created = await app.request('/api/levels', {
       method: 'POST',
       headers: { ...MGR, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Sneaky', ratePerDay: 999 }),
+      body: JSON.stringify({ name: 'Sneaky' }),
     });
     expect(created.status).toBe(403);
 
     const patched = await app.request('/api/levels/00000000-0000-0000-0000-000000000001', {
       method: 'PATCH',
       headers: { ...MGR, 'content-type': 'application/json' },
-      body: JSON.stringify({ ratePerDay: 999 }),
+      body: JSON.stringify({ name: 'Sneaky2' }),
     });
     expect(patched.status).toBe(403);
   });
 
-  it('creates and lists a level', async () => {
+  it('creates and lists a level, carrying no pay data of its own', async () => {
+    // Pay now lives on the (level, location) pay_rates matrix, not on the level — a level is a
+    // pure label. `ratePerDay` must be absent from the response, not just unset.
     const app = await makeApp();
     const created = await app.request('/api/levels', {
       method: 'POST',
       headers: { ...ADMIN, ...JSONH },
-      body: JSON.stringify({ name: 'Junior', ratePerDay: 20 }),
+      body: JSON.stringify({ name: 'Junior' }),
     });
     expect(created.status).toBe(201);
-    const level = (await created.json()) as { id: string; name: string; ratePerDay: number };
-    expect(level).toMatchObject({ name: 'Junior', ratePerDay: 20 });
+    const level = (await created.json()) as { id: string; name: string };
+    expect(level).toEqual({ id: level.id, name: 'Junior' });
+    expect(level).not.toHaveProperty('ratePerDay');
     expect(typeof level.id).toBe('string');
 
     const list = await app.request('/api/levels', { headers: ADMIN });
@@ -65,42 +68,64 @@ describe('levels routes', () => {
     const res = await app.request('/api/levels', {
       method: 'POST',
       headers: { ...ADMIN, ...JSONH },
-      body: JSON.stringify({ name: '', ratePerDay: -5 }),
+      body: JSON.stringify({ name: '' }),
     });
     expect(res.status).toBe(400);
   });
 
   it('rejects a duplicate name with 409', async () => {
     const app = await makeApp();
-    const body = JSON.stringify({ name: 'Dup', ratePerDay: 10 });
+    const body = JSON.stringify({ name: 'Dup' });
     await app.request('/api/levels', { method: 'POST', headers: { ...ADMIN, ...JSONH }, body });
     const res = await app.request('/api/levels', { method: 'POST', headers: { ...ADMIN, ...JSONH }, body });
     expect(res.status).toBe(409);
   });
 
-  it('gets, updates, and 404s a level', async () => {
+  it('gets, updates the name, and 404s a level', async () => {
     const app = await makeApp();
     const created = (await (
       await app.request('/api/levels', {
         method: 'POST',
         headers: { ...ADMIN, ...JSONH },
-        body: JSON.stringify({ name: 'Mid', ratePerDay: 30 }),
+        body: JSON.stringify({ name: 'Mid' }),
       })
-    ).json()) as { id: string; name: string; ratePerDay: number };
+    ).json()) as { id: string; name: string };
 
     const got = await app.request(`/api/levels/${created.id}`, { headers: ADMIN });
     expect(got.status).toBe(200);
+    expect(await got.json()).not.toHaveProperty('ratePerDay');
 
     const patched = await app.request(`/api/levels/${created.id}`, {
       method: 'PATCH',
       headers: { ...ADMIN, ...JSONH },
-      body: JSON.stringify({ ratePerDay: 35 }),
+      body: JSON.stringify({ name: 'Mid-2' }),
     });
     expect(patched.status).toBe(200);
-    expect(((await patched.json()) as { id: string; name: string; ratePerDay: number }).ratePerDay).toBe(35);
+    const patchedBody = (await patched.json()) as { id: string; name: string };
+    expect(patchedBody.name).toBe('Mid-2');
+    expect(patchedBody).not.toHaveProperty('ratePerDay');
 
     const missing = await app.request('/api/levels/00000000-0000-0000-0000-000000000000', { headers: ADMIN });
     expect(missing.status).toBe(404);
+  });
+
+  it('rejects a PATCH with no fields to update', async () => {
+    // ratePerDay used to be a valid field to patch; now that it is gone, an empty-looking
+    // update (only unknown keys) must still 400 rather than silently succeed.
+    const app = await makeApp();
+    const created = (await (
+      await app.request('/api/levels', {
+        method: 'POST',
+        headers: { ...ADMIN, ...JSONH },
+        body: JSON.stringify({ name: 'Empty' }),
+      })
+    ).json()) as { id: string };
+    const res = await app.request(`/api/levels/${created.id}`, {
+      method: 'PATCH',
+      headers: { ...ADMIN, ...JSONH },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
   });
 
   it('deletes a level and 404s when already deleted', async () => {
@@ -109,9 +134,9 @@ describe('levels routes', () => {
       await app.request('/api/levels', {
         method: 'POST',
         headers: { ...ADMIN, ...JSONH },
-        body: JSON.stringify({ name: 'Del', ratePerDay: 15 }),
+        body: JSON.stringify({ name: 'Del' }),
       })
-    ).json()) as { id: string; name: string; ratePerDay: number };
+    ).json()) as { id: string; name: string };
 
     const del = await app.request(`/api/levels/${level.id}`, { method: 'DELETE', headers: ADMIN });
     expect(del.status).toBe(200);

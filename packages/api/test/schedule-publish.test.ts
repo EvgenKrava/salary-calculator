@@ -15,7 +15,7 @@ const MGR = { Authorization: 'Bearer mgr', 'content-type': 'application/json' };
 
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '600.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L' }).returning();
   const [loc] = await db
     .insert(locations)
     .values({ name: '1', opensAt: '08:00', closesAt: '20:00' })

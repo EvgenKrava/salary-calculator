@@ -12,7 +12,6 @@ import { employees, levels } from '../schema';
 const createSchema = z.object({
   name: z.string().min(1),
   levelId: z.string().uuid(),
-  revenuePercent: z.number().min(0).max(1).default(0),
   cognitoSub: z.string().min(1).nullish(),
   active: z.boolean().default(true),
 });
@@ -38,7 +37,6 @@ const updateSchema = z
   .object({
     name: z.string().min(1),
     levelId: z.string().uuid(),
-    revenuePercent: z.number().min(0).max(1),
     cognitoSub: z.string().min(1).nullable(),
     active: z.boolean(),
   })
@@ -51,7 +49,6 @@ function toDto(row: EmployeeRow) {
     id: row.id,
     name: row.name,
     levelId: row.levelId,
-    revenuePercent: Number(row.revenuePercent),
     cognitoSub: row.cognitoSub,
     active: row.active,
   };
@@ -103,7 +100,6 @@ export function createEmployeeRoutes(db: Db, identity?: IdentityProvider): Hono<
       .values({
         name: body.name,
         levelId: body.levelId,
-        revenuePercent: String(body.revenuePercent),
         cognitoSub: body.cognitoSub ?? null,
         active: body.active,
       })
@@ -197,7 +193,6 @@ export function createEmployeeRoutes(db: Db, identity?: IdentityProvider): Hono<
     const patch: Partial<typeof employees.$inferInsert> = {};
     if (body.name !== undefined) patch.name = body.name;
     if (body.levelId !== undefined) patch.levelId = body.levelId;
-    if (body.revenuePercent !== undefined) patch.revenuePercent = String(body.revenuePercent);
     if (body.cognitoSub !== undefined) patch.cognitoSub = body.cognitoSub;
     if (body.active !== undefined) patch.active = body.active;
     const [row] = await db.update(employees).set(patch).where(eq(employees.id, id)).returning();

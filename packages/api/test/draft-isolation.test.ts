@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app';
 import { createTestDb } from '../src/db/testDb';
-import { levels, locations, employees, shifts, dailyRevenue } from '../src/schema';
+import { levels, locations, employees, shifts, dailyRevenue, payRates } from '../src/schema';
 import type { TokenVerifier } from '../src/auth/types';
 
 /**
@@ -22,15 +22,16 @@ const verifier: TokenVerifier = {
 
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '600.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L' }).returning();
   const [loc] = await db
     .insert(locations)
     .values({ name: '1', opensAt: '08:00', closesAt: '20:00' })
     .returning();
   const [emp] = await db
     .insert(employees)
-    .values({ name: 'Олена', levelId: level.id, cognitoSub: EMPLOYEE_SUB, revenuePercent: '0.0500' })
+    .values({ name: 'Олена', levelId: level.id, cognitoSub: EMPLOYEE_SUB })
     .returning();
+  await db.insert(payRates).values({ levelId: level.id, locationId: loc.id, ratePerDay: '600.00', revenuePercent: '0.0500' });
   return { db, app: createApp({ db, verifier }), loc, emp };
 }
 

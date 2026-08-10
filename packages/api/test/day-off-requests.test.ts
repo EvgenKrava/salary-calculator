@@ -20,7 +20,7 @@ const EMP = { Authorization: 'Bearer emp', 'content-type': 'application/json' };
 
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '600.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L' }).returning();
   const [olena] = await db
     .insert(employees)
     .values({ name: 'Олена', levelId: level.id, cognitoSub: OLENA_SUB })

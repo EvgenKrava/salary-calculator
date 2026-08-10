@@ -17,7 +17,7 @@ const JSONH = { 'content-type': 'application/json' };
 
 async function seed() {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '20.00' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'L' }).returning();
   const [alice] = await db.insert(employees).values({ name: 'Alice', levelId: level.id }).returning();
   return { app: createApp({ db, verifier }), alice };
 }

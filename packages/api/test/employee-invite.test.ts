@@ -39,10 +39,10 @@ function fakeIdp(overrides: Partial<IdentityProvider> = {}) {
 
 async function seed(identity?: IdentityProvider) {
   const { db } = await createTestDb();
-  const [level] = await db.insert(levels).values({ name: 'Barista', ratePerDay: '100' }).returning();
+  const [level] = await db.insert(levels).values({ name: 'Barista' }).returning();
   const [employee] = await db
     .insert(employees)
-    .values({ name: 'Olena', levelId: level.id, revenuePercent: '0.05' })
+    .values({ name: 'Olena', levelId: level.id })
     .returning();
   return { app: createApp({ db, verifier, identity }), db, employee };
 }

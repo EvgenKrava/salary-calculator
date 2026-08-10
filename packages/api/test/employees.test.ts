@@ -20,7 +20,6 @@ interface EmployeeDto {
   id: string;
   name: string;
   levelId: string;
-  revenuePercent: number;
   cognitoSub: string | null;
   active: boolean;
 }
@@ -34,7 +33,7 @@ async function makeLevel(app: Awaited<ReturnType<typeof makeApp>>) {
   const res = await app.request('/api/levels', {
     method: 'POST',
     headers: { ...ADMIN, ...JSONH },
-    body: JSON.stringify({ name: `L-${Math.round(performance.now() * 1000)}`, ratePerDay: 20 }),
+    body: JSON.stringify({ name: `L-${Math.round(performance.now() * 1000)}` }),
   });
   return ((await res.json()) as { id: string }).id;
 }
@@ -45,34 +44,26 @@ describe('employees routes', () => {
     expect((await app.request('/api/employees', { headers: EMP })).status).toBe(403);
   });
 
-  it('lets a manager create and list employees', async () => {
+  it('lets a manager create and list employees, carrying no pay data of their own', async () => {
+    // Pay now lives on the (level, location) pay_rates matrix, not on the employee —
+    // revenuePercent must be absent from the response, not just unset.
     const app = await makeApp();
     const levelId = await makeLevel(app);
     const created = await app.request('/api/employees', {
       method: 'POST',
       headers: { ...MGR, ...JSONH },
-      body: JSON.stringify({ name: 'Alice', levelId, revenuePercent: 0.05 }),
+      body: JSON.stringify({ name: 'Alice', levelId }),
     });
     expect(created.status).toBe(201);
     const emp = await created.json();
-    expect(emp).toMatchObject({ name: 'Alice', levelId, revenuePercent: 0.05, active: true, cognitoSub: null });
+    expect(emp).toMatchObject({ name: 'Alice', levelId, active: true, cognitoSub: null });
+    expect(emp).not.toHaveProperty('revenuePercent');
 
     const list = await app.request('/api/employees', { headers: MGR });
     expect(await list.json()).toHaveLength(1);
   });
 
-  it('rejects revenuePercent outside [0,1] with 400', async () => {
-    const app = await makeApp();
-    const levelId = await makeLevel(app);
-    const res = await app.request('/api/employees', {
-      method: 'POST',
-      headers: { ...MGR, ...JSONH },
-      body: JSON.stringify({ name: 'Bad', levelId, revenuePercent: 1.5 }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it('defaults revenuePercent to 0 and active to true', async () => {
+  it('defaults active to true', async () => {
     const app = await makeApp();
     const levelId = await makeLevel(app);
     const emp = (await (
@@ -82,8 +73,8 @@ describe('employees routes', () => {
         body: JSON.stringify({ name: 'Min', levelId }),
       })
     ).json()) as EmployeeDto;
-    expect(emp.revenuePercent).toBe(0);
     expect(emp.active).toBe(true);
+    expect(emp).not.toHaveProperty('revenuePercent');
   });
 
   it('updates an employee and deactivates via PATCH active=false', async () => {
@@ -93,19 +84,19 @@ describe('employees routes', () => {
       await app.request('/api/employees', {
         method: 'POST',
         headers: { ...MGR, ...JSONH },
-        body: JSON.stringify({ name: 'Bob', levelId, revenuePercent: 0.1 }),
+        body: JSON.stringify({ name: 'Bob', levelId }),
       })
     ).json()) as EmployeeDto;
 
     const patched = await app.request(`/api/employees/${emp.id}`, {
       method: 'PATCH',
       headers: { ...MGR, ...JSONH },
-      body: JSON.stringify({ active: false, revenuePercent: 0.2 }),
+      body: JSON.stringify({ active: false }),
     });
     expect(patched.status).toBe(200);
     const body = (await patched.json()) as EmployeeDto;
     expect(body.active).toBe(false);
-    expect(body.revenuePercent).toBe(0.2);
+    expect(body).not.toHaveProperty('revenuePercent');
   });
 
   it('rejects a duplicate cognitoSub with 409', async () => {

@@ -10,16 +10,15 @@ import { levels, employees } from '../schema';
 
 const createSchema = z.object({
   name: z.string().min(1),
-  ratePerDay: z.number().nonnegative(),
 });
 const updateSchema = z
-  .object({ name: z.string().min(1), ratePerDay: z.number().nonnegative() })
+  .object({ name: z.string().min(1) })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
 
 type LevelRow = typeof levels.$inferSelect;
 function toDto(row: LevelRow) {
-  return { id: row.id, name: row.name, ratePerDay: Number(row.ratePerDay) };
+  return { id: row.id, name: row.name };
 }
 
 export function createLevelRoutes(db: Db): Hono<AppEnv> {
@@ -28,10 +27,9 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
   /**
    * Reads are manager+admin; writes stay admin-only.
    *
-   * Same reasoning as locations: setting the rate for a level is an admin decision, but
-   * managing employees is a manager job (design §2) and an employee's level has to be
-   * *shown and chosen* by name on that screen. Note this exposes `ratePerDay` to managers —
-   * acceptable, because a manager already sees every employee's computed pay in a salary run.
+   * Managing employees is a manager job (design §2) and an employee's level has to be *shown
+   * and chosen* by name on that screen, even though a level is now just a label — pay lives on
+   * the (level, location) matrix in `pay_rates`, not here.
    */
   routes.get('/', requireRole('manager', 'admin'), async (c) => {
     const rows = await db.select().from(levels);
@@ -52,7 +50,7 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
     if (existing.length > 0) throw new HTTPException(409, { message: 'level name already exists' });
     const [row] = await db
       .insert(levels)
-      .values({ name: body.name, ratePerDay: String(body.ratePerDay) })
+      .values({ name: body.name })
       .returning();
     return c.json(toDto(row), 201);
   });
@@ -61,7 +59,6 @@ export function createLevelRoutes(db: Db): Hono<AppEnv> {
     const body = await readJson(c, updateSchema);
     const patch: Partial<typeof levels.$inferInsert> = {};
     if (body.name !== undefined) patch.name = body.name;
-    if (body.ratePerDay !== undefined) patch.ratePerDay = String(body.ratePerDay);
     const [row] = await db
       .update(levels)
       .set(patch)
