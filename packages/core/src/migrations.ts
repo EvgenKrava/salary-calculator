@@ -52,6 +52,9 @@ export const SCHEDULE_AUTHORING_SQL = read('0006_schedule_authoring.sql');
 /** History of override reasons for publishing over a required day-off conflict. */
 export const PUBLICATION_OVERRIDES_SQL = read('0007_publication_overrides.sql');
 
+/** Day rate and revenue percent become a (level, location) matrix; a level is a pure label. */
+export const PAY_MATRIX_SQL = read('0008_pay_matrix.sql');
+
 /**
  * All migrations in apply order.
  *

@@ -11,6 +11,7 @@ import {
   ENUM_TO_TEXT_SQL,
   SCHEDULE_AUTHORING_SQL,
   PUBLICATION_OVERRIDES_SQL,
+  PAY_MATRIX_SQL,
 } from '../src/migrations';
 import { MIGRATION_SQL, MIGRATION_NAMES } from '../src/migrations.generated';
 
@@ -56,6 +57,7 @@ describe('migrations', () => {
       ENUM_TO_TEXT_SQL,
       SCHEDULE_AUTHORING_SQL,
       PUBLICATION_OVERRIDES_SQL,
+      PAY_MATRIX_SQL,
     ]);
     expect(MIGRATIONS).toHaveLength(sqlFilesOnDisk().length);
   });

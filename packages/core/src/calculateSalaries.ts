@@ -2,6 +2,7 @@ import type {
   CalcInput,
   CalcResult,
   EmployeeBreakdown,
+  MissingRate,
   PayPeriod,
   RevenueGap,
   Shift,
@@ -14,13 +15,19 @@ function dayKey(locationId: string, date: string): string {
   return `${locationId}|${date}`;
 }
 
+function cellKey(levelId: string, locationId: string): string {
+  return `${levelId}|${locationId}`;
+}
+
 /**
  * Compute per-employee pay for a pay period.
  *
- * **Base pay = the level's DAY rate, pro-rated by hours actually worked**, summed over the
- * employee's approved shifts in the period:
+ * **Base pay and revenue percent come from `pay_rates`, a (level, location) matrix** — a level
+ * is a pure label; the same level pays a different guaranteed day rate AND a different revenue
+ * percent at different locations. Base pay is that cell's day rate, pro-rated by hours actually
+ * worked, summed over the employee's approved shifts in the period:
  *
- *     base = rate_per_day x hours(shift) / working_hours(shift.location)
+ *     base = cell.rate_per_day x hours(shift) / working_hours(shift.location)
  *
  * A full day pays exactly the day rate; half a day pays half. Pro-rating is required, not a
  * refinement: a day is regularly split between two people ("Буває що не цілий день а декілька
@@ -31,14 +38,18 @@ function dayKey(locationId: string, date: string): string {
  * opening hours — dividing an 8-hour shift by a 12-hour location and by a 9-hour one must give
  * different pay for the same rate.
  *
- * Revenue share = the employee's revenue fraction x the location-day's approved revenue,
- * prorated by that employee's share of the total hours worked at that location on that day. A
- * worked location-day with no approved revenue is recorded as a gap and marks the result
- * `blocked`.
+ * Revenue share = the cell's revenue fraction x the location-day's approved revenue, prorated by
+ * that employee's share of the total hours worked at that location on that day. A worked
+ * location-day with no approved revenue is recorded as a gap and marks the result `blocked`.
+ *
+ * A worked (level, location) with no configured `pay_rates` cell contributes to NEITHER
+ * component — writing 0 silently is the one unforgivable failure in a payroll app — and is
+ * recorded in `missingRates` instead, which also blocks the result.
  */
 export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResult {
   const levelById = new Map(input.levels.map((l) => [l.id, l]));
   const locationById = new Map(input.locations.map((loc) => [loc.id, loc]));
+  const rateByCell = new Map(input.payRates.map((r) => [cellKey(r.levelId, r.locationId), r]));
 
   const revenueByDay = new Map<string, number>();
   for (const r of input.dailyRevenue) {
@@ -76,6 +87,9 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
 
   const lines: EmployeeBreakdown[] = [];
   const gaps: RevenueGap[] = [];
+  // (levelId, locationId) cells worked with no pay_rates row. A Set, not a list, because the
+  // same missing cell is hit by many shifts/employees and must be reported exactly once.
+  const missingCells = new Set<string>();
 
   // Pass 2: per-employee pay, using the location-day totals from pass 1.
   for (const employee of input.employees) {
@@ -102,7 +116,19 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
         // would silently produce Infinity in someone's pay, so fail loudly instead.
         throw new Error(`Location ${location.id} has a non-positive working day`);
       }
-      hourlyPay += level.ratePerDay * (hours / locationDayHours);
+
+      const cell = rateByCell.get(cellKey(employee.levelId, shift.locationId));
+      if (!cell) {
+        // No configured pay for this level at this location. This blocks the run — the day
+        // rate is the person's base wage, and writing 0 silently is the one unforgivable
+        // failure in a payroll app. The shift contributes to NEITHER component and does not
+        // create a revenue gap of its own (the run is already blocked; reporting the same
+        // shift twice as two kinds of gap is noise). The missing-cell check comes BEFORE the
+        // revenue-gap check below, so a missing-cell shift produces exactly one kind of gap.
+        missingCells.add(cellKey(employee.levelId, shift.locationId));
+        continue;
+      }
+      hourlyPay += cell.ratePerDay * (hours / locationDayHours);
 
       const key = dayKey(shift.locationId, shift.workDate);
       const revenue = revenueByDay.get(key);
@@ -114,7 +140,7 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
         continue;
       }
       const totalHours = totalHoursByDay.get(key)!;
-      revenueShare += employee.revenuePercent * revenue * (hours / totalHours);
+      revenueShare += cell.revenuePercent * revenue * (hours / totalHours);
     }
 
     const roundedHourly = round2(hourlyPay);
@@ -129,5 +155,10 @@ export function calculateSalaries(input: CalcInput, period: PayPeriod): CalcResu
     });
   }
 
-  return { period, lines, gaps, blocked: gaps.length > 0 };
+  const missingRates: MissingRate[] = [...missingCells].map((key) => {
+    const [levelId, locationId] = key.split('|');
+    return { levelId, locationId };
+  });
+
+  return { period, lines, gaps, missingRates, blocked: gaps.length > 0 || missingRates.length > 0 };
 }

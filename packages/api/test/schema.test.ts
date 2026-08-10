@@ -1,32 +1,37 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb } from '../src/db/testDb';
-import { levels, locations, employees } from '../src/schema';
+import { levels, locations, employees, payRates } from '../src/schema';
 
 describe('drizzle schema against the core migration', () => {
-  it('inserts and reads back a level, location, and employee', async () => {
+  it('inserts and reads back a level, location, employee, and pay-rate cell', async () => {
     const { db } = await createTestDb();
 
-    const [level] = await db
-      .insert(levels)
-      .values({ name: 'Junior', ratePerDay: '20.00' })
+    const [level] = await db.insert(levels).values({ name: 'Junior' }).returning();
+    const [location] = await db
+      .insert(locations)
+      .values({ name: 'Downtown', opensAt: '08:00', closesAt: '16:00' })
       .returning();
-    await db.insert(locations).values({ name: 'Downtown', opensAt: '08:00', closesAt: '16:00' });
     const [employee] = await db
       .insert(employees)
-      .values({ name: 'Alice', levelId: level.id, revenuePercent: '0.0500' })
+      .values({ name: 'Alice', levelId: level.id })
+      .returning();
+    const [cell] = await db
+      .insert(payRates)
+      .values({ levelId: level.id, locationId: location.id, ratePerDay: '20.00', revenuePercent: '0.05000' })
       .returning();
 
     const found = await db.select().from(employees).where(eq(employees.id, employee.id));
     expect(found).toHaveLength(1);
     expect(found[0].name).toBe('Alice');
-    expect(found[0].revenuePercent).toBe('0.0500'); // NUMERIC comes back as a string
     expect(found[0].active).toBe(true);
+    expect(cell.ratePerDay).toBe('20.00'); // NUMERIC comes back as a string
+    expect(cell.revenuePercent).toBe('0.05000');
   });
 
   it('enforces the employee/day/location/start-time uniqueness through drizzle inserts', async () => {
     const { db } = await createTestDb();
-    const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '10.00' }).returning();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
     const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '16:00' }).returning();
     const [emp] = await db.insert(employees).values({ name: 'Bob', levelId: level.id }).returning();
 
@@ -53,7 +58,7 @@ describe('drizzle schema against the core migration', () => {
 describe('schedule authoring tables', () => {
   it('accepts a draft shift and rejects an unknown status', async () => {
     const { db } = await createTestDb();
-    const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '10.00' }).returning();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
     const [loc] = await db.insert(locations).values({ name: '1', opensAt: '08:00', closesAt: '20:00' }).returning();
     const [emp] = await db.insert(employees).values({ name: 'A', levelId: level.id }).returning();
     const { shifts } = await import('../src/schema');
@@ -86,7 +91,7 @@ describe('schedule authoring tables', () => {
 
   it('stores a day-off request and forbids two kinds on one date', async () => {
     const { db } = await createTestDb();
-    const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '10.00' }).returning();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
     const [emp] = await db.insert(employees).values({ name: 'A', levelId: level.id }).returning();
     const { dayOffRequests } = await import('../src/schema');
 
@@ -108,7 +113,7 @@ describe('schedule authoring tables', () => {
 
   it('rejects a day-off kind outside the CHECK list', async () => {
     const { db } = await createTestDb();
-    const [level] = await db.insert(levels).values({ name: 'L', ratePerDay: '10.00' }).returning();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
     const [emp] = await db.insert(employees).values({ name: 'A', levelId: level.id }).returning();
     const { dayOffRequests } = await import('../src/schema');
     await expect(
@@ -138,6 +143,28 @@ describe('schedule authoring tables', () => {
     await db.insert(schedulePublications).values({ year: 2026, month: 9, publishedBy: 'sub-1' });
     await expect(
       db.insert(schedulePublications).values({ year: 2026, month: 9, publishedBy: 'sub-2' }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('pay_rates matrix', () => {
+  it('rejects a negative rate_per_day', async () => {
+    const { db } = await createTestDb();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '20:00' }).returning();
+    await expect(
+      db.insert(payRates).values({ levelId: level.id, locationId: loc.id, ratePerDay: '-5.00' }),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a revenue_percent outside [0, 1]', async () => {
+    const { db } = await createTestDb();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '20:00' }).returning();
+    await expect(
+      db
+        .insert(payRates)
+        .values({ levelId: level.id, locationId: loc.id, ratePerDay: '20.00', revenuePercent: '1.5' }),
     ).rejects.toThrow();
   });
 });

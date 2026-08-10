@@ -6,10 +6,10 @@ const PERIOD: PayPeriod = { start: '2026-08-01', end: '2026-08-15' };
 
 function baseInput(): CalcInput {
   return {
-    levels: [{ id: 'lvl1', name: 'Junior', ratePerDay: 20 }],
+    levels: [{ id: 'lvl1', name: 'Junior' }],
     locations: [{ id: 'locA', name: 'A', opensAt: '08:00', closesAt: '16:00' }],
     employees: [
-      { id: 'e1', name: 'Alice', levelId: 'lvl1', revenuePercent: 0.05, cognitoSub: null, active: true },
+      { id: 'e1', name: 'Alice', levelId: 'lvl1', cognitoSub: null, active: true },
     ],
     shifts: [
       {
@@ -20,6 +20,7 @@ function baseInput(): CalcInput {
     dailyRevenue: [
       { locationId: 'locA', revenueDate: '2026-08-02', amount: 1000, status: 'approved' },
     ],
+    payRates: [{ levelId: 'lvl1', locationId: 'locA', ratePerDay: 20, revenuePercent: 0.05 }],
     bonuses: {},
   };
 }
@@ -27,11 +28,12 @@ function baseInput(): CalcInput {
 describe('calculateSalaries', () => {
   it('returns nothing for empty input', () => {
     const result = calculateSalaries(
-      { levels: [], locations: [], employees: [], shifts: [], dailyRevenue: [], bonuses: {} },
+      { levels: [], locations: [], employees: [], shifts: [], dailyRevenue: [], payRates: [], bonuses: {} },
       PERIOD,
     );
     expect(result.lines).toEqual([]);
     expect(result.gaps).toEqual([]);
+    expect(result.missingRates).toEqual([]);
     expect(result.blocked).toBe(false);
   });
 
@@ -64,8 +66,12 @@ describe('calculateSalaries', () => {
   it('prorates revenue share by each person share of the hours', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '12:00'; // Alice: 4h
+    // Bob is a different level so he can carry a different revenuePercent at the same
+    // location — revenuePercent now lives on the (level, location) cell, not the employee.
+    input.levels.push({ id: 'lvl2', name: 'Senior' });
+    input.payRates.push({ levelId: 'lvl2', locationId: 'locA', ratePerDay: 20, revenuePercent: 0.1 });
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl1', revenuePercent: 0.1, cognitoSub: null, active: true,
+      id: 'e2', name: 'Bob', levelId: 'lvl2', cognitoSub: null, active: true,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -86,6 +92,7 @@ describe('calculateSalaries', () => {
   it('sums multiple shifts for one employee in a day across locations', () => {
     const input = baseInput();
     input.locations.push({ id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' });
+    input.payRates.push({ levelId: 'lvl1', locationId: 'locB', ratePerDay: 20, revenuePercent: 0.05 });
     input.shifts[0].endsAt = '12:00'; // 4h at A
     input.shifts.push({
       id: 's3', employeeId: 'e1', locationId: 'locB', workDate: '2026-08-02',
@@ -104,7 +111,7 @@ describe('calculateSalaries', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '12:00'; // Alice 4h approved
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl1', revenuePercent: 0.1, cognitoSub: null, active: true,
+      id: 'e2', name: 'Bob', levelId: 'lvl1', cognitoSub: null, active: true,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -177,7 +184,7 @@ describe('calculateSalaries', () => {
 
   it('rounds each component and keeps the total consistent', () => {
     const input = baseInput();
-    input.employees[0].revenuePercent = 0.0333;
+    input.payRates[0].revenuePercent = 0.0333;
     input.dailyRevenue[0].amount = 1000.126;
     const result = calculateSalaries(input, PERIOD);
     const line = result.lines[0];
@@ -207,8 +214,12 @@ describe('calculateSalaries', () => {
   it('prorates an uneven split by hours, not headcount', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '14:00'; // Alice: 6h
+    // Bob is a different level at the same rate_per_day but a different revenuePercent, again
+    // because revenuePercent is a (level, location) cell property, not an employee property.
+    input.levels.push({ id: 'lvl2', name: 'Senior' });
+    input.payRates.push({ levelId: 'lvl2', locationId: 'locA', ratePerDay: 20, revenuePercent: 0.1 });
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl1', revenuePercent: 0.1, cognitoSub: null, active: true,
+      id: 'e2', name: 'Bob', levelId: 'lvl2', cognitoSub: null, active: true,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -228,7 +239,7 @@ describe('calculateSalaries', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '12:00'; // Alice: 4h, active
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl1', revenuePercent: 0.1, cognitoSub: null, active: false,
+      id: 'e2', name: 'Bob', levelId: 'lvl1', cognitoSub: null, active: false,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -239,5 +250,129 @@ describe('calculateSalaries', () => {
     const alice = result.lines.find((l) => l.employeeId === 'e1')!;
     expect(alice.revenueShare).toBe(25); // 0.05 x 1000 x 4/8 (Bob's hours still count in the denominator)
     expect(result.lines.find((l) => l.employeeId === 'e2')).toBeUndefined();
+  });
+
+  it('pays different rates and percents for the same person at two locations in one day', () => {
+    // loc A: 12h day, 600/day, 5%; loc B: 12h day, 800/day, 10%. 6h at each.
+    // revenue 1000 approved at each location; the employee is the only worker.
+    // base = 600*(6/12) + 800*(6/12) = 300 + 400 = 700
+    // share = 0.05*1000*(6/6) + 0.10*1000*(6/6) = 50 + 100 = 150
+    const level = { id: 'lvl1', name: 'Junior' };
+    const locA = { id: 'locA', name: 'A', opensAt: '08:00', closesAt: '20:00' };
+    const locB = { id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' };
+    const employee = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true };
+    const input: CalcInput = {
+      levels: [level],
+      locations: [locA, locB],
+      employees: [employee],
+      shifts: [
+        {
+          id: 's1', employeeId: employee.id, locationId: locA.id, workDate: '2026-08-02',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+        {
+          id: 's2', employeeId: employee.id, locationId: locB.id, workDate: '2026-08-02',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+      ],
+      dailyRevenue: [
+        { locationId: locA.id, revenueDate: '2026-08-02', amount: 1000, status: 'approved' },
+        { locationId: locB.id, revenueDate: '2026-08-02', amount: 1000, status: 'approved' },
+      ],
+      payRates: [
+        { levelId: level.id, locationId: locA.id, ratePerDay: 600, revenuePercent: 0.05 },
+        { levelId: level.id, locationId: locB.id, ratePerDay: 800, revenuePercent: 0.1 },
+      ],
+      bonuses: {},
+    };
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.lines[0].hourlyPay).toBe(700);
+    expect(result.lines[0].revenueShare).toBe(150);
+    expect(result.blocked).toBe(false);
+  });
+
+  it('reports a missing matrix cell as a blocking gap and pays nothing for that shift', () => {
+    // Same fixture as above minus the (level, locB) cell. The locA shift still computes; the
+    // locB shift contributes NOTHING to either component and lands in missingRates.
+    const level = { id: 'lvl1', name: 'Junior' };
+    const locA = { id: 'locA', name: 'A', opensAt: '08:00', closesAt: '20:00' };
+    const locB = { id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' };
+    const employee = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true };
+    const input: CalcInput = {
+      levels: [level],
+      locations: [locA, locB],
+      employees: [employee],
+      shifts: [
+        {
+          id: 's1', employeeId: employee.id, locationId: locA.id, workDate: '2026-08-02',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+        {
+          id: 's2', employeeId: employee.id, locationId: locB.id, workDate: '2026-08-02',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+      ],
+      dailyRevenue: [
+        { locationId: locA.id, revenueDate: '2026-08-02', amount: 1000, status: 'approved' },
+        { locationId: locB.id, revenueDate: '2026-08-02', amount: 1000, status: 'approved' },
+      ],
+      payRates: [
+        { levelId: level.id, locationId: locA.id, ratePerDay: 600, revenuePercent: 0.05 },
+        // no cell for (level, locB)
+      ],
+      bonuses: {},
+    };
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.missingRates).toEqual([{ levelId: level.id, locationId: locB.id }]);
+    expect(result.blocked).toBe(true);
+    expect(result.lines[0].hourlyPay).toBe(300); // locA half-day only
+    // The missing-cell shift does not ALSO show up as a revenue gap — reporting the same
+    // shift twice as two kinds of gap would be noise once the run is already blocked.
+    expect(result.gaps).toEqual([]);
+  });
+
+  it('dedupes missingRates across shifts and employees sharing the cell', () => {
+    const level = { id: 'lvl1', name: 'Junior' };
+    const locB = { id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' };
+    const alice = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true };
+    const bob = { id: 'e2', name: 'Bob', levelId: level.id, cognitoSub: null, active: true };
+    const input: CalcInput = {
+      levels: [level],
+      locations: [locB],
+      employees: [alice, bob],
+      shifts: [
+        {
+          id: 's1', employeeId: alice.id, locationId: locB.id, workDate: '2026-08-02',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+        {
+          id: 's2', employeeId: alice.id, locationId: locB.id, workDate: '2026-08-03',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+        {
+          id: 's3', employeeId: bob.id, locationId: locB.id, workDate: '2026-08-02',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+        {
+          id: 's4', employeeId: bob.id, locationId: locB.id, workDate: '2026-08-03',
+          startsAt: '08:00', endsAt: '14:00', status: 'approved', source: 'native',
+        },
+      ],
+      dailyRevenue: [],
+      payRates: [],
+      bonuses: {},
+    };
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.missingRates).toEqual([{ levelId: level.id, locationId: locB.id }]);
+    expect(result.blocked).toBe(true);
+  });
+
+  it('a configured cell with percent 0 pays rate only', () => {
+    const input = baseInput();
+    input.payRates[0].revenuePercent = 0;
+    const result = calculateSalaries(input, PERIOD);
+    expect(result.lines[0].hourlyPay).toBe(20);
+    expect(result.lines[0].revenueShare).toBe(0);
+    expect(result.blocked).toBe(false);
   });
 });

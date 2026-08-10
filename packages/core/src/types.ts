@@ -12,7 +12,6 @@ export type RevenueStatus = 'pending' | 'needs_review' | 'approved' | 'rejected'
 export interface Level {
   id: string;
   name: string;
-  ratePerDay: number;
 }
 
 export interface Location {
@@ -27,10 +26,24 @@ export interface Employee {
   id: string;
   name: string;
   levelId: string;
-  /** Fraction in [0, 1]; 0.05 = 5%. */
-  revenuePercent: number;
   cognitoSub: string | null;
   active: boolean;
+}
+
+/** One matrix cell: what a level is paid at a location. */
+export interface PayRate {
+  levelId: string;
+  locationId: string;
+  /** Guaranteed pay for a full working day at this location (грн). */
+  ratePerDay: number;
+  /** Fraction in [0, 1]; 0.05 = 5%. */
+  revenuePercent: number;
+}
+
+/** A worked (level, location) with no configured pay_rates cell. Blocks the run. */
+export interface MissingRate {
+  levelId: string;
+  locationId: string;
 }
 
 export interface Shift {
@@ -77,6 +90,7 @@ export interface CalcInput {
   locations: Location[];
   shifts: Shift[];
   dailyRevenue: DailyRevenue[];
+  payRates: PayRate[];
   /** employeeId -> personal bonus amount for this run. */
   bonuses: Record<string, number>;
 }
@@ -85,5 +99,6 @@ export interface CalcResult {
   period: PayPeriod;
   lines: EmployeeBreakdown[];
   gaps: RevenueGap[];
+  missingRates: MissingRate[];
   blocked: boolean;
 }

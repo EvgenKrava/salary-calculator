@@ -1,7 +1,7 @@
 // This Drizzle schema is for query building only. CHECK constraints
 // (rate_per_day >= 0, revenue_percent in [0,1], amount >= 0, closes_at > opens_at,
 // ends_at > starts_at) are defined and enforced in packages/core/db/migrations/
-// 0001_init.sql and 0002_hours_model.sql, the source of truth.
+// 0001_init.sql, 0002_hours_model.sql, and 0008_pay_matrix.sql, the source of truth.
 import {
   boolean,
   date,
@@ -30,7 +30,6 @@ export const extractionStatus = pgEnum('extraction_status', ['processing', 'need
 export const levels = pgTable('levels', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().unique(),
-  ratePerDay: numeric('rate_per_day', { precision: 10, scale: 2 }).notNull(),
 });
 
 export const locations = pgTable('locations', {
@@ -44,10 +43,29 @@ export const employees = pgTable('employees', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   levelId: uuid('level_id').notNull().references(() => levels.id),
-  revenuePercent: numeric('revenue_percent', { precision: 6, scale: 4 }).notNull().default('0'),
   cognitoSub: text('cognito_sub').unique(),
   active: boolean('active').notNull().default(true),
 });
+
+/**
+ * One matrix cell: what a level is paid at a location. Both day rate and revenue percent live
+ * here — a level is a pure label — replacing `levels.rate_per_day` and
+ * `employees.revenue_percent` (dropped in 0008_pay_matrix.sql).
+ */
+export const payRates = pgTable(
+  'pay_rates',
+  {
+    levelId: uuid('level_id')
+      .notNull()
+      .references(() => levels.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    ratePerDay: numeric('rate_per_day', { precision: 10, scale: 2 }).notNull(),
+    revenuePercent: numeric('revenue_percent', { precision: 6, scale: 5 }).notNull().default('0'),
+  },
+  (t) => [primaryKey({ columns: [t.levelId, t.locationId] })],
+);
 
 export const shifts = pgTable(
   'shifts',

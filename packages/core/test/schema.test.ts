@@ -15,10 +15,11 @@ describe('schema 0001_init + 0002_hours_model', () => {
       await db.exec(sql);
     }
     await db.exec(`
-      INSERT INTO levels (id, name, rate_per_day) VALUES ('${LEVEL}', 'Junior', 20.00);
+      INSERT INTO levels (id, name) VALUES ('${LEVEL}', 'Junior');
       INSERT INTO locations (id, name, opens_at, closes_at) VALUES ('${LOC}', 'Downtown', '08:00', '20:00');
-      INSERT INTO employees (id, name, level_id, revenue_percent)
-        VALUES ('${EMP}', 'Alice', '${LEVEL}', 0.0500);
+      INSERT INTO employees (id, name, level_id) VALUES ('${EMP}', 'Alice', '${LEVEL}');
+      INSERT INTO pay_rates (level_id, location_id, rate_per_day, revenue_percent)
+        VALUES ('${LEVEL}', '${LOC}', 20.00, 0.0500);
     `);
   });
 
@@ -79,10 +80,28 @@ describe('schema 0001_init + 0002_hours_model', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects a revenue_percent above 1', async () => {
+  it('rejects a pay_rates revenue_percent above 1', async () => {
+    // A location of its own so the insert fails on the CHECK, not on the (level, location)
+    // PRIMARY KEY the beforeAll row already occupies for LEVEL/LOC.
+    await db.exec(
+      `INSERT INTO locations (name, opens_at, closes_at) VALUES ('Percent Check Loc', '08:00', '20:00');`,
+    );
     await expect(
       db.exec(
-        `INSERT INTO employees (name, level_id, revenue_percent) VALUES ('Bad', '${LEVEL}', 1.5);`,
+        `INSERT INTO pay_rates (level_id, location_id, rate_per_day, revenue_percent)
+         SELECT '${LEVEL}', id, 20.00, 1.5 FROM locations WHERE name = 'Percent Check Loc';`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a pay_rates rate_per_day below 0', async () => {
+    await db.exec(
+      `INSERT INTO locations (name, opens_at, closes_at) VALUES ('Rate Check Loc', '08:00', '20:00');`,
+    );
+    await expect(
+      db.exec(
+        `INSERT INTO pay_rates (level_id, location_id, rate_per_day)
+         SELECT '${LEVEL}', id, -5.00 FROM locations WHERE name = 'Rate Check Loc';`,
       ),
     ).rejects.toThrow();
   });
