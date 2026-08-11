@@ -7,6 +7,44 @@
  * not a bullet with a word in it.
  */
 
+/*
+ * The dry-run preview: the figures a manager reads before committing the one irreversible action in
+ * the product. Its own section so the heading, the period line and the breakdown hold together as
+ * one object rather than three stacked page-level elements.
+ */
+.runs__preview {
+  margin-bottom: var(--s6);
+}
+
+/* Tighter than the global h2 margin: the period line below belongs to this heading. */
+.runs__previewTitle {
+  margin-bottom: var(--s1);
+}
+
+.runs__previewPeriod {
+  margin-top: 0;
+}
+
+.runs__commit {
+  margin-top: var(--s4);
+}
+
+/*
+ * The preview no longer matches the form, so committing is withdrawn.
+ *
+ * --warn, not --stop: nothing is broken and no payroll is blocked — the manager simply has to
+ * recalculate before they can commit. It replaces the commit button, so it carries the weight of
+ * explaining where that button went.
+ */
+.runs__stale {
+  margin-top: var(--s4);
+  color: var(--warn);
+}
+
+.runs__blockedUnknown {
+  margin: 0;
+}
+
 .blocker__list {
   list-style: none;
   margin: 0;
@@ -36,6 +74,24 @@
 .blocker__link:hover {
   background: var(--surface-sunk);
   border-color: var(--rule-strong);
+}
+
+/*
+ * A missing revenue day carries more than an identifier: the date, the location, and who worked
+ * it. The date stays mono (it is a value a manager matches against a revenue row); the rest is
+ * prose describing it, so it takes the UI face and a muted tone.
+ */
+.blocker__what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  min-width: 0;
+}
+
+.blocker__where {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
 }
 
 /* Never outline: none — the keyboard path through a blocker has to be visible. */

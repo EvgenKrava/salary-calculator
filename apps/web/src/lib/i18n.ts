@@ -379,6 +379,8 @@ export const t = {
     blockedTitle: 'Розрахунок заблоковано — немає виручки',
     blockedHint:
       'Додайте підтверджену виручку за кожен день нижче, потім запустіть розрахунок знову. Нічого не збережено.',
+    /** Accessible name of a missing-revenue-day link — says where it goes, not just what is wrong. */
+    fixRevenueFor: (date: string, location: string) => `Додати виручку: ${date}, ${location}`,
     badYear: 'Введіть рік від 2000 до 2100.',
     badMonth: 'Введіть місяць від 1 до 12.',
     badBonus: (names: string) =>

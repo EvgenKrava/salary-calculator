@@ -9,6 +9,7 @@ import { Toolbar } from '../ui/Toolbar';
 import { Figure } from '../ui/Figure';
 import { MonthSelect, Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
+import { Loading } from '../ui/QueryGate';
 import { ApiError } from '../lib/api';
 import { t, formatDate, formatTimestampDate } from '../lib/i18n';
 import {
@@ -137,10 +138,32 @@ export function BlockedRun({
 
   return (
     <Card tone="stop" title={t.runs.blockedTitle} description={t.runs.blockedHint}>
-      <ul className="mono" style={{ margin: 0, paddingLeft: 'var(--s5)' }}>
+      {/*
+       * Each missing day is a LINK to the revenue screen that fixes it.
+       *
+       * This is the design system's own canonical blocked state — "a blocked salary run lists the
+       * missing location-days as links, because that is the manager's next action"
+       * (docs/design/system.md § Empty vs blocked) — and it was the one that did not comply: a
+       * plain bulleted list, while `MissingRates` beside it had done this correctly all along. A
+       * manager who has just been told payroll will not run should not then have to go find the
+       * screen.
+       */}
+      <ul className="blocker__list">
         {[...byDay.values()].map((g) => (
           <li key={`${g.locationId}-${g.date}`}>
-            {formatDate(g.date)} — {t.common.location.toLowerCase()} {locOf(g.locationId)} ({g.who.join(', ')})
+            <Link
+              to="/revenue"
+              className="blocker__link"
+              aria-label={t.runs.fixRevenueFor(formatDate(g.date), locOf(g.locationId))}
+            >
+              <span className="blocker__what">
+                <span className="mono">{formatDate(g.date)}</span>
+                <span className="blocker__where">
+                  {t.common.location.toLowerCase()} {locOf(g.locationId)} ({g.who.join(', ')})
+                </span>
+              </span>
+              <span aria-hidden="true">→</span>
+            </Link>
           </li>
         ))}
       </ul>
@@ -377,17 +400,17 @@ export function RunsRoute() {
           <option value="2">{t.runs.secondHalf}</option>
         </Select>
         </div>
-        <fieldset style={{ border: 0, padding: 0, margin: 'var(--s6) 0 0' }}>
-          <legend style={{ font: 'inherit', fontWeight: 600, padding: 0, marginBottom: 'var(--s1)' }}>
-            {t.runs.bonusesTitle}
-          </legend>
-          <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.runs.bonusesHint}</p>
+        {/* `.fieldset` / `.fieldset__legend` from field.css — the primitive that existed for this
+            and was dead because this, its only caller, inlined the same three declarations. */}
+        <fieldset className="fieldset">
+          <legend className="fieldset__legend">{t.runs.bonusesTitle}</legend>
+          <p className="muted">{t.runs.bonusesHint}</p>
           {employees.isLoading ? (
-            <p className="mono">{t.runs.loadingEmployees}</p>
+            <Loading what={t.nav.employees.toLowerCase()} />
           ) : employees.error ? (
             // Never render an empty bonus list as if nobody qualified — a manager would run
             // payroll believing there was nothing to enter.
-            <p style={{ color: 'var(--stop)' }}>{t.runs.employeesFailed}</p>
+            <p className="form__error" role="status">{t.runs.employeesFailed}</p>
           ) : activeEmployees.length === 0 ? (
             /*
              * Not mono, and not adjacent to the CTA by accident. In mono directly above the
@@ -407,11 +430,15 @@ export function RunsRoute() {
               <tbody>
                 {activeEmployees.map((emp) => (
                   <tr key={emp.id}>
-                    <Td>{emp.name}</Td>
-                    <NumCell>
+                    <Td label={t.common.employee}>{emp.name}</Td>
+                    <NumCell label={t.runs.bonusColumn}>
+                      {/*
+                       * `mono` and `--money` sized: this is a money figure being typed, and it was
+                       * rendering in the UI sans face — the one input in the app holding an amount
+                       * that becomes someone's pay, set in the face the system reserves for prose.
+                       */}
                       <input
-                        className="field__input"
-                        style={{ textAlign: 'right', maxWidth: '10ch' }}
+                        className="field__input field__input--money mono"
                         type="text"
                         inputMode="decimal"
                         aria-label={t.runs.bonusFor(emp.name)}
@@ -447,9 +474,9 @@ export function RunsRoute() {
       </form>
 
       {previewed ? (
-        <div style={{ marginBottom: 'var(--s6)' }}>
-          <h2 style={{ marginBottom: 'var(--s1)' }}>{t.runs.previewTitle}</h2>
-          <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
+        <section className="runs__preview">
+          <h2 className="runs__previewTitle">{t.runs.previewTitle}</h2>
+          <p className="muted runs__previewPeriod">
             {formatDate(previewed.periodStart)} — {formatDate(previewed.periodEnd)} · {t.runs.previewHint}
           </p>
 
@@ -481,7 +508,7 @@ export function RunsRoute() {
                   preview heading over an empty screen and no commit button. */}
               {previewed.gaps.length === 0 && previewed.missingRates.length === 0 ? (
                 <Card tone="stop" title={t.common.statusBlocked}>
-                  <p style={{ margin: 0 }}>{t.runs.blockedUnknown}</p>
+                  <p className="runs__blockedUnknown">{t.runs.blockedUnknown}</p>
                 </Card>
               ) : null}
             </>
@@ -497,19 +524,20 @@ export function RunsRoute() {
                   variant="primary"
                   onClick={doCommit}
                   disabled={create.isPending}
-                  style={{ marginTop: 'var(--s4)' }}
+                  className="runs__commit"
                 >
                   {create.isPending ? t.runs.running : t.runs.confirmRun}
                 </Button>
               ) : (
                 /* Inputs changed after the preview: committing now would write figures that
                    differ from the ones on screen, which is exactly the mistake this flow
-                   exists to prevent. */
-                <p style={{ color: 'var(--warn)', marginTop: 'var(--s4)' }}>{t.runs.staleReview}</p>
+                   exists to prevent. Announced, because the commit button DISAPPEARS when this
+                   appears — a control vanishing with no explanation reads as a broken screen. */
+                <p className="runs__stale" role="status">{t.runs.staleReview}</p>
               )}
             </>
           )}
-        </div>
+        </section>
       ) : null}
 
       {gaps ? (
@@ -522,15 +550,16 @@ export function RunsRoute() {
           locations={locations.data ?? []}
         />
       ) : null}
-      {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
+      {error ? <p className="form__error" role="status">{error}</p> : null}
       {result ? (
-        <>
-          <h2 style={{ marginBottom: 'var(--s2)' }}>{t.runs.savedTitle}</h2>
+        <section>
+          {/* The one irreversible action in the product has completed, so it is announced. */}
+          <h2 role="status">{t.runs.savedTitle}</h2>
           <RunBreakdown lines={result} employees={employees.data ?? []} />
-        </>
+        </section>
       ) : null}
 
-      <h2 style={{ margin: 'var(--s8) 0 var(--s4)' }}>{t.runs.pastRuns}</h2>
+      <h2>{t.runs.pastRuns}</h2>
       {(runs.data ?? []).length === 0 ? (
         <EmptyState title={t.runs.noRuns} action={t.runs.noRunsAction} />
       ) : (
@@ -545,11 +574,13 @@ export function RunsRoute() {
           <tbody>
             {(runs.data ?? []).map((r) => (
               <tr key={r.id}>
-                <Td><span className="mono">{formatDate(r.periodStart)}</span></Td>
-                <Td><span className="mono">{formatDate(r.periodEnd)}</span></Td>
+                <Td label={t.runs.periodStart}><span className="mono">{formatDate(r.periodStart)}</span></Td>
+                <Td label={t.runs.periodEnd}><span className="mono">{formatDate(r.periodEnd)}</span></Td>
                 {/* created_at is a timestamptz, so it must be CONVERTED to local time, not sliced:
                     a run created at 22:30 UTC on the 5th was already the 6th in Kyiv. */}
-                <Td><span className="mono">{formatTimestampDate(String(r.createdAt))}</span></Td>
+                <Td label={t.runs.created}>
+                  <span className="mono">{formatTimestampDate(String(r.createdAt))}</span>
+                </Td>
               </tr>
             ))}
           </tbody>
