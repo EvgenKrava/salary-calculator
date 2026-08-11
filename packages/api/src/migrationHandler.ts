@@ -81,8 +81,13 @@ export async function runMigrations(execute: Executor): Promise<MigrateResult> {
     // missing relation, so this probe is safe on a genuinely empty database. Two sentinels,
     // not one: `levels` alone only proves 0001 ran, not that everything up to the last
     // pre-journal migration did.
+    //
+    // The ::text casts are load-bearing, not cosmetic: the RDS Data API refuses to serialize
+    // a regclass-typed result column (UnsupportedResultException, seen live on the first
+    // production run of this probe), while PGlite returns it happily — the fifth divergence
+    // of this kind in the project. Cast to TEXT and both engines agree; NULL stays NULL.
     const probe = await execute(
-      "SELECT to_regclass('public.levels') AS first, to_regclass('public.schedule_publication_overrides') AS last",
+      "SELECT to_regclass('public.levels')::text AS first, to_regclass('public.schedule_publication_overrides')::text AS last",
     );
     const firstExists = probe.length > 0 && probe[0].first != null;
     const lastExists = probe.length > 0 && probe[0].last != null;
