@@ -81,8 +81,31 @@
   border-color: var(--ink-faint);
 }
 
-/* Amber ring on focus ties the active field to the primary action colour. */
-.field__input:focus {
+/*
+ * Focus: the ink outline the design system mandates, plus the amber wash.
+ *
+ * This was `outline: none` with `box-shadow: 0 0 0 3px var(--amber-tint)` as the only cue — and
+ * --amber-tint is #fdf4e5, which is **1.09:1 against --surface**. So the ring the system requires
+ * ("Visible focus ring: 2px solid var(--ink)… Never outline: none") had been replaced by one that
+ * is effectively invisible on white, failing WCAG 2.4.11's 3:1 focus-appearance bar on every input
+ * in the app. Measured, not eyeballed; pinned by test/contrast.test.ts.
+ *
+ * The outline carries the visibility, the amber keeps the "this field is live" cue and ties it to
+ * the primary action colour. `outline-offset: 1px` sits it just clear of the border without
+ * colliding with the wash.
+ */
+.field__input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-tint);
+}
+
+/*
+ * Mouse focus keeps the amber wash but not the outline: a manager who has just clicked a field
+ * knows where they clicked, and :focus-visible above still covers every keyboard path.
+ */
+.field__input:focus:not(:focus-visible) {
   outline: none;
   border-color: var(--amber);
   box-shadow: 0 0 0 3px var(--amber-tint);

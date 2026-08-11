@@ -153,8 +153,20 @@
   border-color: var(--ink-faint);
 }
 
-/* Same amber focus ring as every other input in the app. */
-.matrix__input:focus {
+/*
+ * Same focus treatment as every other input in the app (ui/field.css): the ink outline carries the
+ * visibility — --amber-tint alone is 1.09:1 on white and fails WCAG 2.4.11 — and the amber wash
+ * says which cell is live. It matters more here than anywhere else, because this grid is navigated
+ * by tabbing across it and the cell commits on exit.
+ */
+.matrix__input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-tint);
+}
+
+.matrix__input:focus:not(:focus-visible) {
   outline: none;
   border-color: var(--amber);
   box-shadow: 0 0 0 3px var(--amber-tint);

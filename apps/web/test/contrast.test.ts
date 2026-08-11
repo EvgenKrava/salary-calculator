@@ -95,6 +95,31 @@ describe('contrast', () => {
     expect(ratio(token('ink-faint'), token('surface-raised'))).toBeLessThan(AA);
   });
 
+  it('does not rely on the amber tint alone as an input focus ring', () => {
+    /*
+     * The focus ring on every input in the app was `outline: none` plus
+     * `box-shadow: 0 0 0 3px var(--amber-tint)`. --amber-tint is 1.09:1 against --surface, so the
+     * only focus cue was effectively invisible — failing WCAG 2.4.11's 3:1 focus-appearance bar
+     * and the design system's own "Visible focus ring: 2px solid var(--ink). Never outline: none".
+     *
+     * Found by tabbing the app under Playwright, not by eye: the wash IS visible if you know to
+     * look for it, and the border also turns amber, so it reads as styled rather than as broken.
+     * The ratio below is what makes the case, so it is asserted alongside the rule.
+     */
+    expect(ratio(token('amber-tint'), token('surface'))).toBeLessThan(3);
+
+    for (const [file, selector] of [
+      ['../src/ui/field.css', '.field__input:focus-visible'],
+      ['../src/routes/payMatrix.css', '.matrix__input:focus-visible'],
+    ] as const) {
+      const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), file), 'utf8');
+      const rule = new RegExp(`${selector.replace(/[.:()]/g, '\\$&')}\\s*\\{[^}]*\\}`).exec(css);
+      expect(rule, `${selector} rule not found in ${file}`).toBeTruthy();
+      // An ink outline, not a tint-only shadow.
+      expect(rule![0], selector).toMatch(/outline:\s*2px solid var\(--ink\)/);
+    }
+  });
+
   it('the display figure meets AA on the surfaces it appears on', () => {
     // A ledger total in --amber at 44px is large text (AA large = 3:1), but it also renders in
     // the money column at body size, so hold it to the stricter bar on both surfaces.
