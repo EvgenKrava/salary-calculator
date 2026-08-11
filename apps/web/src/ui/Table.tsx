@@ -25,10 +25,14 @@ export function Th({ children, numeric = false }: { children: ReactNode; numeric
   );
 }
 
-export function Td({ children, label }: { children: ReactNode; label?: string }) {
+export function Td({ children, label }: { children?: ReactNode; label?: string }) {
   // `label` drives the mobile stacked layout: below 640px the header row is hidden and each
   // cell prints its own column name, so a figure is never separated from what it means.
   // Optional so existing call sites keep working — they just lose the mobile label.
+  //
+  // `children` is optional so a spacer cell in a totals row can be written `<Td />` rather than
+  // `<Td> </Td>`: that whitespace made the cell non-`:empty`, which is what table.css keys the
+  // stacked layout's "print nothing for an empty cell" rule off.
   return (
     <td className="td" data-label={label}>
       {children}

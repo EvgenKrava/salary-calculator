@@ -295,9 +295,15 @@
        forbids tracking Cyrillic. */
     color: var(--ink-muted);
   }
-  /* The per-day footer counts are noise at this width: the same figures are one tap away per
-     person, and 31 unlabelled chips at the bottom of a phone screen teach nothing. */
-  .grid tfoot .grid__total[data-day] {
+  /*
+   * The whole per-day footer row goes, not just its cells.
+   *
+   * The counts are noise at this width — the same figures are one tap away per person, and 31
+   * unlabelled chips at the bottom of a phone screen teach nothing. But hiding only the
+   * `[data-day]` cells left the row itself rendering as an empty bordered card with the heading
+   * "Людей" and nothing under it, which reads as a panel that failed to load.
+   */
+  .grid tfoot {
     display: none;
   }
   .grid__popover {

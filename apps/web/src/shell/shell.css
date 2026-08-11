@@ -22,11 +22,18 @@
 .shell__skip:focus {
   left: var(--s4);
   top: var(--s4);
-  padding: var(--s2) var(--s3);
+  /* A real target once it is on screen: it was 23px tall, below the 44px minimum, on the one
+     control that exists purely for keyboard and switch users. */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--s4);
   background: var(--surface);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
+  color: var(--ink);
+  font-weight: 500;
 }
 
 /* Visually hidden but announced — used for badge counts. */
@@ -285,7 +292,16 @@
  */
 @media (max-width: 900px) {
   .shell {
-    grid-template-columns: 1fr;
+    /*
+     * `minmax(0, 1fr)`, not `1fr` — the same reason the desktop rule above gives.
+     *
+     * A bare `1fr` has an AUTO minimum, so a wide table set its own column's width and the whole
+     * page scrolled sideways: at 768px the shifts, review, employees and schedule-edit screens
+     * dragged the page header and the toolbar off-screen with them, instead of the table scrolling
+     * inside its own `.table-wrap`. The desktop rule had the floor and the mobile override dropped
+     * it, so this only reproduced between 640px (where tables stack) and 900px.
+     */
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .rail {

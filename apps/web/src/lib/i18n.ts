@@ -149,6 +149,8 @@ export const t = {
     groupOps: 'Операції',
     groupPayroll: 'Розрахунки',
     groupSetup: 'Налаштування',
+    /** The keyboard shortcut past the rail — the first thing a keyboard user tabs into. */
+    skipToContent: 'Перейти до вмісту',
     today: 'Сьогодні',
     /** Screen-reader text on a count badge, so "3" is never announced bare. */
     needsAttention: (n: number) => `${n} потребує уваги`,

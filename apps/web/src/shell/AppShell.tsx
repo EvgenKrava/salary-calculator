@@ -35,8 +35,13 @@ export function AppShell() {
 
   return (
     <div className="shell">
+      {/*
+       * "Перейти до вмісту", not t.nav.today — the skip link said "Сьогодні", so the first thing a
+       * keyboard user tabbed into announced itself as a navigation item to the home screen rather
+       * than as the shortcut past the rail that it is.
+       */}
       <a className="shell__skip" href="#main">
-        {t.nav.today}
+        {t.nav.skipToContent}
       </a>
 
       <aside className="rail">

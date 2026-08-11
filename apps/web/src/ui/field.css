@@ -196,7 +196,12 @@
  * the day the helper moved.
  */
 .field__input--year {
-  max-width: 8ch;
+  /*
+   * 8ch was too narrow and clipped its own value: `ch` is the width of "0" in the MONO face, and
+   * the box also carries --s3 of padding on each side plus the number spinner. Four digits
+   * scrolled inside a 70px content box at every viewport. Measured, not guessed.
+   */
+  max-width: 11ch;
   text-align: right;
 }
 

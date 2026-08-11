@@ -242,6 +242,18 @@
     font-family: var(--font-ui);
     font-weight: 600;
   }
+  /*
+   * A cell with nothing in it prints nothing — not a label with a blank beside it.
+   *
+   * In the stacked layout every cell becomes its own labelled row, so a conditionally-empty cell
+   * (the decision column on a shift already approved, the action column on a row with no actions)
+   * rendered "РІШЕННЯ" against empty space. On the shifts worklist that was two dead rows per
+   * settled shift. Only `:empty` cells are dropped, so a cell holding a deliberate blank — an
+   * unknown money figure — still prints its label, because unknown is a fact worth labelling.
+   */
+  .table .td:empty {
+    display: none;
+  }
   .table .td--money {
     border-left: 0;
     border-radius: var(--radius-sm);
