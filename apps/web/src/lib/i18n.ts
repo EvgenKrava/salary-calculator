@@ -141,6 +141,14 @@ export const t = {
     statusNeedsReview: 'потребує перевірки',
     statusProcessing: 'обробка',
     statusBlocked: 'заблоковано',
+    /*
+     * A time-of-day box that cannot be read as a time (ui/TimeField).
+     *
+     * States the format rather than saying "невірно", per the system's Forms rule — and states it
+     * as 24-hour, because the fault this most often names is a 12-hour habit ("8:00 PM") or an
+     * out-of-range hour ("25:00").
+     */
+    timeInvalid: 'Вкажіть час у 24-годинному форматі, ГГ:ХХ — наприклад 08:00 або 20:30.',
   },
 
   nav: {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
-import { Field } from '../ui/Field';
+import { TimeField } from '../ui/TimeField';
+import { isTime24 } from '../lib/time';
 import { Select } from '../ui/Select';
 import { StatusPill } from '../ui/StatusPill';
 import {
@@ -69,6 +70,15 @@ export function DayEditor({
     setError(null);
     if (!employeeId) {
       setError(t.dayEditor.chooseEmployee);
+      return;
+    }
+    /*
+     * A custom window is optional — leaving both boxes empty falls back to the location's opening
+     * hours below — but a HALF-typed one is a mistake worth catching. Sent as-is it would 400 in
+     * English, or worse, a `08:0` silently omitted would record the wrong hours, and hours are pay.
+     */
+    if (isCustom && [startsAt, endsAt].some((v) => v !== '' && !isTime24(v))) {
+      setError(t.common.timeInvalid);
       return;
     }
     try {
@@ -200,23 +210,19 @@ export function DayEditor({
 
         {isCustom ? (
           <div className="field-row">
-            <Field
+            <TimeField
               label={t.dayEditor.startsAt}
               name="startsAt"
-              type="time"
-              numeric
               required
               value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
+              onChange={setStartsAt}
             />
-            <Field
+            <TimeField
               label={t.dayEditor.endsAt}
               name="endsAt"
-              type="time"
-              numeric
               required
               value={endsAt}
-              onChange={(e) => setEndsAt(e.target.value)}
+              onChange={setEndsAt}
             />
           </div>
         ) : null}

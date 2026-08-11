@@ -4,6 +4,8 @@ import { AddForm } from '../ui/AddForm';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
+import { TimeField, TimeInput } from '../ui/TimeField';
+import { isTime24 } from '../lib/time';
 import { EmptyState } from '../ui/EmptyState';
 import { Loading } from '../ui/QueryGate';
 import { Toolbar } from '../ui/Toolbar';
@@ -49,6 +51,12 @@ export function LocationRow({ location }: { location: Location }) {
 
   async function save() {
     setError(null);
+    // Checked here rather than left to the API: a malformed time comes back as a 400 whose message
+    // names the field in English, and the row already owns a place to say it in Ukrainian.
+    if (!isTime24(opensAt) || !isTime24(closesAt)) {
+      setError(t.common.timeInvalid);
+      return;
+    }
     try {
       await update.mutateAsync({ id: location.id, name, opensAt, closesAt });
       setEditing(false);
@@ -128,21 +136,17 @@ export function LocationRow({ location }: { location: Location }) {
         />
       </Td>
       <Td label={t.setup.opensAt}>
-        <input
-          className="field__input mono"
-          type="time"
-          aria-label={t.setup.opensAtFor(location.name)}
+        <TimeInput
           value={opensAt}
-          onChange={(e) => setOpensAt(e.target.value)}
+          onChange={setOpensAt}
+          ariaLabel={t.setup.opensAtFor(location.name)}
         />
       </Td>
       <Td label={t.setup.closesAt}>
-        <input
-          className="field__input mono"
-          type="time"
-          aria-label={t.setup.closesAtFor(location.name)}
+        <TimeInput
           value={closesAt}
-          onChange={(e) => setClosesAt(e.target.value)}
+          onChange={setClosesAt}
+          ariaLabel={t.setup.closesAtFor(location.name)}
         />
       </Td>
       <Td label={t.common.actions}>
@@ -191,6 +195,12 @@ export function LocationsPanel() {
 
   async function submit() {
     setError(null);
+    // The times are typed, not picked, so an unparseable one is a real possibility — refused here
+    // with the format named, rather than sent for the API to reject in English.
+    if (!isTime24(opensAt) || !isTime24(closesAt)) {
+      setError(t.common.timeInvalid);
+      return false;
+    }
     setBusy(true);
     try {
       await add.mutateAsync({ name, opensAt, closesAt });
@@ -256,26 +266,8 @@ export function LocationsPanel() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <Field
-            label={t.setup.opensAt}
-            name="opensAt"
-            type="time"
-            numeric
-            fieldSize="time"
-            required
-            value={opensAt}
-            onChange={(e) => setOpensAt(e.target.value)}
-          />
-          <Field
-            label={t.setup.closesAt}
-            name="closesAt"
-            type="time"
-            numeric
-            fieldSize="time"
-            required
-            value={closesAt}
-            onChange={(e) => setClosesAt(e.target.value)}
-          />
+          <TimeField label={t.setup.opensAt} name="opensAt" required value={opensAt} onChange={setOpensAt} />
+          <TimeField label={t.setup.closesAt} name="closesAt" required value={closesAt} onChange={setClosesAt} />
         </div>
         {/*
          * The error moves out of the closesAt field and up to form level.

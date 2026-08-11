@@ -111,6 +111,19 @@ describe('SlotEditor', () => {
     ).toBeInTheDocument();
   });
 
+  it('refuses a malformed window rather than sending it', async () => {
+    // A slot window decides how many hours an imported shift is worth, so a time the API would
+    // reject is stopped here with the 24-hour format named.
+    render(<SlotEditor location={LOCATION as never} />);
+    const starts = screen.getByLabelText(t.setup.opensAt);
+    await userEvent.clear(starts);
+    await userEvent.type(starts, '2500');
+    await userEvent.click(screen.getByRole('button', { name: t.setup.saveSlot }));
+
+    expect(await screen.findByText(t.common.timeInvalid)).toBeInTheDocument();
+    expect(setSlot.mutateAsync).not.toHaveBeenCalled();
+  });
+
   it('says slots are unset rather than showing an empty list', () => {
     render(<SlotEditor location={LOCATION as never} />);
     expect(screen.getByText(t.setup.noSlots)).toBeInTheDocument();
@@ -182,6 +195,35 @@ describe('LocationRow', () => {
     expect(screen.queryByText(t.setup.slotsHint)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: t.setup.slots }));
     expect(screen.getByText(t.setup.slotsHint)).toBeInTheDocument();
+  });
+
+  it('refuses to save an impossible time instead of sending it to the API', async () => {
+    // The hours are typed now, not picked, so this is reachable. The row says it in Ukrainian
+    // rather than letting the API answer with an English 400 — and these hours are a payroll
+    // input, since a day rate prorates against the location's working day.
+    inTable(<LocationRow location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
+    const opens = screen.getByLabelText(t.setup.opensAtFor('Перша'));
+    await userEvent.clear(opens);
+    await userEvent.type(opens, '2500');
+    await userEvent.click(screen.getByRole('button', { name: t.common.save }));
+
+    expect(await screen.findByText(t.common.timeInvalid)).toBeInTheDocument();
+    expect(updateLocation.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('accepts a bare hour, completing it on the way out of the field', async () => {
+    // `7` is how someone says "seven o'clock"; the field completes it rather than refusing it.
+    inTable(<LocationRow location={LOCATION as never} />);
+    await userEvent.click(screen.getByRole('button', { name: t.common.edit }));
+    const opens = screen.getByLabelText(t.setup.opensAtFor('Перша'));
+    await userEvent.clear(opens);
+    await userEvent.type(opens, '7');
+    await userEvent.click(screen.getByRole('button', { name: t.common.save }));
+
+    expect(updateLocation.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'l1', opensAt: '07:00' }),
+    );
   });
 });
 
@@ -284,6 +326,35 @@ describe('collapsed add forms', () => {
     await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
     // A stale failure above a blank form describes nothing on screen.
     expect(screen.queryByText('location name already exists')).not.toBeInTheDocument();
+  });
+
+  it('refuses an out-of-range time and keeps the form open with the reason', async () => {
+    render(<LocationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    await userEvent.type(screen.getByLabelText(t.setup.locationName), 'Третя');
+    await userEvent.type(screen.getByLabelText(t.setup.opensAt), '2500');
+    await userEvent.type(screen.getByLabelText(t.setup.closesAt), '2000');
+    await userEvent.click(submitButton(t.setup.addLocation));
+
+    expect(await screen.findByText(t.common.timeInvalid)).toBeInTheDocument();
+    expect(addLocation.mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(t.setup.locationName)).toBeInTheDocument();
+  });
+
+  it('sends the completed 24-hour times, not what was literally typed', async () => {
+    render(<LocationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    await userEvent.type(screen.getByLabelText(t.setup.locationName), 'Третя');
+    // Typed the fast way: no colon, and a bare hour for the closing time.
+    await userEvent.type(screen.getByLabelText(t.setup.opensAt), '830');
+    await userEvent.type(screen.getByLabelText(t.setup.closesAt), '21');
+    await userEvent.click(submitButton(t.setup.addLocation));
+
+    expect(addLocation.mutateAsync).toHaveBeenCalledWith({
+      name: 'Третя',
+      opensAt: '08:30',
+      closesAt: '21:00',
+    });
   });
 
   it('closes the form on Escape, as the pay matrix and schedule popover do', async () => {

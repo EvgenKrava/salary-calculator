@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { TimeField } from '../ui/TimeField';
+import { isTime24 } from '../lib/time';
 import { Loading } from '../ui/QueryGate';
 import {
   useDeleteShiftSlot,
@@ -47,6 +49,12 @@ export function SlotEditor({ location }: { location: Location }) {
     const n = Number(slotNumber);
     if (!Number.isInteger(n) || n < 1) {
       setError(t.setup.slotNumberInvalid);
+      return;
+    }
+    // Typed times, so an unparseable one is refused here with the format named rather than sent
+    // for the API to reject in English.
+    if (!isTime24(startsAt) || !isTime24(endsAt)) {
+      setError(t.common.timeInvalid);
       return;
     }
     try {
@@ -119,25 +127,19 @@ export function SlotEditor({ location }: { location: Location }) {
           value={slotNumber}
           onChange={(e) => setSlotNumber(e.target.value)}
         />
-        <Field
+        <TimeField
           label={t.setup.opensAt}
           name={`slot-starts-${location.id}`}
-          type="time"
-          numeric
-          fieldSize="time"
           required
           value={startsAt}
-          onChange={(e) => setStartsAt(e.target.value)}
+          onChange={setStartsAt}
         />
-        <Field
+        <TimeField
           label={t.setup.closesAt}
           name={`slot-ends-${location.id}`}
-          type="time"
-          numeric
-          fieldSize="time"
           required
           value={endsAt}
-          onChange={(e) => setEndsAt(e.target.value)}
+          onChange={setEndsAt}
         />
         <Button type="submit" variant="primary" size="sm" disabled={save.isPending}>
           {save.isPending ? t.common.saving : t.setup.saveSlot}
