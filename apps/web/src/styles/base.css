@@ -138,6 +138,34 @@ p:last-child {
 }
 
 /*
+ * A form-level error — one that belongs to the whole submission rather than to a single field.
+ *
+ * A `Field` renders its own error underneath itself (`.field__error`); this is for the failures
+ * that have no one field to sit under: a rejected add, a refused save. It was `<p style={{ color:
+ * 'var(--stop)' }}>` in nine places, each with its own margins, so the same failure sat at a
+ * different distance from the button that caused it on every screen.
+ *
+ * States the reason, never a generic "invalid" — the API's message names the actual fault.
+ */
+.form__error {
+  margin: 0 0 var(--s3);
+  color: var(--stop);
+  font-size: var(--text-sm);
+}
+
+/*
+ * A form-level note that is NOT an error: a precondition the user has to satisfy elsewhere
+ * ("no levels exist yet — an admin must create one"). --warn, because nothing is broken and no
+ * payroll is blocked; --stop is reserved for what stops a run.
+ */
+.form__note {
+  margin: var(--s2) 0 0;
+  color: var(--warn);
+  font-size: var(--text-xs);
+  max-width: 68ch;
+}
+
+/*
  * A detail row expanded under its parent table row (e.g. a location's shift slots).
  *
  * Sunk background and no row height so it reads as belonging to the row above rather than as

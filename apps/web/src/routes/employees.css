@@ -1,0 +1,38 @@
+/*
+ * The invite form, expanded inside an employee's row.
+ */
+
+/*
+ * "немає входу" — an employee record nobody can sign in as.
+ *
+ * --warn, not --stop: it needs attention (they cannot see their own shifts or pay) but it blocks no
+ * payroll — they are still paid. --stop is reserved for what stops a run.
+ */
+.employees__noLogin {
+  color: var(--warn);
+}
+
+/* The form sits in a table cell, so it must not stretch the column: fields wrap instead. */
+.invite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  max-width: 52ch;
+  padding: var(--s2) 0;
+  white-space: normal;
+}
+
+/* Inside a row the labelled fields no longer need their own bottom margin — the flex gap owns the
+   rhythm here, and doubling the two left a ragged gap above the buttons. */
+.invite .field {
+  margin-bottom: 0;
+}
+.invite .field-row {
+  gap: var(--s3);
+}
+
+.invite__hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}

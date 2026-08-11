@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Table, Th, Td } from '../ui/Table';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
+import { Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { StatusPill } from '../ui/StatusPill';
-import { anyLoading, firstError } from '../ui/QueryGate';
+import { anyLoading, firstError, Loading } from '../ui/QueryGate';
+import { LoadFailure } from '../ui/LoadFailure';
 import { Toolbar } from '../ui/Toolbar';
+import './employees.css';
 import {
   useAddEmployee,
   useEmployees,
@@ -64,28 +68,32 @@ function AddEmployee({ levels }: { levels: Level[] }) {
 
   return (
     /*
-     * `field-row`, not a stacked column. Three short fields down the left edge of a 1200px card
-     * left the rest of it empty and made the form look unfinished; a name, a level and a
-     * percentage are one logical row of inputs and now read as one.
+     * `field-row`, not a stacked column. Two short fields down the left edge of a 1200px card
+     * left the rest of it empty and made the form look unfinished; a name and a level are one
+     * logical row of inputs and now read as one.
+     *
+     * `Card`, not a hand-rolled `<div className="panel" style={{ padding }}>` — the padding and
+     * heading treatment are what drifted screen to screen before the primitive existed.
      */
-    <form className="panel" style={{ padding: 'var(--s5)', marginBottom: 'var(--s6)' }} onSubmit={submit}>
-      <h2 style={{ marginBottom: 'var(--s4)' }}>{t.employees.addTitle}</h2>
-      <div className="field-row">
-        {/* `fieldSize`, not `size` — Field extends input attributes, where `size` is the native
-            numeric character-width attribute and a string is a type error. */}
-        <Field
-          label={t.employees.name}
-          name="name"
-          fieldSize="wide"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <div className="field field--month">
-          <label className="field__label" htmlFor="levelId">{t.employees.level}</label>
-          <select
-            id="levelId"
-            className="field__input field__select"
+    <form onSubmit={submit}>
+      <Card title={t.employees.addTitle}>
+        <div className="field-row">
+          {/* `fieldSize`, not `size` — Field extends input attributes, where `size` is the native
+              numeric character-width attribute and a string is a type error. */}
+          <Field
+            label={t.employees.name}
+            name="name"
+            fieldSize="wide"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          {/* `Select`, not a hand-rolled field/label/select — drifting copies of that markup are
+              why the primitive exists (some lost their htmlFor, so the label did nothing). */}
+          <Select
+            label={t.employees.level}
+            name="levelId"
+            size="month"
             value={levelId}
             onChange={(e) => setLevelId(e.target.value)}
           >
@@ -95,18 +103,17 @@ function AddEmployee({ levels }: { levels: Level[] }) {
                 {l.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
-      </div>
-      {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
-      <Button type="submit" variant="primary" disabled={add.isPending || levels.length === 0}>
-        {add.isPending ? t.employees.adding : t.employees.addButton}
-      </Button>
-      {levels.length === 0 ? (
-        <p style={{ color: 'var(--warn)', fontSize: 'var(--text-xs)' }}>
-          {t.employees.noLevels}
-        </p>
-      ) : null}
+        {/* role=status: the only feedback on a failed add, and focus stays on the form. */}
+        {error ? <p className="form__error" role="status">{error}</p> : null}
+        <Button type="submit" variant="primary" disabled={add.isPending || levels.length === 0}>
+          {add.isPending ? t.employees.adding : t.employees.addButton}
+        </Button>
+        {/* Not --stop: nothing is broken and no payroll is blocked, an admin simply has to create a
+            level first. --stop is reserved for what blocks payroll now. */}
+        {levels.length === 0 ? <p className="form__note">{t.employees.noLevels}</p> : null}
+      </Card>
     </form>
   );
 }
@@ -139,34 +146,49 @@ function InviteEmployee({ emp, onDone }: { emp: Employee; onDone: () => void }) 
   }
 
   return (
-    <form onSubmit={submit} style={{ display: 'flex', gap: 'var(--s2)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-      <input
-        className="field__input"
-        type="email"
-        required
-        placeholder="email@example.com"
-        aria-label={t.employees.loginEmailFor(emp.name)}
-        value={email}
-        onChange={(ev) => setEmail(ev.target.value)}
-      />
-      <select
-        className="field__input field__select"
-        aria-label={t.employees.roleFor(emp.name)}
-        value={role}
-        onChange={(ev) => setRole(ev.target.value as 'admin' | 'manager' | 'employee')}
-      >
-        <option value="employee">{t.employees.roleEmployee}</option>
-        <option value="manager">{t.employees.roleManager}</option>
-        <option value="admin">{t.employees.roleAdmin}</option>
-      </select>
-      <Button type="submit" variant="primary" disabled={invite.isPending}>
-        {invite.isPending ? t.employees.inviting : t.employees.sendInvite}
-      </Button>
-      <Button type="button" onClick={onDone}>{t.common.cancel}</Button>
-      {error ? <p style={{ color: 'var(--stop)', margin: 0, flexBasis: '100%' }}>{error}</p> : null}
-      <p style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-xs)', margin: 0, flexBasis: '100%' }}>
-        {t.employees.inviteHint}
-      </p>
+    /*
+     * Visible labels, not a placeholder and an unlabelled select.
+     *
+     * The email field's only visible label was `placeholder="email@example.com"`, which
+     * disappears the moment anyone types — exactly when they are checking what they entered — and
+     * the role select had no visible label at all, on the control that decides what payroll data
+     * the person can see. The design system forbids placeholder-as-label outright, and this was
+     * the only place in the app still doing it. The `aria-label`s that carried the meaning are now
+     * `Field`/`Select` labels, which is both visible and announced.
+     */
+    <form onSubmit={submit} className="invite">
+      <div className="field-row">
+        <Field
+          label={t.employees.inviteEmail}
+          name={`invite-email-${emp.id}`}
+          type="email"
+          fieldSize="wide"
+          required
+          value={email}
+          onChange={(ev) => setEmail(ev.target.value)}
+        />
+        <Select
+          label={t.employees.role}
+          name={`invite-role-${emp.id}`}
+          size="wide"
+          value={role}
+          onChange={(ev) => setRole(ev.target.value as 'admin' | 'manager' | 'employee')}
+        >
+          <option value="employee">{t.employees.roleEmployee}</option>
+          <option value="manager">{t.employees.roleManager}</option>
+          <option value="admin">{t.employees.roleAdmin}</option>
+        </Select>
+      </div>
+      <span className="row-actions">
+        <Button type="submit" size="sm" variant="primary" disabled={invite.isPending}>
+          {invite.isPending ? t.employees.inviting : t.employees.sendInvite}
+        </Button>
+        <Button type="button" size="sm" variant="quiet" onClick={onDone}>
+          {t.common.cancel}
+        </Button>
+      </span>
+      {error ? <p className="setup__rowError" role="status">{error}</p> : null}
+      <p className="invite__hint">{t.employees.inviteHint}</p>
     </form>
   );
 }
@@ -218,7 +240,7 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
               <InviteEmployee emp={emp} onDone={() => setInviting(false)} />
             ) : (
               <span className="row-actions">
-                <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
+                <span className="mono employees__noLogin">{t.employees.noLogin}</span>
                 {emp.active ? (
                   <Button size="sm" onClick={() => setInviting(true)}>{t.employees.invite}</Button>
                 ) : null}
@@ -240,11 +262,11 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
               <Button size="sm" onClick={toggleActive} disabled={update.isPending}>
                 {emp.active ? t.employees.deactivate : t.employees.reactivate}
               </Button>
-              <Button size="sm" onClick={() => setDaysOffOpen((v) => !v)}>
+              <Button size="sm" onClick={() => setDaysOffOpen((v) => !v)} aria-expanded={daysOffOpen}>
                 {t.employees.daysOff}
               </Button>
             </span>
-            {error ? <p style={{ color: 'var(--stop)', margin: 0 }}>{error}</p> : null}
+            {error ? <p className="setup__rowError" role="status">{error}</p> : null}
           </Td>
         </tr>
         {daysOffOpen ? (
@@ -261,9 +283,11 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
   }
 
   return (
+    // The same data-labels as the read-only row above: without them the stacked 390px layout
+    // labelled a record or not depending on whether it happened to be in edit mode.
     <tr>
-      <Td>{emp.name}</Td>
-      <Td>
+      <Td label={t.employees.name}>{emp.name}</Td>
+      <Td label={t.common.level}>
         <select className="field__input field__select" aria-label={t.employees.levelFor(emp.name)} value={levelId} onChange={(e) => setLevelId(e.target.value)}>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>{l.name}</option>
@@ -272,11 +296,11 @@ function EmployeeRow({ emp, levels }: { emp: Employee; levels: Level[] }) {
       </Td>
       {/* Login state is read-only here: it is set by Invite from Cognito's own response, so
           there is nothing for a manager to type or mistype. */}
-      <Td>
+      <Td label={t.employees.login}>
         {emp.cognitoSub ? (
           <span className="mono">{t.employees.canSignIn}</span>
         ) : (
-          <span className="mono" style={{ color: 'var(--warn)' }}>{t.employees.noLogin}</span>
+          <span className="mono employees__noLogin">{t.employees.noLogin}</span>
         )}
       </Td>
       <Td label={t.common.status}><StatusPill status={emp.active ? 'active' : 'inactive'} /></Td>
@@ -301,16 +325,9 @@ export function EmployeesRoute() {
   const employees = useEmployees();
   const levels = useLevels();
 
-  if (anyLoading(employees, levels)) return <p className="mono">{t.common.loading}</p>;
+  if (anyLoading(employees, levels)) return <Loading what={t.employees.title.toLowerCase()} />;
   const loadError = firstError(employees, levels);
-  if (loadError) {
-    return (
-      <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>{t.common.couldNotLoad(t.employees.title.toLowerCase())}</h2>
-        <p className="mono" style={{ margin: 0 }}>{loadError.message}</p>
-      </div>
-    );
-  }
+  if (loadError) return <LoadFailure what={t.employees.title.toLowerCase()} error={loadError} />;
 
   const rows = employees.data ?? [];
   const levelList = levels.data ?? [];
