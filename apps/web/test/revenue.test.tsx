@@ -80,4 +80,36 @@ describe('revenue form', () => {
     const { container } = render(<RevenueForm locations={LOCATIONS} onSubmit={vi.fn()} />);
     expect(container.querySelector('input.mono')).not.toBeNull();
   });
+
+  it('sizes the date and amount for their own data, not for a 4-digit year', () => {
+    /*
+     * Both were falling through to `--num` (12ch, sized for a year). Measured in Chromium that put
+     * each at 100px: the date input CLIPPED ITS OWN `dd.mm.yyyy` placeholder to "dd . mm . )" with
+     * the calendar icon printing over the last segment, and the amount box was narrower than the
+     * six-digit figures a day's takings run to.
+     *
+     * jsdom has no layout, so the widths themselves were verified in the browser (date 160px,
+     * amount 211px, neither scrolling its own content with `05.08.2026` / `125000.50` in it). What
+     * this pins is the class that selects the width, which is what regressed.
+     */
+    const { container } = render(<RevenueForm locations={LOCATIONS} onSubmit={vi.fn()} />);
+
+    const date = screen.getByLabelText(t.revenue.revenueDate);
+    expect(date.closest('.field')).toHaveClass('field--date');
+    // Inferred from type="date" rather than passed, so the next date input in the app cannot
+    // silently inherit the numeric width again.
+    expect(date).toHaveAttribute('type', 'date');
+
+    expect(screen.getByLabelText(t.revenue.amountUah).closest('.field')).toHaveClass('field--money');
+    expect(container.querySelector('.field--num')).toBeNull();
+  });
+
+  it('lays the three inputs out as one row, since they are one record', () => {
+    // Stacked, they left a wide modal with three short boxes down its left edge and the rest empty
+    // — the same `field-row` idiom the location add-form and day editor use.
+    const { container } = render(<RevenueForm locations={LOCATIONS} onSubmit={vi.fn()} />);
+    const row = container.querySelector('.field-row');
+    expect(row).not.toBeNull();
+    expect(row!.querySelectorAll('.field')).toHaveLength(3);
+  });
 });

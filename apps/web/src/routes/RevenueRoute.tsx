@@ -98,41 +98,59 @@ export function RevenueForm({
   }
 
   return (
+    /*
+     * One row of inputs, not three stacked pairs.
+     *
+     * A location, a date and an amount are one logical record — the same `field-row` idiom the
+     * location add-form and the day editor use. Stacked, they left a 900px-wide modal with three
+     * short boxes down its left edge and the rest empty, which reads as a form that failed to
+     * finish laying itself out rather than a deliberately compact one.
+     */
     <form onSubmit={submit}>
-      <Select
-        label={t.common.location}
-        name="locationId"
-        size="wide"
-        value={locationId}
-        onChange={(e) => setLocationId(e.target.value)}
-      >
-        {locations.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </Select>
-      <Field
-        label={t.revenue.revenueDate}
-        name="revenueDate"
-        type="date"
-        numeric
-        required
-        value={revenueDate}
-        onChange={(e) => setRevenueDate(e.target.value)}
-      />
-      <Field
-        label={t.revenue.amountUah}
-        name="amount"
-        type="number"
-        step="0.01"
-        min="0"
-        numeric
-        required
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        error={error ?? undefined}
-      />
+      <div className="field-row">
+        {/* `month`-width (18ch), not `wide` (48ch): in a `field-row` a field sizes to its own
+            content, so `wide` only ever set a cap — and a café name needs more than the label's
+            own width, which is what `max-content` alone would have given it. */}
+        <Select
+          label={t.common.location}
+          name="locationId"
+          size="month"
+          value={locationId}
+          onChange={(e) => setLocationId(e.target.value)}
+        >
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </Select>
+        {/* `fieldSize` is inferred from `type="date"` — see ui/Field. It was 100px wide and
+            clipping its own dd.mm.yyyy placeholder. */}
+        <Field
+          label={t.revenue.revenueDate}
+          name="revenueDate"
+          type="date"
+          numeric
+          required
+          value={revenueDate}
+          onChange={(e) => setRevenueDate(e.target.value)}
+        />
+        {/* `money`, not the inherited `num`: a day's takings run to six digits plus decimals, and
+            this box was sized for a 4-digit year. */}
+        <Field
+          label={t.revenue.amountUah}
+          name="amount"
+          type="number"
+          step="0.01"
+          min="0"
+          numeric
+          fieldSize="money"
+          required
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          error={error ?? undefined}
+        />
+      </div>
       <Button type="submit" variant="primary" disabled={busy}>
         {busy ? t.revenue.saving : t.common.add}
       </Button>

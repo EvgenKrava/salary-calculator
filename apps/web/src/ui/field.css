@@ -141,6 +141,38 @@
   max-width: 48ch;
 }
 
+/*
+ * A native date input.
+ *
+ * Sized to the widest thing it renders — `dd.mm.yyyy` plus the calendar button — with headroom,
+ * because the engine lays those segments out itself and a `ch` measured against the mono zero is
+ * not what it uses. It was inheriting `--num` (12ch, sized for a 4-digit year) and came out at
+ * 100px, which CLIPPED ITS OWN PLACEHOLDER to "dd . mm . )" with the icon printing over the last
+ * segment: the one control on the screen whose whole job is to say what format it wants was the one
+ * that could not finish saying it. That truncation is also what made the format look foreign —
+ * Chromium renders dd.mm.yyyy here regardless of page locale.
+ */
+.field--date {
+  max-width: 20ch;
+}
+
+/*
+ * A money figure being typed. Matches `.field__input--money` (the bonus column in a salary run):
+ * right-aligned and mono so a column of them aligns digit-for-digit, the same rule the rendered
+ * money column follows.
+ *
+ * 14ch, not `--num`'s 12: a day's takings for a coffee shop runs to five or six digits before the
+ * decimals (`125000.00` is nine characters), and this had inherited a width sized for a year. In
+ * the screenshot that shipped, the Сума box was narrower than the figures a manager types into it
+ * every day.
+ */
+.field--money {
+  max-width: 14ch;
+}
+.field--money .field__input {
+  text-align: right;
+}
+
 .field__input.mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
