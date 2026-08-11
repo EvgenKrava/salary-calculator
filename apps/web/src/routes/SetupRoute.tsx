@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Table, Th, Td } from '../ui/Table';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
+import { Loading } from '../ui/QueryGate';
 import { Toolbar } from '../ui/Toolbar';
 import {
   useAddLevel,
@@ -21,6 +23,7 @@ import {
 import { SlotEditor } from './SlotEditor';
 import { PayMatrixPanel } from './PayMatrixPanel';
 import { t } from '../lib/i18n';
+import './setup.css';
 
 /**
  * One location row: read-only until edited, then the same three fields inline.
@@ -195,12 +198,12 @@ function LocationsPanel() {
     }
   }
 
-  if (locations.isLoading) return <p className="mono">{t.common.loading}</p>;
+  if (locations.isLoading) return <Loading what={t.setup.locations.toLowerCase()} />;
   const rows = locations.data ?? [];
 
   return (
     <>
-      <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.locations}</h2>
+      <h2>{t.setup.locations}</h2>
       {rows.length === 0 ? (
         <EmptyState title={t.setup.noLocations} action={t.setup.noLocationsAction} />
       ) : (
@@ -221,31 +224,54 @@ function LocationsPanel() {
         </Table>
       )}
 
-      <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s4)' }} onSubmit={submit}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.addLocation}</h2>
-        <Field label={t.setup.locationName} name="name" required value={name} onChange={(e) => setName(e.target.value)} />
-        <Field
-          label={t.setup.opensAt}
-          name="opensAt"
-          type="time"
-          numeric
-          required
-          value={opensAt}
-          onChange={(e) => setOpensAt(e.target.value)}
-        />
-        <Field
-          label={t.setup.closesAt}
-          name="closesAt"
-          type="time"
-          numeric
-          required
-          value={closesAt}
-          onChange={(e) => setClosesAt(e.target.value)}
-          error={error ?? undefined}
-        />
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? t.setup.adding : t.setup.addLocation}
-        </Button>
+      {/* Card, like every other panel on this screen: three of them were hand-rolled `<form
+          className="panel" style={{ padding }}>` at --s4 while the pay matrix and the day-off
+          limits sat at --s5, so one screen had three paddings for one kind of object. */}
+      <form onSubmit={submit} className="setup__addForm">
+        <Card title={t.setup.addLocation}>
+          {/* A name and two times are one logical row of inputs, not a tall column. */}
+          <div className="field-row">
+            <Field
+              label={t.setup.locationName}
+              name="name"
+              fieldSize="wide"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Field
+              label={t.setup.opensAt}
+              name="opensAt"
+              type="time"
+              numeric
+              fieldSize="time"
+              required
+              value={opensAt}
+              onChange={(e) => setOpensAt(e.target.value)}
+            />
+            <Field
+              label={t.setup.closesAt}
+              name="closesAt"
+              type="time"
+              numeric
+              fieldSize="time"
+              required
+              value={closesAt}
+              onChange={(e) => setClosesAt(e.target.value)}
+            />
+          </div>
+          {/*
+           * The error moves out of the closesAt field and up to form level.
+           *
+           * It was attached to `closesAt` because that field is last, not because that is where the
+           * fault is: "location name already exists" printed under the closing-time box. A
+           * submission-level failure belongs at submission level.
+           */}
+          {error ? <p className="form__error" role="status">{error}</p> : null}
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? t.setup.adding : t.setup.addLocation}
+          </Button>
+        </Card>
       </form>
     </>
   );
@@ -363,12 +389,12 @@ function LevelsPanel() {
     }
   }
 
-  if (levels.isLoading) return <p className="mono">{t.common.loading}</p>;
+  if (levels.isLoading) return <Loading what={t.setup.levels.toLowerCase()} />;
   const rows = levels.data ?? [];
 
   return (
     <>
-      <h2 style={{ margin: 'var(--s8) 0 var(--s1)' }}>{t.setup.levels}</h2>
+      <h2 className="setup__sectionTitle">{t.setup.levels}</h2>
       {/*
         * A level is a pure LABEL now — the day rate and revenue percent moved to the (level,
         * location) matrix below, because the same level is paid differently at different cafés.
@@ -376,7 +402,7 @@ function LevelsPanel() {
         * remembers entering a rate on a level needs to be told where it went, not left to
         * conclude the setting was lost.
         */}
-      <p className="muted" style={{ margin: '0 0 var(--s4)', maxWidth: '68ch' }}>{t.setup.levelsHint}</p>
+      <p className="muted setup__sectionHint">{t.setup.levelsHint}</p>
       {rows.length === 0 ? (
         <EmptyState title={t.setup.noLevels} action={t.setup.noLevelsAction} />
       ) : (
@@ -395,19 +421,22 @@ function LevelsPanel() {
         </Table>
       )}
 
-      <form className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s4)' }} onSubmit={submit}>
-        <h2 style={{ marginBottom: 'var(--s4)' }}>{t.setup.addLevel}</h2>
-        <Field
-          label={t.setup.levelName}
-          name="name"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          error={error ?? undefined}
-        />
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? t.setup.adding : t.setup.addLevel}
-        </Button>
+      <form onSubmit={submit} className="setup__addForm">
+        <Card title={t.setup.addLevel}>
+          {/* One field, so the error stays ON it — "level name already exists" is about the name. */}
+          <Field
+            label={t.setup.levelName}
+            name="name"
+            fieldSize="wide"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            error={error ?? undefined}
+          />
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? t.setup.adding : t.setup.addLevel}
+          </Button>
+        </Card>
       </form>
     </>
   );
@@ -422,7 +451,7 @@ export function DayOffLimitsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const current = settings.data;
-  if (settings.isLoading || !current) return <p className="mono">{t.common.loading}</p>;
+  if (settings.isLoading || !current) return <Loading what={t.daysOff.limitsTitle.toLowerCase()} />;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -441,9 +470,8 @@ export function DayOffLimitsPanel() {
   }
 
   return (
-    <form className="panel" style={{ padding: 'var(--s5)', marginTop: 'var(--s6)' }} onSubmit={submit}>
-      <h2 style={{ marginBottom: 'var(--s2)' }}>{t.daysOff.limitsTitle}</h2>
-      <p className="muted">{t.daysOff.limitsHint}</p>
+    <form onSubmit={submit} className="setup__addForm">
+      <Card title={t.daysOff.limitsTitle} description={t.daysOff.limitsHint}>
       <div className="field-row">
         <Field
           label={t.daysOff.requiredPerMonth}
@@ -466,10 +494,11 @@ export function DayOffLimitsPanel() {
           onChange={(e) => setPreferred(e.target.value)}
         />
       </div>
-      {error ? <p className="setup__rowError">{error}</p> : null}
+      {error ? <p className="form__error" role="status">{error}</p> : null}
       <Button type="submit" variant="primary" disabled={update.isPending}>
         {update.isPending ? t.common.saving : t.common.save}
       </Button>
+      </Card>
     </form>
   );
 }
@@ -489,7 +518,7 @@ export function SetupRoute() {
       <Toolbar title={t.setup.title} />
       <LocationsPanel />
       <LevelsPanel />
-      <div style={{ marginTop: 'var(--s8)' }}>
+      <div className="setup__section">
         <PayMatrixPanel />
       </div>
       <DayOffLimitsPanel />

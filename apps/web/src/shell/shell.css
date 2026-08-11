@@ -251,6 +251,32 @@
 }
 
 /*
+ * The sign-in card. Capped to a form measure — a login form stretched across a desktop reads as a
+ * page that failed to lay out — and full width below that, so it fits a 390px screen with the
+ * ground's padding still showing.
+ */
+.login {
+  width: 100%;
+  max-width: 380px;
+  padding: var(--s6);
+}
+
+.login__title {
+  margin-bottom: var(--s5);
+}
+
+.login__hint {
+  margin-bottom: var(--s5);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* The form's own fields should not add a bottom margin above the submit button, which is block. */
+.login .field:last-of-type {
+  margin-bottom: var(--s5);
+}
+
+/*
  * Below 900px the rail becomes a bottom bar.
  *
  * Bottom, not top: this is where a thumb reaches on a phone, and the manager entering revenue

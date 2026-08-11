@@ -47,19 +47,15 @@
   flex-wrap: wrap;
 }
 
-.slot-editor__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
+/*
+ * The fields are `Field`s now, so they bring their own label and bottom margin. Drop the margin —
+ * the flex row aligns them on one baseline — and size the number field to its data so a slot number
+ * does not get a name field's width.
+ */
+.slot-editor__form .field {
+  margin-bottom: 0;
 }
 
-.slot-editor__label {
-  font-size: var(--text-xs);
-  color: var(--ink-muted);
-}
-
-/* Times and the slot number are fixed-width data; sizing to content keeps the row on one line. */
-.slot-editor__field .field__input {
-  width: auto;
-  min-width: 9ch;
+.slot-editor__form .field--num {
+  max-width: 9ch;
 }

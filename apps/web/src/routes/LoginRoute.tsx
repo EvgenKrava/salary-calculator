@@ -40,8 +40,12 @@ export function LoginForm({
   }
 
   return (
-    <form className="panel" style={{ padding: 'var(--s6)', maxWidth: 380 }} onSubmit={submit}>
-      <h1 style={{ marginBottom: 'var(--s6)' }}>{title}</h1>
+    <form className="panel login" onSubmit={submit}>
+      <h1 className="login__title">{title}</h1>
+      {/* Only shown on the forced-password-change step, where a user who typed the right temporary
+          password is being asked for another one and needs telling why. The string existed and was
+          never rendered. */}
+      {!emailOnly ? <p className="login__hint">{t.login.newPasswordHint}</p> : null}
       {emailOnly ? (
         <Field
           label={t.login.email}
@@ -62,12 +66,10 @@ export function LoginForm({
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      {error ? (
-        <p style={{ color: 'var(--stop)', fontSize: 'var(--text-xs)', margin: '0 0 var(--s4)' }}>
-          {error}
-        </p>
-      ) : null}
-      <Button type="submit" variant="primary" disabled={busy}>
+      {/* role=status: a rejected sign-in changes nothing else on screen, and this is the one screen
+          a user cannot get past without being told what went wrong. */}
+      {error ? <p className="form__error" role="status">{error}</p> : null}
+      <Button type="submit" variant="primary" block disabled={busy}>
         {busy ? t.login.signingIn : submitLabel}
       </Button>
     </form>

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { Field } from '../ui/Field';
+import { Loading } from '../ui/QueryGate';
 import {
   useDeleteShiftSlot,
   useSetShiftSlot,
@@ -67,7 +69,7 @@ export function SlotEditor({ location }: { location: Location }) {
     }
   }
 
-  if (slots.isLoading) return <p className="mono">{t.common.loading}</p>;
+  if (slots.isLoading) return <Loading what={t.setup.slots.toLowerCase()} />;
 
   return (
     <div className="slot-editor">
@@ -99,43 +101,50 @@ export function SlotEditor({ location }: { location: Location }) {
         </ul>
       )}
 
+      {/*
+       * `Field`, not three hand-rolled label/span/input trios. These were the last wrapping-label
+       * fields in the app, so they were the only ones whose label was not associated by `htmlFor` —
+       * and the only ones not picking up the shared focus ring and invalid states.
+       *
+       * Names are scoped by location id: two locations' slot editors can be expanded at once, and
+       * duplicate ids would point every label at the first one's input.
+       */}
       <form className="slot-editor__form" onSubmit={submit}>
-        <label className="slot-editor__field">
-          <span className="slot-editor__label">{t.setup.slotNumber}</span>
-          <input
-            className="field__input mono"
-            type="number"
-            min="1"
-            value={slotNumber}
-            onChange={(e) => setSlotNumber(e.target.value)}
-          />
-        </label>
-        <label className="slot-editor__field">
-          <span className="slot-editor__label">{t.setup.opensAt}</span>
-          <input
-            className="field__input mono"
-            type="time"
-            required
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-          />
-        </label>
-        <label className="slot-editor__field">
-          <span className="slot-editor__label">{t.setup.closesAt}</span>
-          <input
-            className="field__input mono"
-            type="time"
-            required
-            value={endsAt}
-            onChange={(e) => setEndsAt(e.target.value)}
-          />
-        </label>
+        <Field
+          label={t.setup.slotNumber}
+          name={`slot-number-${location.id}`}
+          type="number"
+          min="1"
+          numeric
+          value={slotNumber}
+          onChange={(e) => setSlotNumber(e.target.value)}
+        />
+        <Field
+          label={t.setup.opensAt}
+          name={`slot-starts-${location.id}`}
+          type="time"
+          numeric
+          fieldSize="time"
+          required
+          value={startsAt}
+          onChange={(e) => setStartsAt(e.target.value)}
+        />
+        <Field
+          label={t.setup.closesAt}
+          name={`slot-ends-${location.id}`}
+          type="time"
+          numeric
+          fieldSize="time"
+          required
+          value={endsAt}
+          onChange={(e) => setEndsAt(e.target.value)}
+        />
         <Button type="submit" variant="primary" size="sm" disabled={save.isPending}>
           {save.isPending ? t.common.saving : t.setup.saveSlot}
         </Button>
       </form>
 
-      {error ? <p className="setup__rowError">{error}</p> : null}
+      {error ? <p className="setup__rowError" role="status">{error}</p> : null}
     </div>
   );
 }

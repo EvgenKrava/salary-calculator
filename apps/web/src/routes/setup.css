@@ -1,0 +1,35 @@
+/*
+ * Admin setup: four sections down one page (locations, levels, pay matrix, day-off limits).
+ *
+ * The page's job here is rhythm. Every section was setting its own ad-hoc margins inline and the
+ * three "add" forms carried three different paddings for one kind of object, so the screen read as
+ * four panels that happened to be stacked rather than one ordered setup flow.
+ */
+
+/* A section heading that follows a preceding section's table needs room to separate from it. */
+.setup__sectionTitle {
+  margin-top: var(--s8);
+  margin-bottom: var(--s1);
+}
+
+/* A hint belonging to the heading above it, not to the table below. */
+.setup__sectionHint {
+  margin: 0 0 var(--s4);
+  max-width: 68ch;
+}
+
+/* A whole section that is not a Card of its own (the pay matrix brings its own). */
+.setup__section {
+  margin-top: var(--s8);
+}
+
+/*
+ * The `<form>` wrapping an "add" Card.
+ *
+ * The Card owns the padding and the bottom margin; the form is only there to carry the submit. It
+ * still needs a top margin, because it follows the table of the things it adds to.
+ */
+.setup__addForm {
+  display: block;
+  margin-top: var(--s4);
+}
