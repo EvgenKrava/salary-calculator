@@ -123,6 +123,49 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * File input.
+ *
+ * The raw control sat unstyled beside fully styled inputs on the two screens that use one (the
+ * workbook import and the photo upload) — a grey platform button plus body-face filename, reading
+ * as the one field on the form that had been forgotten. Only the button part can be restyled
+ * portably (`::file-selector-button`), so that is made to match a secondary Button and the filename
+ * beside it goes mono, since it is an identifier the user checks.
+ */
+.field__file {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  padding: var(--s2) 0;
+  max-width: 100%;
+}
+
+.field__file::file-selector-button {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 500;
+  min-height: var(--control-h);
+  margin-right: var(--s3);
+  padding: 0 var(--s4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.field__file::file-selector-button:hover {
+  background: var(--surface-sunk);
+  border-color: var(--ink-faint);
+}
+
+@media (pointer: coarse) {
+  .field__file::file-selector-button {
+    min-height: var(--tap);
+  }
+}
+
 .field__hint {
   margin: 0;
   font-size: var(--text-xs);

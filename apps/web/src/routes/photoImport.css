@@ -1,0 +1,25 @@
+/*
+ * Photograph a hand-written sheet and let AI read it. Used from a modal on the revenue screen,
+ * often one-handed on a phone behind a counter.
+ */
+
+.photo__result {
+  margin: var(--s3) 0 0;
+}
+
+/*
+ * Upload succeeded. --ok with the word beside it, never the colour alone.
+ *
+ * It says the file was RECEIVED, not that the figures are live: nothing is applied until a manager
+ * confirms the reading in the review queue, and the copy (t.photo.uploaded) carries that.
+ */
+.photo__ok {
+  margin: var(--s3) 0 0;
+  color: var(--ok);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.photo__queue {
+  margin-top: var(--s4);
+}

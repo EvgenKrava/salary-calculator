@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
-import { anyLoading, firstError } from '../ui/QueryGate';
+import { anyLoading, firstError, Loading } from '../ui/QueryGate';
+import { LoadFailure } from '../ui/LoadFailure';
 import { useRole } from '../lib/auth';
 import {
   useClearPayRate,
@@ -59,7 +60,7 @@ function PayMatrix() {
   const locations = useLocations();
   const rates = usePayRates();
 
-  if (anyLoading(levels, locations, rates)) return <p className="mono">{t.common.loading}</p>;
+  if (anyLoading(levels, locations, rates)) return <Loading what={t.payMatrix.title.toLowerCase()} />;
 
   /*
    * A failed read is NOT an empty matrix.
@@ -69,14 +70,7 @@ function PayMatrix() {
    * blocked when it is not. Empty and unknown are different facts (see ui/QueryGate).
    */
   const loadError = firstError(levels, locations, rates);
-  if (loadError) {
-    return (
-      <Card tone="stop" title={t.common.couldNotLoad(t.payMatrix.title.toLowerCase())}>
-        <p className="mono" style={{ margin: 0 }}>{loadError.message}</p>
-        <p className="muted" style={{ marginBottom: 0 }}>{t.common.reload}</p>
-      </Card>
-    );
-  }
+  if (loadError) return <LoadFailure what={t.payMatrix.title.toLowerCase()} error={loadError} />;
 
   const levelRows = levels.data ?? [];
   const locationCols = locations.data ?? [];

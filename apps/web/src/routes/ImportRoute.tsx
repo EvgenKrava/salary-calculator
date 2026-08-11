@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
 import { Select } from '../ui/Select';
 import { config } from '../lib/config';
 import { useAuth } from '../lib/auth';
 import { t, MONTHS } from '../lib/i18n';
 import { Table, Th, Td } from '../ui/Table';
-import { Toolbar } from '../ui/Toolbar';
 import { useEmployees, useNameMap, useSetNameMapping } from '../lib/queries';
+import './import.css';
 
 interface PreviewResult {
   /**
@@ -54,13 +55,22 @@ interface CommitResult {
   inactiveEmployees: string[];
 }
 
-/** A named list of strings/numbers, or nothing if the report array is empty. */
+/**
+ * A named list of strings/numbers, or nothing if the report array is empty.
+ *
+ * The same "heading plus mono list" shape was written out four times across this file with its own
+ * inline margins each time; it is one class now (`report__*` in import.css).
+ */
 function ReportList({ title, items }: { title: string; items: (string | number)[] }) {
   if (items.length === 0) return null;
   return (
-    <div style={{ marginTop: 'var(--s4)' }}>
-      <h3 style={{ fontSize: 'var(--text-base)', marginBottom: 'var(--s1)' }}>{title}</h3>
-      <ul className="mono" style={{ margin: 0, paddingLeft: 'var(--s6)', fontSize: 'var(--text-xs)' }}>
+    <div className="report">
+      {/* The count is part of the heading: "2 097 anomalies" and "3 anomalies" call for very
+          different reactions, and the old heading made the reader count the list to find out. */}
+      <h3 className="report__title">
+        {title} <span className="report__count mono">{items.length}</span>
+      </h3>
+      <ul className="report__list mono">
         {items.map((item, i) => (
           <li key={`${item}-${i}`}>{item}</li>
         ))}
@@ -90,32 +100,29 @@ export function AnomalyReport({ anomalies }: { anomalies: Anomaly[] }) {
   ];
 
   return (
-    <div style={{ marginTop: 'var(--s4)' }}>
-      <h3 style={{ fontSize: 'var(--text-base)', marginBottom: 'var(--s1)' }}>
-        {t.importScreen.anomalies} ({anomalies.length})
+    <div className="report">
+      <h3 className="report__title">
+        {t.importScreen.anomalies} <span className="report__count mono">{anomalies.length}</span>
       </h3>
       {KINDS.map(({ kind, label, note }) => {
         const group = anomalies.filter((a) => a.kind === kind);
         if (group.length === 0) return null;
         return (
-          <div key={kind} style={{ marginTop: 'var(--s3)' }}>
-            <p style={{ margin: 0, fontWeight: 500 }}>
+          <div key={kind} className="report__group">
+            {/* The heading text is asserted verbatim by import-panel.test.tsx — a substitution
+                means someone worked and will not be paid, so the count belongs in the label. */}
+            <p className="report__groupTitle">
               {label} — {group.length}
             </p>
-            <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{note}</p>
-            <ul
-              className="mono"
-              style={{ margin: 'var(--s1) 0 0', paddingLeft: 'var(--s6)', fontSize: 'var(--text-xs)' }}
-            >
+            <p className="report__note">{note}</p>
+            <ul className="report__list mono">
               {group.slice(0, 5).map((a, i) => (
                 <li key={`${kind}-${i}`}>
                   {[a.date, a.sourceName, a.raw].filter(Boolean).join(' · ')}
                 </li>
               ))}
               {group.length > 5 ? (
-                <li style={{ listStyle: 'none', color: 'var(--ink-faint)' }}>
-                  {t.importScreen.andMore(group.length - 5)}
-                </li>
+                <li className="report__more">{t.importScreen.andMore(group.length - 5)}</li>
               ) : null}
             </ul>
           </div>
@@ -161,13 +168,11 @@ export function NameMapper({ names }: { names: string[] }) {
   }
 
   return (
-    <section style={{ marginTop: 'var(--s4)' }}>
-      <h3 style={{ marginBottom: 'var(--s1)' }}>{t.importScreen.mapNamesTitle}</h3>
-      <p style={{ marginTop: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
-        {t.importScreen.mapNamesHint}
-      </p>
+    <section className="report">
+      <h3 className="report__title">{t.importScreen.mapNamesTitle}</h3>
+      <p className="report__note">{t.importScreen.mapNamesHint}</p>
       {employees.error ? (
-        <p style={{ color: 'var(--stop)' }}>{t.common.couldNotLoad(t.nav.employees.toLowerCase())}</p>
+        <p className="form__error" role="status">{t.common.couldNotLoad(t.nav.employees.toLowerCase())}</p>
       ) : (
         <Table caption={t.importScreen.mapNamesTitle}>
           <thead>
@@ -182,8 +187,8 @@ export function NameMapper({ names }: { names: string[] }) {
               const current = m?.ignored ? '__ignore__' : (m?.employeeId ?? '');
               return (
                 <tr key={n}>
-                  <Td><span className="mono">{n}</span></Td>
-                  <Td>
+                  <Td label={t.importScreen.sheetName}><span className="mono">{n}</span></Td>
+                  <Td label={t.common.employee}>
                     <select
                       className="field__input field__select"
                       aria-label={t.importScreen.mapNameFor(n)}
@@ -204,7 +209,7 @@ export function NameMapper({ names }: { names: string[] }) {
           </tbody>
         </Table>
       )}
-      {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
+      {error ? <p className="form__error" role="status">{error}</p> : null}
     </section>
   );
 }
@@ -317,10 +322,14 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
   return (
     <>
       <form onSubmit={runPreview}>
-        <div className="field">
+        <div className="field field--wide">
           <label className="field__label" htmlFor="file">{t.importScreen.workbook}</label>
+          {/* `field__file`: the raw control sat unstyled beside fully styled inputs — the browser
+              default is a grey button plus body-face text, which read as the one thing on the form
+              that had been forgotten. */}
           <input
             id="file"
+            className="field__file"
             type="file"
             accept=".xlsx"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -333,12 +342,11 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
         </Button>
       </form>
 
-      {error ? <p style={{ color: 'var(--stop)', marginTop: 'var(--s4)' }}>{error}</p> : null}
+      {error ? <p className="form__error import__error" role="status">{error}</p> : null}
 
       {preview ? (
-        <div className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }}>
-          <h2>{t.importScreen.previewResult}</h2>
-          <p className="mono" style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>
+        <Card title={t.importScreen.previewResult}>
+          <p className="mono report__note">
             {t.importScreen.monthsFound(
               preview.months.map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`).join(', ') || '—',
             )}
@@ -351,8 +359,8 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
           <ReportList title={t.importScreen.inactiveEmployees} items={preview.inactiveEmployees} />
           <AnomalyReport anomalies={preview.anomalies} />
 
-          <div style={{ marginTop: 'var(--s6)' }}>
-            <h3 style={{ marginBottom: 'var(--s2)' }}>{t.importScreen.commitHeading}</h3>
+          <div className="import__commit">
+            <h3>{t.importScreen.commitHeading}</h3>
             {/* Choose from the periods the file actually contains, not from all twelve months:
                 a month that isn't in the workbook imports nothing, and with a two-year timeline
                 a bare month number cannot say which year is meant. */}
@@ -373,13 +381,14 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
               {busy ? t.importScreen.committing : t.importScreen.commit}
             </Button>
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {commitResult ? (
-        <div className="panel" style={{ padding: 'var(--s4)', marginTop: 'var(--s6)' }}>
-          <h2>{t.importScreen.commitResult}</h2>
-          <p className="mono" style={{ fontSize: 'var(--text-xs)' }}>
+        <Card title={t.importScreen.commitResult} tone="ok">
+          {/* The outcome of a write, announced: the modal does not close on commit, so without this
+              a screen-reader user gets no signal that the import actually happened. */}
+          <p className="mono import__tally" role="status">
             {t.importScreen.created} {commitResult.created}, {t.importScreen.skipped} {commitResult.skipped}
           </p>
           <ReportList title={t.importScreen.conflicts} items={commitResult.conflicts} />
@@ -388,7 +397,7 @@ export function ImportPanel({ onCommitted }: { onCommitted?: () => void } = {}) 
           <ReportList title={t.importScreen.unknownLocations} items={commitResult.unknownLocations} />
           <ReportList title={t.importScreen.missingSlots} items={commitResult.missingSlots} />
           <ReportList title={t.importScreen.inactiveEmployees} items={commitResult.inactiveEmployees} />
-        </div>
+        </Card>
       ) : null}
     </>
   );

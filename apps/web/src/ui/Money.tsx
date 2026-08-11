@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n';
 import './money.css';
 
 /**
@@ -12,7 +13,9 @@ import './money.css';
  */
 export function Money({ value }: { value: number | null | undefined }) {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return <span className="money money--unknown" aria-label="unknown" />;
+    // Ukrainian, like every other string a user meets: this was the one English label left in the
+    // UI, and it is announced on the money component — the thing a payroll dispute turns on.
+    return <span className="money money--unknown" aria-label={t.common.unknownAmount} />;
   }
   return <span className="money mono">{value.toFixed(2)}</span>;
 }

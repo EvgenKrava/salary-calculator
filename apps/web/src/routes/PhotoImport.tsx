@@ -3,6 +3,7 @@ import { Button } from '../ui/Button';
 import { useApi, useExtractionJobs, type ExtractionJob } from '../lib/queries';
 import { useAuth } from '../lib/auth';
 import { t } from '../lib/i18n';
+import './photoImport.css';
 
 /**
  * Photograph a hand-written document and let AI read it.
@@ -83,6 +84,7 @@ export function PhotoImport({ docType }: { docType: 'revenue' | 'schedule' }) {
         </label>
         <input
           id="photo"
+          className="field__file"
           type="file"
           accept={accept}
           // capture="environment" makes a phone open the camera directly rather than the photo
@@ -96,14 +98,16 @@ export function PhotoImport({ docType }: { docType: 'revenue' | 'schedule' }) {
         {busy ? t.photo.uploading : t.photo.upload}
       </Button>
 
-      {error ? <p style={{ color: 'var(--stop)' }}>{error}</p> : null}
-      {uploaded ? <p style={{ color: 'var(--ok)' }}>{t.photo.uploaded}</p> : null}
+      {/*
+       * Both outcomes are announced. The upload is asynchronous and nothing else on screen moves
+       * when it finishes — the file input clears, which a sighted user reads as success and a
+       * screen-reader user gets nothing from at all. This is also the flow most likely to be used
+       * one-handed on a phone behind a counter.
+       */}
+      {error ? <p className="form__error photo__result" role="status">{error}</p> : null}
+      {uploaded ? <p className="photo__ok" role="status">{t.photo.uploaded}</p> : null}
 
-      {pending.length > 0 ? (
-        <p className="muted" style={{ marginTop: 'var(--s4)' }}>
-          {t.photo.inQueue(pending.length)}
-        </p>
-      ) : null}
+      {pending.length > 0 ? <p className="muted photo__queue">{t.photo.inQueue(pending.length)}</p> : null}
     </form>
   );
 }

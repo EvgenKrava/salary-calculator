@@ -126,6 +126,14 @@ export const t = {
     total: 'Разом',
     currency: '₴',
     reload: 'Оновіть сторінку, перш ніж діяти на основі цих даних.',
+    /*
+     * The accessible name of a blank money figure.
+     *
+     * Blank means UNKNOWN, not zero — in payroll those are different facts, which is why ui/Money
+     * refuses to render a dash for either. A screen reader would otherwise announce nothing at all
+     * for the cell.
+     */
+    unknownAmount: 'сума невідома',
     couldNotLoad: (what: string) => `Не вдалося завантажити ${what}`,
     saving: 'Зберігаємо…',
     // Status-pill labels shared across screens (shifts, revenue, extraction jobs) that this
@@ -470,8 +478,13 @@ export const t = {
   payMatrix: {
     title: 'Оплата по локаціях',
     hint: 'Ставка за день і відсоток від виручки для кожного рівня на кожній локації. Порожня клітинка блокує розрахунок зарплати для цієї комбінації.',
-    ratePerDay: 'Ставка, грн/день',
-    revenuePercent: '% від виручки',
+    /*
+     * `ratePerDay`/`revenuePercent` (the full column labels) were removed: a matrix repeats the
+     * same two figures in every cell, so the full labels printed once per cell and buried the
+     * figures they described. `rateUnit`/`percentUnit` below carry that job, with the row and
+     * column headers supplying the level and the location. `missingCount` went with them — the
+     * blocked-run panel names each combination instead of counting them.
+     */
     notConfigured: 'не задано',
     clearConfirm: 'Прибрати оплату для цієї комбінації? Розрахунок зарплати буде заблоковано, поки її не задано знову.',
     missingTitle: 'Не задано оплату',
@@ -515,7 +528,6 @@ export const t = {
     /** One blocked combination, and the accessible name of the link that fixes it. */
     missingCell: (level: string, location: string) => `${level} — ${location}`,
     missingCellLink: (level: string, location: string) => `Задати оплату: ${level} — ${location}`,
-    missingCount: (n: number) => `${n} ${plural(n, 'комбінація', 'комбінації', 'комбінацій')}`,
   },
 
   schedule: {

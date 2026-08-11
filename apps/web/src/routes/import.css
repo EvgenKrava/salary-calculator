@@ -1,0 +1,83 @@
+/*
+ * The schedule-import flow, inside a modal on the schedule screen.
+ *
+ * Its whole output is reports — names it could not map, slots it could not find, cells it could not
+ * parse. The "heading plus mono list" shape below was written out four times with its own inline
+ * margins each time (ReportList, AnomalyReport's groups, NameMapper, the preview summary), which is
+ * why the same list sat at a different distance from its heading in each one.
+ */
+
+.report {
+  margin-top: var(--s4);
+}
+
+/*
+ * A report heading. `--text-base`, not the global h3's `--text-md`: these are sub-headings inside a
+ * Card whose title already names the step, and at --text-md they competed with it.
+ */
+.report__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin: 0 0 var(--s1);
+  font-size: var(--text-base);
+}
+
+/*
+ * The item count, in the heading rather than left to be counted off the list.
+ *
+ * Mono because it is a figure a manager compares against the workbook — 2,097 anomalies and 3
+ * anomalies call for very different reactions.
+ */
+.report__count {
+  color: var(--ink-muted);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
+.report__note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  max-width: 68ch;
+}
+
+.report__list {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s6);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  /* These lists run to thousands of rows on the real workbook; cap and scroll rather than turning
+     the modal into an endless page. */
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.report__group {
+  margin-top: var(--s3);
+}
+
+.report__groupTitle {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* "…and 2092 more" — not an item, so it loses the bullet. */
+.report__more {
+  list-style: none;
+  color: var(--ink-faint);
+}
+
+.import__error {
+  margin-top: var(--s4);
+}
+
+.import__commit {
+  margin-top: var(--s6);
+}
+
+.import__tally {
+  margin: 0;
+  font-size: var(--text-sm);
+}
