@@ -1,0 +1,30 @@
+/*
+ * The collapsed/expanded "add" disclosure (ui/AddForm).
+ *
+ * Owns the space between the table of things and the button that adds to them, in both states —
+ * previously each route set its own top margin on the `<form>`, so the same gap differed per
+ * section. The Card supplies the bottom margin when open; the collapsed trigger has to supply its
+ * own, since a bare button has none.
+ */
+.add-form {
+  margin-top: var(--s4);
+}
+
+/* Collapsed, the trigger is the only thing here, so it carries the section's bottom gap. */
+.add-form:has(> .btn) {
+  margin-bottom: var(--s6);
+}
+
+/*
+ * Submit and cancel on one line, matching the day editor's action row rather than inventing a
+ * third layout for the same pair. Not `row-actions`: that one is right-aligned for a table's Дії
+ * column, and a form's actions belong at the left edge, under the fields they submit.
+ */
+.add-form__actions {
+  display: flex;
+  /* Wraps so the two buttons stack rather than shrink at 390px — each is `block`, so below 480px
+     the first fills the line and the second moves under it. */
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}

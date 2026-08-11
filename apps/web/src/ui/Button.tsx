@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import './button.css';
 
 /**
@@ -8,28 +8,30 @@ import './button.css';
  */
 type Variant = 'primary' | 'secondary' | 'danger' | 'quiet';
 
-export function Button({
-  variant = 'secondary',
-  size,
-  block = false,
-  className,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: Variant;
-  /**
-   * `sm` for actions inside a dense table row, where the default 44px tap target would blow the
-   * row height apart. Everywhere else the default stands, so touch targets are never shrunk by
-   * accident.
-   */
-  size?: 'sm';
-  /** Full width below 480px — side-by-side buttons at 360px are unreadably cramped. */
-  block?: boolean;
-}) {
+/**
+ * `forwardRef` because focus has to be returnable to a button by whoever owns the flow: a
+ * disclosure that swaps its trigger for a form (ui/AddForm) must put focus back on the trigger
+ * when the form closes, and a keyboard user has nothing to grab otherwise.
+ */
+export const Button = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: Variant;
+    /**
+     * `sm` for actions inside a dense table row, where the default 44px tap target would blow the
+     * row height apart. Everywhere else the default stands, so touch targets are never shrunk by
+     * accident.
+     */
+    size?: 'sm';
+    /** Full width below 480px — side-by-side buttons at 360px are unreadably cramped. */
+    block?: boolean;
+  }
+>(function Button({ variant = 'secondary', size, block = false, className, ...props }, ref) {
   // `className` is merged rather than overwritten: it used to be clobbered, so a caller adding
   // a utility class silently lost every button style.
   const classes = ['btn', `btn--${variant}`];
   if (size) classes.push(`btn--${size}`);
   if (block) classes.push('btn--block');
   if (className) classes.push(className);
-  return <button {...props} className={classes.join(' ')} />;
-}
+  return <button {...props} ref={ref} className={classes.join(' ')} />;
+});

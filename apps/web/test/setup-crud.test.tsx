@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { t } from '../src/lib/i18n';
 
 const fn = () => ({ mutateAsync: vi.fn(async () => ({})), isPending: false });
+const addLocation = fn();
+const addLevel = fn();
 const updateLocation = fn();
 const deleteLocation = fn();
 const updateLevel = fn();
@@ -13,8 +15,10 @@ const deleteSlot = fn();
 const slotsQuery = { data: [] as unknown[], isLoading: false, error: null as unknown };
 
 vi.mock('../src/lib/queries', () => ({
-  useAddLocation: fn,
-  useAddLevel: fn,
+  // Stable instances, not a fresh `fn()` per render: the add forms are asserted against now, and
+  // a new mock each call would forget what the form submitted.
+  useAddLocation: () => addLocation,
+  useAddLevel: () => addLevel,
   useLocations: () => ({ data: [], isLoading: false, error: null }),
   useLevels: () => ({ data: [], isLoading: false, error: null }),
   useUpdateLocation: () => updateLocation,
@@ -27,13 +31,14 @@ vi.mock('../src/lib/queries', () => ({
 }));
 
 const { SlotEditor } = await import('../src/routes/SlotEditor');
-const { LocationRow, LevelRow } = await import('../src/routes/SetupRoute');
+const { LocationRow, LevelRow, LocationsPanel, LevelsPanel } = await import('../src/routes/SetupRoute');
 
 const LOCATION = { id: 'l1', name: 'Перша', opensAt: '08:00', closesAt: '20:00' };
 
 beforeEach(() => {
-  for (const m of [updateLocation, deleteLocation, updateLevel, deleteLevel, setSlot, deleteSlot]) {
-    m.mutateAsync.mockClear();
+  for (const m of [addLocation, addLevel, updateLocation, deleteLocation, updateLevel, deleteLevel, setSlot, deleteSlot]) {
+    m.mutateAsync.mockReset();
+    m.mutateAsync.mockImplementation(async () => ({}));
     m.isPending = false;
   }
   slotsQuery.data = [];
@@ -177,6 +182,139 @@ describe('LocationRow', () => {
     expect(screen.queryByText(t.setup.slotsHint)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: t.setup.slots }));
     expect(screen.getByText(t.setup.slotsHint)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The add forms are collapsed behind a button.
+ *
+ * Setup is read far more often than written — locations and levels are configured once — so two
+ * permanently-open add Cards led the screen with empty inputs for work nobody was doing, and spent
+ * two amber submit buttons where the design system allows about one primary action per view. The
+ * behaviours pinned here are the ones a disclosure gets wrong: reopening with stale values, a
+ * failed add that closes as if it saved, and focus dropping to <body> when the trigger vanishes.
+ */
+describe('collapsed add forms', () => {
+  /**
+   * The submit button inside the open form.
+   *
+   * The trigger and the submit deliberately carry the SAME word ("Додати локацію") — it names one
+   * action, and renaming one of them would make the disclosure look like a different operation
+   * from the add it performs. So they are told apart by `type`, which `getByRole` cannot filter on.
+   */
+  function submitButton(name: string) {
+    const found = screen
+      .getAllByRole('button', { name })
+      .find((b) => (b as HTMLButtonElement).type === 'submit');
+    if (!found) throw new Error(`no submit button named ${name}`);
+    return found;
+  }
+
+  it('shows only the trigger until an admin asks for the locations form', async () => {
+    render(<LocationsPanel />);
+    expect(screen.queryByLabelText(t.setup.locationName)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    expect(screen.getByLabelText(t.setup.locationName)).toBeInTheDocument();
+  });
+
+  it('shows only the trigger until an admin asks for the levels form', async () => {
+    render(<LevelsPanel />);
+    expect(screen.queryByLabelText(t.setup.levelName)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLevel }));
+    expect(screen.getByLabelText(t.setup.levelName)).toBeInTheDocument();
+  });
+
+  it('focuses the first field on open, so the keyboard path continues where it left off', async () => {
+    render(<LocationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    expect(screen.getByLabelText(t.setup.locationName)).toHaveFocus();
+  });
+
+  it('adds the location and collapses back to the trigger', async () => {
+    render(<LocationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    await userEvent.type(screen.getByLabelText(t.setup.locationName), 'Друга');
+    await userEvent.type(screen.getByLabelText(t.setup.opensAt), '08:00');
+    await userEvent.type(screen.getByLabelText(t.setup.closesAt), '20:00');
+    await userEvent.click(submitButton(t.setup.addLocation));
+
+    expect(addLocation.mutateAsync).toHaveBeenCalledWith({
+      name: 'Друга',
+      opensAt: '08:00',
+      closesAt: '20:00',
+    });
+    // The refetched table showing the new row is the confirmation; the form's job is done.
+    expect(screen.queryByLabelText(t.setup.locationName)).not.toBeInTheDocument();
+  });
+
+  it('cancel collapses the form, clears the fields and returns focus to the trigger', async () => {
+    render(<LocationsPanel />);
+    const trigger = screen.getByRole('button', { name: t.setup.addLocation });
+    await userEvent.click(trigger);
+    await userEvent.type(screen.getByLabelText(t.setup.locationName), 'Покинута');
+    await userEvent.click(screen.getByRole('button', { name: t.common.cancel }));
+
+    expect(screen.queryByLabelText(t.setup.locationName)).not.toBeInTheDocument();
+    expect(addLocation.mutateAsync).not.toHaveBeenCalled();
+    // Focus back on the trigger: the button the user clicked has just been removed from the DOM,
+    // and without this focus falls to <body> and a keyboard user restarts from the page top.
+    expect(screen.getByRole('button', { name: t.setup.addLocation })).toHaveFocus();
+
+    // Reopening must not re-present an abandoned entry as if it were pending.
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    expect(screen.getByLabelText(t.setup.locationName)).toHaveValue('');
+  });
+
+  it('keeps a rejected add open with the reason, then clears it on cancel', async () => {
+    addLocation.mutateAsync.mockRejectedValueOnce(new Error('location name already exists'));
+    render(<LocationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    await userEvent.type(screen.getByLabelText(t.setup.locationName), 'Перша');
+    await userEvent.type(screen.getByLabelText(t.setup.opensAt), '08:00');
+    await userEvent.type(screen.getByLabelText(t.setup.closesAt), '20:00');
+    await userEvent.click(submitButton(t.setup.addLocation));
+
+    // Closing on a failure would read as a successful save.
+    expect(await screen.findByText('location name already exists')).toBeInTheDocument();
+    expect(screen.getByLabelText(t.setup.locationName)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: t.common.cancel }));
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    // A stale failure above a blank form describes nothing on screen.
+    expect(screen.queryByText('location name already exists')).not.toBeInTheDocument();
+  });
+
+  it('closes the form on Escape, as the pay matrix and schedule popover do', async () => {
+    render(<LevelsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLevel }));
+    await userEvent.type(screen.getByLabelText(t.setup.levelName), 'Бариста');
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByLabelText(t.setup.levelName)).not.toBeInTheDocument();
+    expect(addLevel.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('adds the level and collapses', async () => {
+    render(<LevelsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLevel }));
+    await userEvent.type(screen.getByLabelText(t.setup.levelName), 'Старший бариста');
+    await userEvent.click(submitButton(t.setup.addLevel));
+
+    expect(addLevel.mutateAsync).toHaveBeenCalledWith({ name: 'Старший бариста' });
+    expect(screen.queryByLabelText(t.setup.levelName)).not.toBeInTheDocument();
+  });
+
+  it('keeps the trigger secondary, so the amber stays on the write inside the form', async () => {
+    // docs/design/system.md § Color: amber is the primary action in a view, and revealing a form
+    // is not the write. Two amber "Додати" triggers under two tables would spend the screen's
+    // loudest signal on disclosure.
+    render(<LocationsPanel />);
+    expect(screen.getByRole('button', { name: t.setup.addLocation })).not.toHaveClass('btn--primary');
+
+    await userEvent.click(screen.getByRole('button', { name: t.setup.addLocation }));
+    expect(submitButton(t.setup.addLocation)).toHaveClass('btn--primary');
   });
 });
 

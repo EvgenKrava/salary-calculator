@@ -24,12 +24,17 @@
 }
 
 /*
- * The `<form>` wrapping an "add" Card.
+ * The `<form>` wrapping a settings Card — the standing day-off limits.
  *
  * The Card owns the padding and the bottom margin; the form is only there to carry the submit. It
- * still needs a top margin, because it follows the table of the things it adds to.
+ * still needs a top margin, because it follows the section above it.
+ *
+ * The two "add" forms on this screen no longer use this: they are collapsed behind a button
+ * (ui/AddForm), which owns its own spacing in both states. This one is NOT an add form and stays
+ * open — the limits it holds are current values an admin came to this screen to read, so hiding
+ * them behind a disclosure would hide the answer, not a blank form.
  */
-.setup__addForm {
+.setup__settingsForm {
   display: block;
   margin-top: var(--s4);
 }

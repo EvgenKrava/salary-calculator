@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Table, Th, Td } from '../ui/Table';
+import { AddForm } from '../ui/AddForm';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
@@ -171,7 +172,7 @@ export function LocationRow({ location }: { location: Location }) {
   );
 }
 
-function LocationsPanel() {
+export function LocationsPanel() {
   const locations = useLocations();
   const add = useAddLocation();
   const [name, setName] = useState('');
@@ -180,19 +181,27 @@ function LocationsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  /** Clears the form, including the error: a reopened form must not show an abandoned failure. */
+  function reset() {
+    setName('');
+    setOpensAt('');
+    setClosesAt('');
+    setError(null);
+  }
+
+  async function submit() {
     setError(null);
     setBusy(true);
     try {
       await add.mutateAsync({ name, opensAt, closesAt });
-      setName('');
-      setOpensAt('');
-      setClosesAt('');
+      reset();
+      return true;
     } catch (err) {
       // e.g. "closesAt must be after opensAt" or "location name already exists" — the API's
-      // own message tells the admin exactly what to fix.
+      // own message tells the admin exactly what to fix. Returning false keeps the form open,
+      // so the reason stays next to the values that caused it.
       setError((err as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -224,55 +233,59 @@ function LocationsPanel() {
         </Table>
       )}
 
-      {/* Card, like every other panel on this screen: three of them were hand-rolled `<form
-          className="panel" style={{ padding }}>` at --s4 while the pay matrix and the day-off
-          limits sat at --s5, so one screen had three paddings for one kind of object. */}
-      <form onSubmit={submit} className="setup__addForm">
-        <Card title={t.setup.addLocation}>
-          {/* A name and two times are one logical row of inputs, not a tall column. */}
-          <div className="field-row">
-            <Field
-              label={t.setup.locationName}
-              name="name"
-              fieldSize="wide"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Field
-              label={t.setup.opensAt}
-              name="opensAt"
-              type="time"
-              numeric
-              fieldSize="time"
-              required
-              value={opensAt}
-              onChange={(e) => setOpensAt(e.target.value)}
-            />
-            <Field
-              label={t.setup.closesAt}
-              name="closesAt"
-              type="time"
-              numeric
-              fieldSize="time"
-              required
-              value={closesAt}
-              onChange={(e) => setClosesAt(e.target.value)}
-            />
-          </div>
-          {/*
-           * The error moves out of the closesAt field and up to form level.
-           *
-           * It was attached to `closesAt` because that field is last, not because that is where the
-           * fault is: "location name already exists" printed under the closing-time box. A
-           * submission-level failure belongs at submission level.
-           */}
-          {error ? <p className="form__error" role="status">{error}</p> : null}
-          <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? t.setup.adding : t.setup.addLocation}
-          </Button>
-        </Card>
-      </form>
+      {/* Collapsed behind its own button (ui/AddForm): locations are configured once, so an admin
+          opens this screen to read what is set far more often than to add to it, and the Card sat
+          open below the table asking for input nobody was giving. */}
+      <AddForm
+        label={t.setup.addLocation}
+        submitLabel={busy ? t.setup.adding : t.setup.addLocation}
+        busy={busy}
+        onSubmit={submit}
+        onCancel={reset}
+      >
+        {/* A name and two times are one logical row of inputs, not a tall column. */}
+        <div className="field-row">
+          {/* `location-name`, not `name`: the levels form below has a name field too, and `Field`
+              derives the input id from this — two `id="name"` inputs would point both labels at
+              whichever rendered first, which is now reachable since both forms can be open. */}
+          <Field
+            label={t.setup.locationName}
+            name="location-name"
+            fieldSize="wide"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Field
+            label={t.setup.opensAt}
+            name="opensAt"
+            type="time"
+            numeric
+            fieldSize="time"
+            required
+            value={opensAt}
+            onChange={(e) => setOpensAt(e.target.value)}
+          />
+          <Field
+            label={t.setup.closesAt}
+            name="closesAt"
+            type="time"
+            numeric
+            fieldSize="time"
+            required
+            value={closesAt}
+            onChange={(e) => setClosesAt(e.target.value)}
+          />
+        </div>
+        {/*
+         * The error moves out of the closesAt field and up to form level.
+         *
+         * It was attached to `closesAt` because that field is last, not because that is where the
+         * fault is: "location name already exists" printed under the closing-time box. A
+         * submission-level failure belongs at submission level.
+         */}
+        {error ? <p className="form__error" role="status">{error}</p> : null}
+      </AddForm>
     </>
   );
 }
@@ -367,23 +380,29 @@ export function LevelRow({ level }: { level: Level }) {
   );
 }
 
-function LevelsPanel() {
+export function LevelsPanel() {
   const levels = useLevels();
   const add = useAddLevel();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  function reset() {
+    setName('');
+    setError(null);
+  }
+
+  async function submit() {
     setError(null);
     setBusy(true);
     try {
       await add.mutateAsync({ name });
-      setName('');
+      reset();
+      return true;
     } catch (err) {
       // e.g. "level name already exists"
       setError((err as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -421,23 +440,27 @@ function LevelsPanel() {
         </Table>
       )}
 
-      <form onSubmit={submit} className="setup__addForm">
-        <Card title={t.setup.addLevel}>
-          {/* One field, so the error stays ON it — "level name already exists" is about the name. */}
-          <Field
-            label={t.setup.levelName}
-            name="name"
-            fieldSize="wide"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            error={error ?? undefined}
-          />
-          <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? t.setup.adding : t.setup.addLevel}
-          </Button>
-        </Card>
-      </form>
+      {/* Collapsed like the locations form above, though this one is a single field: a level and a
+          location are the same class of thing on this screen, and two disclosure behaviours for
+          "add one of these" would make the difference look meaningful when it is not. */}
+      <AddForm
+        label={t.setup.addLevel}
+        submitLabel={busy ? t.setup.adding : t.setup.addLevel}
+        busy={busy}
+        onSubmit={submit}
+        onCancel={reset}
+      >
+        {/* One field, so the error stays ON it — "level name already exists" is about the name. */}
+        <Field
+          label={t.setup.levelName}
+          name="level-name"
+          fieldSize="wide"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          error={error ?? undefined}
+        />
+      </AddForm>
     </>
   );
 }
@@ -470,7 +493,7 @@ export function DayOffLimitsPanel() {
   }
 
   return (
-    <form onSubmit={submit} className="setup__addForm">
+    <form onSubmit={submit} className="setup__settingsForm">
       <Card title={t.daysOff.limitsTitle} description={t.daysOff.limitsHint}>
       <div className="field-row">
         <Field
