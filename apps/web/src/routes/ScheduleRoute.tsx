@@ -5,7 +5,8 @@ import { Toolbar } from '../ui/Toolbar';
 import { ImportPanel } from './ImportRoute';
 import { MonthSelect } from '../ui/Select';
 import { StatusPill } from '../ui/StatusPill';
-import { anyLoading, firstError } from '../ui/QueryGate';
+import { anyLoading, firstError, Loading } from '../ui/QueryGate';
+import { LoadFailure } from '../ui/LoadFailure';
 import { useEmployees, useLocations, useShifts, type Shift } from '../lib/queries';
 // Shared with the Today screen. A second copy of calendar arithmetic is how an off-by-one-day
 // bug reaches a payroll screen.
@@ -169,21 +170,11 @@ export function ScheduleRoute() {
     }
   }
 
-  if (anyLoading(shifts, employees, locations)) return <p className="mono">{t.common.loading}</p>;
+  if (anyLoading(shifts, employees, locations)) return <Loading what={t.schedule.title.toLowerCase()} />;
   // A failed employees/locations query must not degrade into a grid full of blank names — the
   // same trap QueryGate exists to catch on ShiftsRoute.
   const loadError = firstError(shifts, employees, locations);
-  if (loadError) {
-    return (
-      <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>
-          {t.common.couldNotLoad(t.schedule.title.toLowerCase())}
-        </h2>
-        <p className="mono" style={{ margin: 0 }}>{loadError.message}</p>
-        <p style={{ marginBottom: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>{t.common.reload}</p>
-      </div>
-    );
-  }
+  if (loadError) return <LoadFailure what={t.schedule.title.toLowerCase()} error={loadError} />;
 
   const nameOf = (id: string) => employees.data?.find((e) => e.id === id)?.name ?? '—';
   const locOf = (id: string) => locations.data?.find((l) => l.id === id)?.name ?? '—';
@@ -230,7 +221,7 @@ export function ScheduleRoute() {
         </Button>
         <MonthSelect label={t.schedule.month} value={monthValue} onChange={(v) => setMonth(Number(v))} />
         <input
-          className="field__input mono schedule__year"
+          className="field__input field__input--year mono"
           type="number"
           aria-label={t.schedule.year}
           value={year}

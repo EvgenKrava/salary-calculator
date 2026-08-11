@@ -1,6 +1,8 @@
 import { Table, Th, Td, NumCell } from '../ui/Table';
 import { Money } from '../ui/Money';
 import { EmptyState } from '../ui/EmptyState';
+import { Loading } from '../ui/QueryGate';
+import { LoadFailure } from '../ui/LoadFailure';
 import { Toolbar } from '../ui/Toolbar';
 import { Figure } from '../ui/Figure';
 import { useMyPay } from '../lib/queries';
@@ -10,8 +12,8 @@ import { t, formatDate } from '../lib/i18n';
 export function MyPayRoute() {
   const pay = useMyPay();
 
-  if (pay.isLoading) return <p className="mono">{t.common.loading}</p>;
-  if (pay.error) return <p style={{ color: 'var(--stop)' }}>{(pay.error as Error).message}</p>;
+  if (pay.isLoading) return <Loading what={t.myPay.title.toLowerCase()} />;
+  if (pay.error) return <LoadFailure what={t.myPay.title.toLowerCase()} error={pay.error as Error} />;
 
   const rows = pay.data ?? [];
   /*

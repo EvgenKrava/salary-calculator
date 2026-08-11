@@ -1,0 +1,37 @@
+/*
+ * The extracted payload, shown verbatim in the review queue.
+ *
+ * Verbatim is non-negotiable — a prettified summary could hide the misread digit this screen
+ * exists to catch — but an unbounded <pre> in a table cell was a horizontal scroll tunnel, and at
+ * 390px it sat inside an already-stacked row. So it becomes a bounded, sunk box: capped height with
+ * its own vertical scroll, and long values wrapped rather than pushed sideways.
+ */
+.review__payload {
+  margin: 0;
+  max-width: 44ch;
+  /* ~7 lines of the payloads these jobs actually produce. Taller than the 40px row on purpose:
+     the cell grows, and a manager verifying a reading needs to see it, not scroll it one line at
+     a time. */
+  max-height: 11rem;
+  overflow: auto;
+  padding: var(--s2);
+  background: var(--surface-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  /* Wrap rather than scroll sideways: a long S3 key or a run of digits would otherwise hide the
+     rest of the object behind a scrollbar. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* Stacked rows get the full width — the 44ch cap exists to stop the column stretching the
+   desktop table, and there is no column to stretch here. */
+@media (max-width: 640px) {
+  .review__payload {
+    max-width: 100%;
+    /* The cell is `text-align: right` in the stacked layout (table.css); code is left-read. */
+    text-align: left;
+  }
+}

@@ -305,6 +305,13 @@ export const t = {
     title: 'Мої зміни',
     empty: 'У вас ще немає змін.',
     emptyAction: 'Підтверджені зміни з’являться тут.',
+    /*
+     * The Ledger's display total. Hours, not money — the pay for them is the figure on the
+     * My-pay screen, and amber stays tied to money (docs/design/system.md § Color).
+     */
+    totalHours: 'Усього годин',
+    hoursUnit: 'год',
+    shiftCount: (n: number) => `${n} ${plural(n, 'зміна', 'зміни', 'змін')}`,
   },
 
   myPay: {
@@ -395,6 +402,13 @@ export const t = {
     confirm: 'Підтвердити',
     reject: 'Відхилити',
     rejectReason: 'Причина відхилення',
+    /** What this Worklist opens with: 1 документ / 2 документи / 5 документів. */
+    awaitingReview: (n: number) =>
+      `${n} ${plural(n, 'документ', 'документи', 'документів')} на перевірці`,
+    /* Accessible names: a queue of identical "Підтвердити" buttons announces nothing about which
+       document it acts on. */
+    confirmFor: (doc: string) => `Підтвердити розпізнавання: ${doc}`,
+    rejectFor: (doc: string) => `Відхилити розпізнавання: ${doc}`,
   },
 
   setup: {

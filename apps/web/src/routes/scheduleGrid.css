@@ -194,26 +194,8 @@
   color: var(--stop);
 }
 
-/* Shared failure panel: a load error, or slot windows that could not be read. */
-.grid__failure {
-  padding: var(--s4);
-  border-color: var(--stop);
-  background: var(--stop-tint);
-  margin-bottom: var(--s4);
-}
-.grid__failureTitle {
-  color: var(--stop);
-  margin: 0 0 var(--s2);
-  font-weight: 600;
-}
-.grid__failureDetail {
-  margin: 0;
-}
-.grid__failureHint {
-  margin: var(--s2) 0 0;
-  color: var(--ink-muted);
-  font-size: var(--text-xs);
-}
+/* The failure panel that used to live here (.grid__failure*) is now ui/LoadFailure — this screen
+   was one of seven rendering the same object six different ways. */
 
 /*
  * Below 720px the 31-column table cannot stay readable, and horizontal scroll is a fallback rather

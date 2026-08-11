@@ -142,6 +142,22 @@
 }
 
 /*
+ * A bare year input sitting inline beside a month picker, with no `.field` wrapper — used by the
+ * schedule calendar and the schedule grid, which put it in a flex row rather than stacking it as a
+ * labelled field. Without a cap, `.field__input`'s `width: 100%` stretches four digits across the
+ * whole row.
+ *
+ * Lives here, next to `.field__input` it modifies, rather than in schedule.css: ScheduleGrid uses
+ * the class but imports only scheduleGrid.css, so the style reached it purely because it imports
+ * `buildMonthGrid` from ScheduleRoute, which imports schedule.css. That would have broken silently
+ * the day the helper moved.
+ */
+.field__input--year {
+  max-width: 8ch;
+  text-align: right;
+}
+
+/*
  * Native select, restyled to match text inputs. `appearance: none` plus an inline SVG chevron,
  * because the platform arrow sits inconsistently across browsers and made the control look
  * like a different family of widget than the inputs beside it.

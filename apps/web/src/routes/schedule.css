@@ -4,28 +4,11 @@
  * whitespace rather than a card that looks broken.
  */
 
-.schedule__header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s4);
-  margin-bottom: var(--s4);
-  flex-wrap: wrap;
-}
-
 .schedule__nav {
   display: flex;
   align-items: flex-end;
   gap: var(--s2);
   margin-bottom: var(--s4);
-}
-
-/* No `.field` wrapper around this input (it sits inline with the month picker and arrows,
-   not stacked as a labelled form field), so its width is capped explicitly — otherwise
-   `.field__input`'s `width: 100%` would stretch a 4-digit year across the flex row. */
-.schedule__year {
-  max-width: 8ch;
-  text-align: right;
 }
 
 .schedule__grid {

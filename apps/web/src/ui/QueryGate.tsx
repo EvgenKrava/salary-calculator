@@ -59,7 +59,11 @@ export function QueryGate({
 export function Loading({ what }: { what?: string }) {
   return (
     <p className="mono loading" role="status">
-      {what ? `${t.common.loading} ${what}` : t.common.loading}
+      {/* The word and the subject are separate elements so `t.common.loading` stays its own text
+          node — the schedule-grid and pay-matrix tests query for it exactly, and they are pinning
+          that no cell is writable while a gate is open, which is behaviour worth keeping pinned. */}
+      <span>{t.common.loading}</span>
+      {what ? <span> {what}</span> : null}
     </p>
   );
 }

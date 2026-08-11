@@ -6,6 +6,8 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
+import { anyLoading, firstError, Loading } from '../ui/QueryGate';
+import { LoadFailure } from '../ui/LoadFailure';
 import { Toolbar } from '../ui/Toolbar';
 import { Figure } from '../ui/Figure';
 import { Modal } from '../ui/Modal';
@@ -148,12 +150,16 @@ export function RevenueRoute() {
   const [manualOpen, setManualOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  if (locations.isLoading || revenue.isLoading) {
-    return <p className="mono">{t.common.loading}</p>;
-  }
-  if (locations.error || revenue.error) {
-    return <p style={{ color: 'var(--stop)' }}>{((locations.error ?? revenue.error) as Error).message}</p>;
-  }
+  if (anyLoading(locations, revenue)) return <Loading what={t.revenue.title.toLowerCase()} />;
+  /*
+   * A failed read is a blocked screen, not a red sentence.
+   *
+   * This was a bare `<p style={{ color: 'var(--stop)' }}>` printing the API's raw English — on the
+   * screen a manager enters money on, with nothing telling them the (absent) figures must not be
+   * acted on. LoadFailure carries that warning.
+   */
+  const loadError = firstError(locations, revenue);
+  if (loadError) return <LoadFailure what={t.revenue.title.toLowerCase()} error={loadError} />;
 
   const rows = revenue.data ?? [];
   const total = rows.reduce((sum, r) => sum + r.amount, 0);

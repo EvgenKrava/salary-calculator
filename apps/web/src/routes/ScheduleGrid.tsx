@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Toolbar } from '../ui/Toolbar';
 import { MonthSelect } from '../ui/Select';
-import { anyLoading, firstError } from '../ui/QueryGate';
+import { anyLoading, firstError, Loading } from '../ui/QueryGate';
+import { LoadFailure } from '../ui/LoadFailure';
 import { buildMonthGrid } from './ScheduleRoute';
 import { PublishPanel } from './PublishPanel';
 import {
@@ -98,26 +99,15 @@ export function ScheduleGrid() {
    * unknown — a write in that window would default to the wrong status exactly like an unknown
    * slot window defaults to the wrong hours.
    */
-  if (anyLoading(shifts, employees, locations, slots, publication)) return <p className="mono">{t.common.loading}</p>;
-  const loadError = firstError(shifts, employees, locations, publication);
-  if (loadError) {
-    return (
-      <div className="panel grid__failure">
-        <h2 className="grid__failureTitle">{t.common.couldNotLoad(t.scheduleGrid.title.toLowerCase())}</h2>
-        <p className="mono grid__failureDetail">{loadError.message}</p>
-        <p className="grid__failureHint">{t.common.reload}</p>
-      </div>
-    );
+  if (anyLoading(shifts, employees, locations, slots, publication)) {
+    return <Loading what={t.scheduleGrid.title.toLowerCase()} />;
   }
+  const loadError = firstError(shifts, employees, locations, publication);
+  if (loadError) return <LoadFailure what={t.scheduleGrid.title.toLowerCase()} error={loadError} />;
   // Its own message rather than the generic one: a failed read means the hours are UNKNOWN, which
   // is a different fix from "an admin has not configured any slots yet".
   if (slots.error) {
-    return (
-      <div className="panel grid__failure">
-        <h2 className="grid__failureTitle">{t.scheduleGrid.slotsFailed}</h2>
-        <p className="grid__failureHint">{t.scheduleGrid.slotsFailedHint}</p>
-      </div>
-    );
+    return <LoadFailure title={t.scheduleGrid.slotsFailed} hint={t.scheduleGrid.slotsFailedHint} />;
   }
 
   const people = (employees.data ?? []).filter((e) => e.active);
@@ -235,7 +225,7 @@ export function ScheduleGrid() {
       <Toolbar title={t.scheduleGrid.title} description={t.scheduleGrid.hint}>
         <MonthSelect label={t.schedule.month} value={String(month)} onChange={(v) => setMonth(Number(v))} />
         <input
-          className="field__input mono schedule__year"
+          className="field__input field__input--year mono"
           type="number"
           aria-label={t.schedule.year}
           value={year}
