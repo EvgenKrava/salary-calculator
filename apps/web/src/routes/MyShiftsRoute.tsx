@@ -72,7 +72,7 @@ export function MyShiftsRoute() {
             </tbody>
             <tfoot>
               <tr>
-                <Td label={t.common.total}>{t.common.total}</Td>
+                <Td>{t.common.total}</Td>
                 <Td />
                 <NumCell label={t.common.hours}>{totalHours.toFixed(2)}</NumCell>
                 <Td />

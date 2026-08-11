@@ -57,7 +57,7 @@ export function RevenueTable({ rows, locations }: { rows: RevenueRow[]; location
        */}
       <tfoot>
         <tr>
-          <Td label={t.common.total}>{t.common.total}</Td>
+          <Td>{t.common.total}</Td>
           <Td />
           <Td />
           <Td />

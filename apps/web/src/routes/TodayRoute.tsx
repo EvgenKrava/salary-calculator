@@ -136,7 +136,7 @@ export function TodayRoute() {
             </tbody>
             <tfoot>
               <tr>
-                <Td label={t.common.total}>{t.common.total}</Td>
+                <Td>{t.common.total}</Td>
                 <Td />
                 <NumCell money label={t.common.total}>
                   <Money value={weekTotal} />
