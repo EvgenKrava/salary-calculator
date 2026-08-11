@@ -490,6 +490,60 @@ describe('ScheduleGrid', () => {
     await userEvent.click(cell);
     await waitFor(() => expect(cell).toHaveAttribute('aria-expanded', 'true'));
   });
+
+  it('renders the location menu outside the scrolling grid, so no ancestor can clip it', async () => {
+    /*
+     * The fix for "the location selector hides behind everything". The menu used to be
+     * absolutely positioned inside the cell, and `.grid__wrap` carries `overflow-x: auto` for 31
+     * columns — an overflow container CLIPS absolutely-positioned descendants, and CSS computes the
+     * other axis to `auto` as soon as one is not `visible`, so it was cut off at the last day column
+     * AND on the last row. No z-index can fix that: the box is painted, then cropped by an ancestor.
+     *
+     * jsdom has no layout, so it cannot see the clipping itself — what it CAN pin is the structural
+     * property that makes clipping impossible: the menu is not a descendant of the scroll container.
+     * The geometry (inside the viewport at every edge, the option topmost at its own centre point)
+     * was verified in Chromium at 1280 and 390.
+     */
+    stubFetch();
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: t.scheduleGrid.cellLabel('Олена', 3) }));
+    const menu = await screen.findByRole('group', { name: t.scheduleGrid.chooseLocation });
+
+    const scroller = document.querySelector('.grid__wrap')!;
+    expect(scroller).not.toBeNull();
+    expect(scroller.contains(menu)).toBe(false);
+    // Portalled to the body, which is outside every overflow and sticky stacking context on the page.
+    expect(menu.parentElement).toBe(document.body);
+  });
+
+  it('still writes through the portalled menu', async () => {
+    // The menu moved out of the cell's DOM subtree; the click path that commits a shift must be
+    // unaffected, since that is the screen's whole purpose.
+    const calls = stubFetch();
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: t.scheduleGrid.cellLabel('Олена', 4) }));
+    await userEvent.click(await screen.findByRole('button', { name: /^1$/ }));
+
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.includes('/api/shifts'))).toBe(true));
+  });
+
+  it('dismisses the menu on a click outside it', async () => {
+    // The scrim moved into the portal with the menu. A transparent sibling rather than a document
+    // listener, so the menu cannot be left open by a click the listener missed.
+    stubFetch();
+    renderGrid();
+    await waitForGrid();
+
+    await userEvent.click(screen.getByRole('button', { name: t.scheduleGrid.cellLabel('Олена', 3) }));
+    expect(await screen.findByRole('button', { name: /^1$/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: t.common.close }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^1$/ })).not.toBeInTheDocument());
+  });
 });
 
 describe('PublishPanel', () => {
@@ -528,6 +582,51 @@ describe('PublishPanel', () => {
 
     // The action is gone, not merely disabled-with-a-reason: an overlap cannot be overridden.
     expect(screen.queryByRole('textbox', { name: t.publish.reasonLabel })).not.toBeInTheDocument();
+  });
+
+  it('puts the publish action in the sticky bar, as the screen\'s one primary', async () => {
+    /*
+     * Publishing used to sit in a Card BELOW a 31-column, 12-row grid — off-screen for the whole of
+     * the authoring work and found only by scrolling past the thing you had just finished. An
+     * unpublished month is invisible to staff and uncounted by payroll, so a missable action is a
+     * data problem. It now lives in a bar stuck to the bottom of the viewport.
+     *
+     * jsdom cannot evaluate `position: sticky`; what it pins is that the button is IN the bar and
+     * that the bar is the screen's only amber. Placement was verified in Chromium at 1280 and 390.
+     */
+    stubFetch();
+    renderGrid();
+    await waitForGrid();
+
+    const bar = document.querySelector('.publish__bar')!;
+    expect(bar).not.toBeNull();
+    const action = within(bar as HTMLElement).getByRole('button', { name: t.publish.button });
+    // Primary: this is the terminal action of the screen, and the grid's cells carry no amber.
+    expect(action).toHaveClass('btn--primary');
+    expect(document.querySelectorAll('.btn--primary')).toHaveLength(1);
+  });
+
+  it('states where the month stands beside the button, so it is never a bare action', async () => {
+    // A primary pinned to the viewport with no statement of state invites a press to find out.
+    stubFetch({ preview: { draftCount: 5, conflicts: { required: [], preferred: [] }, overlaps: [] } });
+    renderGrid();
+    await waitForGrid();
+
+    const bar = document.querySelector('.publish__bar') as HTMLElement;
+    expect(within(bar).getByText(t.publish.barUnchecked)).toBeInTheDocument();
+
+    await userEvent.click(within(bar).getByRole('button', { name: t.publish.button }));
+    // After the check it reports what pressing publish would actually do.
+    expect(await within(bar).findByText(t.publish.willPublish(5))).toBeInTheDocument();
+  });
+
+  it('says the month is already published rather than only offering the button', async () => {
+    stubFetch({ publication: { published: true, publishedAt: '2026-08-05T09:00:00.000Z', overrides: [] } });
+    renderGrid();
+    await waitForGrid();
+
+    const bar = document.querySelector('.publish__bar') as HTMLElement;
+    expect(within(bar).getByText(t.publish.barPublished)).toBeInTheDocument();
   });
 
   it('shows the override history, newest first', async () => {

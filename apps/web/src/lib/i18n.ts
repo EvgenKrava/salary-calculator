@@ -637,6 +637,17 @@ export const t = {
     // The override audit trail.
     historyTitle: 'Історія причин',
     historyEntry: (date: string, who: string) => `${date} · ${who}`,
+    /*
+     * Status line in the sticky publish bar.
+     *
+     * The bar is always on screen, so the button is never alone: a primary action pinned to the
+     * viewport with no statement of where the month stands invites a press to find out. Each line
+     * names the state and, where there is one, the next step.
+     */
+    barUnchecked: 'Натисніть, щоб перевірити перед публікацією.',
+    barPublished: 'Місяць опубліковано. Нові зміни стають активними одразу.',
+    barBlocked: 'Публікацію зупинено — дивіться перелік вище.',
+    barNeedsReason: 'Потрібна причина — вкажіть її вище.',
   },
 
   /** Editing one day's shifts by hand, from the calendar. */

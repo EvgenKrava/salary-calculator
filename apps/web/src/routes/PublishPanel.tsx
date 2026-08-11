@@ -78,10 +78,127 @@ export function PublishPanel({ year, month }: { year: number; month: number }) {
   const blockedByOverlap = (overlaps?.length ?? 0) > 0;
   const history = state.data?.overrides ?? [];
 
+  /*
+   * The publish control is the screen's terminal action and its ONE primary, so it lives in a
+   * sticky bar at the bottom of the viewport rather than in a Card below the grid.
+   *
+   * Why it moved: a manager finishing a month is at the far end of a 31-column, 12-row table, and
+   * the action was in a panel *below* it — off-screen for the whole of the authoring work, found
+   * only by scrolling past the thing you had just finished. A schedule that is built but never
+   * published is invisible to staff and uncounted by payroll, which makes "easy to miss" a data
+   * problem rather than a matter of convenience. Sticky keeps it reachable at every scroll position
+   * without occupying the top, where the month pickers already are.
+   *
+   * The system permits a shadow on a sticky bar (§ Space, density, shape), and this is the one
+   * amber on the screen — the grid's cells carry no amber, and the active slot tab uses
+   * --amber-tint, not the action fill.
+   *
+   * Everything that EXPLAINS the action — blockers, counts, the override reason, the audit trail —
+   * stays in normal page flow above the bar. A blocker list is something to read and act on, and
+   * pinning it to the viewport would cover the very cells it names.
+   */
+  const monthLabel = t.publish.title(`${MONTHS[month - 1]} ${year}`);
+  const publishButton = assessment ? (
+    <Button
+      variant="primary"
+      onClick={() => void commit()}
+      disabled={
+        publish.isPending ||
+        assessment.draftCount === 0 ||
+        // An overlap cannot be overridden, so the action is simply unavailable.
+        blockedByOverlap ||
+        (blockedByDayOff && reason.trim() === '')
+      }
+    >
+      {publish.isPending
+        ? t.publish.publishing
+        : blockedByDayOff
+          ? t.publish.confirmOverride
+          : t.publish.button}
+    </Button>
+  ) : (
+    <Button variant="primary" onClick={() => void check()} disabled={preview.isPending}>
+      {t.publish.button}
+    </Button>
+  );
+
   return (
-    <Card title={t.publish.title(`${MONTHS[month - 1]} ${year}`)}>
-      {state.data?.published && state.data.publishedAt ? (
-        <p className="muted">{t.publish.alreadyPublished(formatTimestampDate(state.data.publishedAt))}</p>
+    <>
+      <PublishDetail
+        monthLabel={monthLabel}
+        state={state.data}
+        assessment={assessment}
+        overlaps={overlaps}
+        requiredConflicts={requiredConflicts}
+        blockedByDayOff={blockedByDayOff}
+        blockedByOverlap={blockedByOverlap}
+        reason={reason}
+        onReason={setReason}
+        published={published}
+        error={error}
+        history={history}
+      />
+
+      <div className="publish__bar">
+        <div className="publish__barText">
+          <p className="publish__barTitle">{monthLabel}</p>
+          <p className="publish__barStatus">{statusLine()}</p>
+        </div>
+        {publishButton}
+      </div>
+    </>
+  );
+
+  /** One line under the bar's heading saying where the month stands, so the button is never bare. */
+  function statusLine(): string {
+    if (blockedByOverlap) return t.publish.barBlocked;
+    if (state.data?.published) return t.publish.barPublished;
+    if (assessment) {
+      if (assessment.draftCount === 0) return t.publish.nothingToPublish;
+      if (blockedByDayOff) return t.publish.barNeedsReason;
+      return t.publish.willPublish(assessment.draftCount);
+    }
+    return t.publish.barUnchecked;
+  }
+}
+
+/**
+ * Everything about publishing that is not the button: blockers, counts, the reason field, history.
+ *
+ * Split out when the action moved into a sticky bar. These belong in page flow — a blocker list is
+ * read and acted on, and pinning it to the viewport would cover the cells it names.
+ */
+function PublishDetail({
+  monthLabel,
+  state,
+  assessment,
+  overlaps,
+  requiredConflicts,
+  blockedByDayOff,
+  blockedByOverlap,
+  reason,
+  onReason,
+  published,
+  error,
+  history,
+}: {
+  monthLabel: string;
+  state: { published: boolean; publishedAt?: string | null } | undefined;
+  assessment: PublishAssessment | null;
+  overlaps: PublishConflict[] | null;
+  requiredConflicts: PublishConflict[];
+  blockedByDayOff: boolean;
+  blockedByOverlap: boolean;
+  reason: string;
+  onReason: (v: string) => void;
+  published: number | null;
+  error: string | null;
+  history: { createdAt: string; createdBy: string; reason: string }[];
+}) {
+  return (
+    <Card title={monthLabel}>
+      {state?.published && state.publishedAt ? (
+        <p className="muted">{t.publish.alreadyPublished(formatTimestampDate(state.publishedAt))}</p>
       ) : null}
 
       {/*
@@ -135,35 +252,14 @@ export function PublishPanel({ year, month }: { year: number; month: number }) {
               name="overrideReason"
               fieldSize="wide"
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(e) => onReason(e.target.value)}
               hint={t.publish.reasonRequired}
             />
           ) : null}
-
-          <Button
-            variant="primary"
-            onClick={() => void commit()}
-            disabled={
-              publish.isPending ||
-              assessment.draftCount === 0 ||
-              // An overlap cannot be overridden, so the action is simply unavailable.
-              blockedByOverlap ||
-              (blockedByDayOff && reason.trim() === '')
-            }
-          >
-            {publish.isPending
-              ? t.publish.publishing
-              : blockedByDayOff
-                ? t.publish.confirmOverride
-                : t.publish.button}
-          </Button>
         </>
-      ) : (
-        <Button onClick={() => void check()} disabled={preview.isPending}>
-          {t.publish.button}
-        </Button>
-      )}
+      ) : null}
 
+      {/* The button itself is in the sticky bar below — see PublishPanel. */}
       {published !== null ? <p className="publish__ok">{t.publish.publishedNow(published)}</p> : null}
       {error ? <p className="publish__error">{error}</p> : null}
 

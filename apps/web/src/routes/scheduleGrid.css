@@ -78,9 +78,15 @@
 /*
  * The cell is the interactive control, so it carries the tap target, not the row height.
  *
- * This was 34px — a value docs/design/system.md explicitly records as rejected and replaced,
- * because it is below the 44px minimum and a manager builds the schedule on a phone. --row-h with
- * a --tap floor keeps the month scannable on a laptop without failing touch.
+ * **52px, above the app's 40px --row-h, and deliberately.** The other tables in the app are read;
+ * this one is *authored* — a manager fills 12 people × 31 days by clicking individual cells, and it
+ * is the screen they spend the most time on. At the shared 44px floor the rows were cramped enough
+ * that hitting the intended day took care, and a mis-click here writes a shift on the wrong date.
+ * The extra 8px buys a comfortably larger target on every one of the ~400 cells without loosening
+ * the table elsewhere: --row-h stays 40px for ledgers, which are scanned rather than clicked.
+ *
+ * Still scannable at a month: 12 rows × 52px plus chrome is ~800px, so a full month of people fits
+ * a laptop viewport without scrolling the grid vertically. Going further would trade that away.
  */
 .grid__cell {
   appearance: none;
@@ -93,9 +99,10 @@
   justify-content: center;
   gap: 2px;
   width: 100%;
-  min-width: var(--tap);
-  height: var(--row-h);
-  min-height: var(--tap);
+  /* Wider than --tap too: a 44px square cell made a 31-column month read as a dense mosaic, and
+     the day columns now line up with the roomier row. */
+  min-width: 52px;
+  height: 52px;
   background: none;
   color: var(--ink-faint);
   cursor: pointer;
@@ -134,52 +141,16 @@
   color: var(--warn);
 }
 
-/* Covers the page behind an open popover so any click outside dismisses it. Transparent, and
-   below the popover but above everything else. */
-.grid__scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 4;
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: none;
-  cursor: default;
-}
-
-.grid__popover {
-  position: absolute;
-  z-index: 5;
-  top: 100%;
-  left: 0;
-  min-width: 8rem;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  padding: var(--s1);
-}
-
-.grid__option {
-  appearance: none;
-  border: 0;
-  background: none;
-  font: inherit;
-  text-align: left;
-  min-height: var(--tap);
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--transition);
-}
-.grid__option:hover {
-  background: var(--surface-sunk);
-}
-.grid__option--clear {
-  color: var(--stop);
-}
+/*
+ * The location menu is ui/AnchoredPopover, portalled to <body>.
+ *
+ * `.grid__scrim`, `.grid__popover` and `.grid__option` lived here and were absolutely positioned
+ * inside the cell — which `.grid__wrap`'s `overflow-x: auto` CLIPPED. CSS computes the other axis to
+ * `auto` as soon as one is not `visible`, so the menu was cut off both at the last day column and on
+ * the last row, and no z-index could fix it: the box was painted and then cropped by an ancestor.
+ * A portal leaves the container entirely, which also puts the menu above the sticky name column, the
+ * sticky day header and the publish bar without any of them knowing it exists.
+ */
 
 .grid__total {
   font-size: var(--text-xs);
@@ -306,24 +277,71 @@
   .grid tfoot {
     display: none;
   }
-  .grid__popover {
-    /* Anchored to the chip would overflow a narrow viewport. */
-    position: fixed;
-    top: auto;
-    bottom: var(--s4);
-    left: var(--s4);
-    right: var(--s4);
-    min-width: 0;
-  }
-  .grid__option {
-    text-align: center;
-  }
+  /* The narrow-screen menu layout lives with the primitive now, in ui/popover.css. */
 }
 
 /*
  * Publish panel. Lives here rather than in its own stylesheet because the panel only ever appears
  * beneath the grid, and a second file for six rules is the drift the Card primitive exists to stop.
  */
+
+/*
+ * The sticky publish bar.
+ *
+ * Publishing is this screen's terminal action, and it used to sit in a Card *below* a 31-column,
+ * 12-row grid — off-screen for the whole of the authoring work and found only by scrolling past the
+ * thing you had just finished. An unpublished month is invisible to staff and uncounted by payroll,
+ * so "easy to miss" was a data problem, not a convenience one.
+ *
+ * `sticky`, not `fixed`: it stays in the document flow, so it cannot cover the content below it and
+ * needs no compensating padding on the page. A shadow is permitted here — the design system allows
+ * one on a genuinely floating layer, and lists a sticky bar as exactly that. Top border plus the
+ * upward shadow is what makes it read as chrome over the grid rather than another panel in it.
+ */
+.publish__bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 -2px 8px rgb(21 24 27 / 8%);
+}
+
+.publish__barText {
+  min-width: 0;
+}
+
+.publish__barTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.publish__barStatus {
+  margin: 2px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  max-width: 68ch;
+}
+
+@media (max-width: 640px) {
+  .publish__bar {
+    /* Clear the fixed bottom nav so the button is not underneath it. */
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Stacked, and the action takes the full width rather than becoming a cramped half. */
+  .publish__barText,
+  .publish__bar > .btn {
+    width: 100%;
+  }
+}
 
 .publish__blocker {
   margin-bottom: var(--s3);

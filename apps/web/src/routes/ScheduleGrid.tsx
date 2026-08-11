@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Toolbar } from '../ui/Toolbar';
 import { MonthSelect } from '../ui/Select';
+import { AnchoredPopover } from '../ui/AnchoredPopover';
 import { anyLoading, firstError, Loading } from '../ui/QueryGate';
 import { LoadFailure } from '../ui/LoadFailure';
 import { buildMonthGrid } from './ScheduleRoute';
@@ -15,6 +16,7 @@ import {
   useShiftSlotsByLocation,
   useShifts,
   type DayOffRequest,
+  type Location,
   type Shift,
 } from '../lib/queries';
 import { t } from '../lib/i18n';
@@ -284,66 +286,19 @@ export function ScheduleGrid() {
                     const locName = shift ? locs.find((l) => l.id === shift.locationId)?.name ?? '?' : '';
                     const open = openCell === cellKey;
                     return (
-                      <td key={c.iso} className="grid__cellwrap" data-day={c.day}>
-                        <button
-                          type="button"
-                          className={[
-                            'grid__cell',
-                            shift ? 'grid__cell--filled' : '',
-                            shift?.status === 'approved' ? 'grid__cell--published' : '',
-                            request?.kind === 'required' ? 'grid__cell--required' : '',
-                            request?.kind === 'preferred' ? 'grid__cell--preferred' : '',
-                          ].filter(Boolean).join(' ')}
-                          aria-label={cellLabel(person.name, c.day, locName, request)}
-                          aria-expanded={open}
-                          onClick={() => setOpenCell(open ? null : cellKey)}
-                        >
-                          <span className="grid__cellValue">{locName || t.scheduleGrid.emptyCell}</span>
-                          {/* A glyph beside the tint: colour is never the only carrier, and these
-                              screens get printed. */}
-                          {request ? (
-                            <span className="grid__cellMark" aria-hidden="true">
-                              {request.kind === 'required'
-                                ? t.scheduleGrid.markRequired
-                                : t.scheduleGrid.markPreferred}
-                            </span>
-                          ) : null}
-                        </button>
-                        {open ? (
-                          <>
-                            {/* Click-away dismissal. A transparent sibling rather than a document
-                                listener, so the popover cannot be left open by a click the
-                                listener missed. */}
-                            <button
-                              type="button"
-                              className="grid__scrim"
-                              aria-label={t.common.close}
-                              onClick={() => setOpenCell(null)}
-                            />
-                            <div className="grid__popover" role="group" aria-label={t.scheduleGrid.chooseLocation}>
-                              {locs.map((l) => (
-                                <button
-                                  key={l.id}
-                                  type="button"
-                                  className="grid__option"
-                                  onClick={() => void setCell(person.id, c.iso, l.id, shift)}
-                                >
-                                  {l.name}
-                                </button>
-                              ))}
-                              {shift ? (
-                                <button
-                                  type="button"
-                                  className="grid__option grid__option--clear"
-                                  onClick={() => void clearCell(shift.id)}
-                                >
-                                  {t.scheduleGrid.clearCell}
-                                </button>
-                              ) : null}
-                            </div>
-                          </>
-                        ) : null}
-                      </td>
+                      <GridCell
+                        key={c.iso}
+                        day={c.day}
+                        label={cellLabel(person.name, c.day, locName, request)}
+                        locName={locName}
+                        shift={shift}
+                        request={request}
+                        open={open}
+                        onToggle={() => setOpenCell(open ? null : cellKey)}
+                        locations={locs}
+                        onPick={(locationId) => void setCell(person.id, c.iso, locationId, shift)}
+                        onClear={() => shift && void clearCell(shift.id)}
+                      />
                     );
                   })}
                   {/* data-label carries the column heading into the ≤720px layout, where thead is
@@ -371,5 +326,82 @@ export function ScheduleGrid() {
 
       <PublishPanel year={year} month={month} />
     </>
+  );
+}
+
+/**
+ * One day for one person: the button, and the location menu it opens.
+ *
+ * Its own component so each cell can hold a ref to its own trigger, which is what
+ * `AnchoredPopover` positions against. The menu is portalled to `<body>` rather than absolutely
+ * positioned in this `<td>`: `.grid__wrap` needs `overflow-x: auto` for 31 columns, and an overflow
+ * container clips absolutely-positioned descendants — so the list was cut off on the last row and
+ * the last day column, which are ordinary cells to fill.
+ */
+function GridCell({
+  day,
+  label,
+  locName,
+  shift,
+  request,
+  open,
+  onToggle,
+  locations,
+  onPick,
+  onClear,
+}: {
+  day: number;
+  label: string;
+  locName: string;
+  shift?: Shift;
+  request?: DayOffRequest;
+  open: boolean;
+  onToggle: () => void;
+  locations: Location[];
+  onPick: (locationId: string) => void;
+  onClear: () => void;
+}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  return (
+    <td className="grid__cellwrap" data-day={day}>
+      <button
+        ref={trigger}
+        type="button"
+        className={[
+          'grid__cell',
+          locName ? 'grid__cell--filled' : '',
+          shift?.status === 'approved' ? 'grid__cell--published' : '',
+          request?.kind === 'required' ? 'grid__cell--required' : '',
+          request?.kind === 'preferred' ? 'grid__cell--preferred' : '',
+        ].filter(Boolean).join(' ')}
+        aria-label={label}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="grid__cellValue">{locName || t.scheduleGrid.emptyCell}</span>
+        {/* A glyph beside the tint: colour is never the only carrier, and these screens get
+            printed. */}
+        {request ? (
+          <span className="grid__cellMark" aria-hidden="true">
+            {request.kind === 'required' ? t.scheduleGrid.markRequired : t.scheduleGrid.markPreferred}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <AnchoredPopover anchor={trigger} onDismiss={onToggle} label={t.scheduleGrid.chooseLocation}>
+          {locations.map((l) => (
+            <button key={l.id} type="button" className="popover__option" onClick={() => onPick(l.id)}>
+              {l.name}
+            </button>
+          ))}
+          {shift ? (
+            <button type="button" className="popover__option popover__option--clear" onClick={onClear}>
+              {t.scheduleGrid.clearCell}
+            </button>
+          ) : null}
+        </AnchoredPopover>
+      ) : null}
+    </td>
   );
 }
