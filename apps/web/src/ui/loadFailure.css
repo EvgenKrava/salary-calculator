@@ -1,0 +1,21 @@
+/*
+ * The load-failure panel. Structure comes from Card's `stop` tone; only the two lines inside it
+ * need anything.
+ */
+
+/*
+ * The API's message, verbatim. `break-word` because these are unwrapped English sentences that
+ * can carry a long identifier or URL, and at 390px one of those would push the card sideways.
+ */
+.load-failure__detail {
+  margin: 0;
+  overflow-wrap: break-word;
+  font-size: var(--text-sm);
+}
+
+/* Sits under the detail: what to do about it, quieter than the fault itself. */
+.load-failure__hint {
+  margin: var(--s2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}

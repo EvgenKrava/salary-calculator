@@ -1,4 +1,5 @@
 import { t } from '../lib/i18n';
+import { LoadFailure } from './LoadFailure';
 
 /**
  * Loading/error gate for screens that read several queries at once.
@@ -40,18 +41,25 @@ export function QueryGate({
   /** What the screen was trying to load, named in the error so the message is actionable. */
   what: string;
 }) {
-  if (anyLoading(...queries)) return <p className="mono">{t.common.loading}</p>;
+  if (anyLoading(...queries)) return <Loading what={what} />;
   const err = firstError(...queries);
-  if (err) {
-    return (
-      <div className="panel" style={{ padding: 'var(--s4)', borderColor: 'var(--stop)', background: 'var(--stop-tint)' }}>
-        <h2 style={{ color: 'var(--stop)', marginTop: 0, marginBottom: 'var(--s2)' }}>{t.common.couldNotLoad(what)}</h2>
-        <p className="mono" style={{ margin: 0 }}>{err.message}</p>
-        <p style={{ marginBottom: 0, color: 'var(--ink-muted)', fontSize: 'var(--text-xs)' }}>
-          {t.common.reload}
-        </p>
-      </div>
-    );
-  }
+  if (err) return <LoadFailure what={what} error={err} />;
   return <>{children()}</>;
+}
+
+/**
+ * The one loading indicator: a small inline mono line, per docs/design/system.md § Motion —
+ * "no skeleton shimmer … use a small inline mono `loading…`".
+ *
+ * `role="status"` because a screen that swaps its whole body for one word is exactly the case a
+ * screen reader needs told; every route was rendering this line bare. `what` names what is being
+ * waited for, so four panels loading on one Setup screen are distinguishable rather than four
+ * identical "завантаження…" lines.
+ */
+export function Loading({ what }: { what?: string }) {
+  return (
+    <p className="mono loading" role="status">
+      {what ? `${t.common.loading} ${what}` : t.common.loading}
+    </p>
+  );
 }

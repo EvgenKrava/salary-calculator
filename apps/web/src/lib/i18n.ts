@@ -282,6 +282,20 @@ export const t = {
     source: 'Джерело',
     decision: 'Рішення',
     couldNotLoad: 'Не вдалося завантажити зміни',
+    /*
+     * What this Worklist opens with: how many rows need a decision, or that none do.
+     *
+     * The screen listed every shift ever recorded with no statement of what needed the manager —
+     * the archetype's first rule (docs/design/system.md § Page archetypes). Three plural forms,
+     * never a binary ternary: 1 заявка / 2 заявки / 5 заявок.
+     */
+    awaitingDecision: (n: number) =>
+      `${n} ${plural(n, 'заявка', 'заявки', 'заявок')} ${plural(n, 'очікує', 'очікують', 'очікують')} на рішення`,
+    noneAwaiting: 'Усі зміни розглянуті.',
+    /* Accessible names: a table of identical "Підтвердити" buttons announces nothing about which
+       row it belongs to. */
+    approveFor: (name: string, date: string) => `Підтвердити зміну: ${name}, ${date}`,
+    rejectFor: (name: string, date: string) => `Відхилити зміну: ${name}, ${date}`,
     sourceNative: 'вручну',
     sourceExtracted: 'з документа',
     sourceImported: 'з імпорту',

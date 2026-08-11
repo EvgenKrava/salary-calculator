@@ -73,6 +73,18 @@ p:last-child {
   margin-bottom: 0;
 }
 
+/*
+ * The one loading indicator (ui/QueryGate → Loading).
+ *
+ * A small inline mono line, per docs/design/system.md § Motion: "no skeleton shimmer — a 34px row
+ * does not benefit from one". Muted so a screen mid-load does not read as a screen whose only
+ * content is the word "завантаження".
+ */
+.loading {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
 /* Secondary prose: hints, period ranges, "nothing saved yet" notes. */
 .muted {
   color: var(--ink-muted);
