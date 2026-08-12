@@ -200,6 +200,55 @@ describe('consecutive_limit', () => {
     expect(result.rejected).toEqual([{ assignment: c, reason: 'consecutive_limit' }]);
   });
 
+  it('rejects the day that extends the run past the limit regardless of the array order given (order-independence)', () => {
+    // Same three proposals as the "already-accepted proposals" case above, but handed to the
+    // validator in reverse-chronological order — the way an LLM might emit them. Acceptance must
+    // not depend on that order: chronologically 09-01 and 09-02 form the allowed run of 2, and
+    // 09-03 is what extends it past the limit, however the caller ordered the array.
+    const ctx = baseCtx();
+    ctx.employees[0].maxConsecutiveDays = 2;
+    const a = assignment({ date: '2026-09-01' });
+    const b = assignment({ date: '2026-09-02' });
+    const c = assignment({ date: '2026-09-03' });
+    const result = validateAssignments([c, b, a], ctx);
+    expect(result.rejected).toEqual([{ assignment: c, reason: 'consecutive_limit' }]);
+    expect(result.accepted).toHaveLength(2);
+    expect(result.accepted).toContainEqual(a);
+    expect(result.accepted).toContainEqual(b);
+  });
+
+  it('rejects a single proposal that bridges into an approved run starting the day after it', () => {
+    // maxConsecutiveDays=2, approved shifts on 09-02 and 09-03. Proposing 09-01 alone forms a run
+    // of three (09-01, 09-02, 09-03) even though nothing worked-so-far sits BEFORE 09-01 — a
+    // purely-backward scan from the proposed date would miss this and wrongly accept it.
+    const ctx = baseCtx();
+    ctx.employees[0].maxConsecutiveDays = 2;
+    ctx.approvedShifts.push(
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-02', startsAt: '08:00', endsAt: '16:00' },
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-03', startsAt: '08:00', endsAt: '16:00' },
+    );
+    const a = assignment({ date: '2026-09-01' });
+    const result = validateAssignments([a], ctx);
+    expect(result.rejected).toEqual([{ assignment: a, reason: 'consecutive_limit' }]);
+  });
+
+  it('rejects a single proposal that merges two approved runs separated by exactly one gap day', () => {
+    // maxConsecutiveDays=4, approved 09-01/09-02 and 09-04/09-05, gap at 09-03. Proposing 09-03
+    // alone bridges the gap into one run of five (09-01..09-05), over the limit — again nothing
+    // worked-so-far sits immediately before 09-03 in isolation, so this needs the forward scan too.
+    const ctx = baseCtx();
+    ctx.employees[0].maxConsecutiveDays = 4;
+    ctx.approvedShifts.push(
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-01', startsAt: '08:00', endsAt: '16:00' },
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-02', startsAt: '08:00', endsAt: '16:00' },
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-04', startsAt: '08:00', endsAt: '16:00' },
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-05', startsAt: '08:00', endsAt: '16:00' },
+    );
+    const a = assignment({ date: '2026-09-03' });
+    const result = validateAssignments([a], ctx);
+    expect(result.rejected).toEqual([{ assignment: a, reason: 'consecutive_limit' }]);
+  });
+
   it('does not double-count a second slot on an already-worked date', () => {
     const ctx = baseCtx();
     ctx.employees[0].maxConsecutiveDays = 1;

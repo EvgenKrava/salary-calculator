@@ -90,6 +90,14 @@ function previousDay(date: string): string {
   return `${prev.getUTCFullYear()}-${pad(prev.getUTCMonth() + 1)}-${pad(prev.getUTCDate())}`;
 }
 
+/** One day after `date` ('YYYY-MM-DD'), same Date.UTC-parts discipline as {@link previousDay}. */
+function nextDay(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
+}
+
 export function validateAssignments(
   proposed: ProposedAssignment[],
   ctx: ValidationContext,
@@ -143,19 +151,38 @@ export function validateAssignments(
   const rejected: RejectedAssignment[] = [];
   const flags: FlaggedAssignment[] = [];
 
-  function runLength(employeeId: string, date: string): number {
+  // Length of the run `date` would join if added to `worked`, counting BOTH directions: a
+  // proposal is not only extending a run behind it, it can also bridge into (or between) runs of
+  // already-approved shifts that sit AFTER it. A backward-only scan misses that: with
+  // maxConsecutiveDays=2 and approved shifts on the 2nd and 3rd, proposing the 1st alone forms a
+  // run of three (1st, 2nd, 3rd) even though nothing worked-so-far sits before the 1st.
+  function runLengthThrough(employeeId: string, date: string): number {
     const worked = workedDatesByEmployee.get(employeeId);
-    if (!worked) return 0;
-    let length = 0;
+    if (!worked) return 1;
+    let length = 1; // date itself
     let cursor = previousDay(date);
     while (worked.has(cursor)) {
       length += 1;
       cursor = previousDay(cursor);
     }
+    cursor = nextDay(date);
+    while (worked.has(cursor)) {
+      length += 1;
+      cursor = nextDay(cursor);
+    }
     return length;
   }
 
-  for (const a of proposed) {
+  // The consecutive-day check accepts or rejects based on the worked-dates set as it stands as
+  // *this* proposal is reached, so that set must fill in chronological order — otherwise a later
+  // date processed first would see a run-in that hasn't "happened" yet, or an earlier date
+  // processed last could slip past a limit already used up by dates ahead of it. Sorting once,
+  // stably, before the loop makes every check's outcome depend only on the proposal set the LLM
+  // sent, never on the order it listed them in. Array.prototype.sort is a stable sort (guaranteed
+  // since ES2019), so same-date proposals keep the caller's original relative order.
+  const sorted = [...proposed].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  for (const a of sorted) {
     const employee = employeeById.get(a.employeeId);
     if (!employee) {
       rejected.push({ assignment: a, reason: 'unknown_employee' });
@@ -183,7 +210,7 @@ export function validateAssignments(
       rejected.push({ assignment: a, reason: 'required_day_off' });
       continue;
     }
-    if (runLength(a.employeeId, a.date) + 1 > employee.maxConsecutiveDays) {
+    if (runLengthThrough(a.employeeId, a.date) > employee.maxConsecutiveDays) {
       rejected.push({ assignment: a, reason: 'consecutive_limit' });
       continue;
     }
