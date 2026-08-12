@@ -17,3 +17,13 @@ export {
   type ShiftLike,
   type ShiftWindowLike,
 } from './dayOffLimits';
+export {
+  validateAssignments,
+  type ProposedAssignment,
+  type ValidationContext,
+  type ValidationResult,
+  type RejectedAssignment,
+  type FlaggedAssignment,
+  type RejectionReason,
+  type AssignmentFlag,
+} from './scheduleValidation';
