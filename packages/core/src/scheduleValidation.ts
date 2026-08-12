@@ -144,8 +144,19 @@ export function validateAssignments(
   const acceptedByEmployeeDate = new Map<string, ProposedAssignment[]>();
   // (employeeId, date, slotNumber) already accepted — the duplicate check.
   const acceptedSlots = new Set<string>();
-  // Accepted headcount per (locationId, date, slotNumber) — the staffing check.
+  // Accepted headcount per (locationId, date, slotNumber) — the staffing check. Seeded below from
+  // approved shifts: an approved occupant already consumes a slot's capacity, so a proposal for a
+  // DIFFERENT employee in the same (location, date, slot) must see that opening as already taken.
   const acceptedHeadcount = new Map<string, number>();
+  for (const s of ctx.approvedShifts) {
+    const location = locationById.get(s.locationId);
+    // Match on start time, same convention as the schedule grid's shiftAt: an approved shift whose
+    // window matches no configured slot sits outside slot accounting and consumes nothing here.
+    const slot = location?.slots.find((sl) => sl.startsAt === s.startsAt);
+    if (!slot) continue;
+    const key = `${s.locationId}|${s.workDate}|${slot.slotNumber}`;
+    acceptedHeadcount.set(key, (acceptedHeadcount.get(key) ?? 0) + 1);
+  }
 
   const accepted: ProposedAssignment[] = [];
   const rejected: RejectedAssignment[] = [];

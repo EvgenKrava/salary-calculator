@@ -249,6 +249,29 @@ describe('consecutive_limit', () => {
     expect(result.rejected).toEqual([{ assignment: a, reason: 'consecutive_limit' }]);
   });
 
+  it('resets the run across a single missing day rather than tolerating the gap', () => {
+    // A run-in of three approved days (08-30, 08-31, 09-01), then a genuine gap on 09-02 (no
+    // shift, approved or proposed). The gap must fully reset the count: 09-03/04/05 form a FRESH
+    // run of exactly 3 (at the limit) and all accept, but 09-06 extends that fresh run to 4 and
+    // must reject. If the walk treated the single missing day as still-continuous, 09-06 would
+    // wrongly look like day 4 of the pre-gap run's continuation and the whole batch would misbehave.
+    const ctx = baseCtx();
+    ctx.employees[0].maxConsecutiveDays = 3;
+    ctx.approvedShifts.push(
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-08-30', startsAt: '08:00', endsAt: '16:00' },
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-08-31', startsAt: '08:00', endsAt: '16:00' },
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-01', startsAt: '08:00', endsAt: '16:00' },
+      // 2026-09-02 is deliberately absent — the gap.
+    );
+    const day3 = assignment({ date: '2026-09-03' });
+    const day4 = assignment({ date: '2026-09-04' });
+    const day5 = assignment({ date: '2026-09-05' });
+    const day6 = assignment({ date: '2026-09-06' });
+    const result = validateAssignments([day3, day4, day5, day6], ctx);
+    expect(result.accepted).toEqual([day3, day4, day5]);
+    expect(result.rejected).toEqual([{ assignment: day6, reason: 'consecutive_limit' }]);
+  });
+
   it('does not double-count a second slot on an already-worked date', () => {
     const ctx = baseCtx();
     ctx.employees[0].maxConsecutiveDays = 1;
@@ -381,6 +404,54 @@ describe('staffing_exceeded', () => {
     const b = assignment({ employeeId: 'e2', date: '2026-09-08' });
     const result = validateAssignments([a, b], ctx);
     expect(result.accepted).toEqual([a, b]);
+    expect(result.rejected).toEqual([]);
+  });
+
+  it('counts an approved shift toward headcount, rejecting a proposal that would put two heads in a one-person slot', () => {
+    // peopleNeeded=1 (baseCtx default). e1 already has an APPROVED shift filling slot 1's window
+    // on 2026-09-01. A proposal for a different employee in that same location/date/slot must
+    // reject — the approved occupant already consumed the only opening.
+    const ctx = baseCtx();
+    ctx.employees.push({ id: 'e2', active: true, maxConsecutiveDays: 5, homeLocationIds: ['locA'] });
+    ctx.approvedShifts.push(
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-01', startsAt: '08:00', endsAt: '16:00' },
+    );
+    const b = assignment({ employeeId: 'e2', date: '2026-09-01', slotNumber: 1 });
+    const result = validateAssignments([b], ctx);
+    expect(result.rejected).toEqual([{ assignment: b, reason: 'staffing_exceeded' }]);
+  });
+
+  it('accepts a proposal that fills the remaining opening alongside an approved shift, then rejects the next', () => {
+    // peopleNeeded=2. One approved shift plus one accepted proposal exactly fills the slot; a
+    // second proposal is the third head and must reject.
+    const ctx = baseCtx();
+    ctx.staffing = ctx.staffing.map((s) => ({ ...s, peopleNeeded: 2 }));
+    ctx.employees.push(
+      { id: 'e2', active: true, maxConsecutiveDays: 5, homeLocationIds: ['locA'] },
+      { id: 'e3', active: true, maxConsecutiveDays: 5, homeLocationIds: ['locA'] },
+    );
+    ctx.approvedShifts.push(
+      { employeeId: 'e1', locationId: 'locA', workDate: '2026-09-01', startsAt: '08:00', endsAt: '16:00' },
+    );
+    const b = assignment({ employeeId: 'e2', date: '2026-09-01', slotNumber: 1 });
+    const c = assignment({ employeeId: 'e3', date: '2026-09-01', slotNumber: 1 });
+    const result = validateAssignments([b, c], ctx);
+    expect(result.accepted).toEqual([b]);
+    expect(result.rejected).toEqual([{ assignment: c, reason: 'staffing_exceeded' }]);
+  });
+
+  it('does not count an approved shift whose window matches no slot toward staffing headcount', () => {
+    // The approved shift's window (23:00-23:30) matches neither slot's startsAt and does not
+    // overlap slot 1's window (08:00-16:00), so it sits outside slot accounting entirely — same
+    // as the grid's shiftAt fallback for an unconfigured window. It must not consume the one
+    // opening peopleNeeded=1 provides for slot 1.
+    const ctx = baseCtx();
+    ctx.approvedShifts.push(
+      { employeeId: 'e2', locationId: 'locA', workDate: '2026-09-01', startsAt: '23:00', endsAt: '23:30' },
+    );
+    const a = assignment({ date: '2026-09-01', slotNumber: 1 });
+    const result = validateAssignments([a], ctx);
+    expect(result.accepted).toEqual([a]);
     expect(result.rejected).toEqual([]);
   });
 });
