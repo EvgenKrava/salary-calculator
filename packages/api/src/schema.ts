@@ -21,7 +21,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export const shiftStatus = pgEnum('shift_status', ['draft', 'requested', 'approved', 'rejected']);
-export const shiftSource = pgEnum('shift_source', ['native', 'extracted', 'imported']);
+export const shiftSource = pgEnum('shift_source', ['native', 'extracted', 'imported', 'generated']);
 export const revenueSource = pgEnum('revenue_source', ['manual', 'extracted']);
 export const revenueStatus = pgEnum('revenue_status', ['pending', 'needs_review', 'approved', 'rejected']);
 export const docType = pgEnum('doc_type', ['revenue', 'schedule']);
@@ -45,6 +45,7 @@ export const employees = pgTable('employees', {
   levelId: uuid('level_id').notNull().references(() => levels.id),
   cognitoSub: text('cognito_sub').unique(),
   active: boolean('active').notNull().default(true),
+  maxConsecutiveDays: integer('max_consecutive_days').notNull().default(5),
 });
 
 /**
@@ -223,4 +224,53 @@ export const appSettings = pgTable('app_settings', {
   id: boolean('id').primaryKey().default(true),
   requiredDaysOffPerMonth: integer('required_days_off_per_month').notNull().default(2),
   preferredDaysOffPerMonth: integer('preferred_days_off_per_month').notNull().default(4),
+});
+
+/**
+ * Which locations an employee normally works. No rows = works nowhere by default: the
+ * generator skips them and the grid warns on ANY assignment.
+ */
+export const employeeLocations = pgTable(
+  'employee_locations',
+  {
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.employeeId, t.locationId] })],
+);
+
+/**
+ * People needed per location per weekday (0 = Sunday .. 6 = Saturday, matching EXTRACT(DOW)).
+ * A missing row means 0. `peopleNeeded` is people PER SLOT that day.
+ */
+export const locationStaffing = pgTable(
+  'location_staffing',
+  {
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    weekday: integer('weekday').notNull(),
+    peopleNeeded: integer('people_needed').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.locationId, t.weekday] })],
+);
+
+/** One row per generation run: the audit trail for "why did the AI do that", and the job
+ *  record the UI polls. */
+export const generationJobs = pgTable('generation_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  periodStart: date('period_start').notNull(),
+  periodEnd: date('period_end').notNull(),
+  status: text('status').notNull().default('pending'),
+  requestedBy: text('requested_by').notNull(),
+  modelId: text('model_id'),
+  rawResponse: jsonb('raw_response'),
+  report: jsonb('report'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
 });

@@ -5,9 +5,10 @@ export interface PayPeriod {
 }
 
 export type ShiftStatus = 'draft' | 'requested' | 'approved' | 'rejected';
-export type ShiftSource = 'native' | 'extracted' | 'imported';
+export type ShiftSource = 'native' | 'extracted' | 'imported' | 'generated';
 export type RevenueSource = 'manual' | 'extracted';
 export type RevenueStatus = 'pending' | 'needs_review' | 'approved' | 'rejected';
+export type GenerationJobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
 export interface Level {
   id: string;
@@ -28,6 +29,21 @@ export interface Employee {
   levelId: string;
   cognitoSub: string | null;
   active: boolean;
+  /** Max days this employee may work in a row. The AI generator and its validator enforce it. */
+  maxConsecutiveDays: number;
+}
+
+/** A location an employee normally works. No rows for an employee = works nowhere by default. */
+export interface EmployeeLocation {
+  employeeId: string;
+  locationId: string;
+}
+
+/** People needed at a location on a given weekday (0 = Sunday .. 6 = Saturday), per slot. */
+export interface LocationStaffing {
+  locationId: string;
+  weekday: number;
+  peopleNeeded: number;
 }
 
 /** One matrix cell: what a level is paid at a location. */

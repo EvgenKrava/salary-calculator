@@ -9,7 +9,7 @@ function baseInput(): CalcInput {
     levels: [{ id: 'lvl1', name: 'Junior' }],
     locations: [{ id: 'locA', name: 'A', opensAt: '08:00', closesAt: '16:00' }],
     employees: [
-      { id: 'e1', name: 'Alice', levelId: 'lvl1', cognitoSub: null, active: true },
+      { id: 'e1', name: 'Alice', levelId: 'lvl1', cognitoSub: null, active: true, maxConsecutiveDays: 5 },
     ],
     shifts: [
       {
@@ -71,7 +71,7 @@ describe('calculateSalaries', () => {
     input.levels.push({ id: 'lvl2', name: 'Senior' });
     input.payRates.push({ levelId: 'lvl2', locationId: 'locA', ratePerDay: 20, revenuePercent: 0.1 });
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl2', cognitoSub: null, active: true,
+      id: 'e2', name: 'Bob', levelId: 'lvl2', cognitoSub: null, active: true, maxConsecutiveDays: 5,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -111,7 +111,7 @@ describe('calculateSalaries', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '12:00'; // Alice 4h approved
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl1', cognitoSub: null, active: true,
+      id: 'e2', name: 'Bob', levelId: 'lvl1', cognitoSub: null, active: true, maxConsecutiveDays: 5,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -219,7 +219,7 @@ describe('calculateSalaries', () => {
     input.levels.push({ id: 'lvl2', name: 'Senior' });
     input.payRates.push({ levelId: 'lvl2', locationId: 'locA', ratePerDay: 20, revenuePercent: 0.1 });
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl2', cognitoSub: null, active: true,
+      id: 'e2', name: 'Bob', levelId: 'lvl2', cognitoSub: null, active: true, maxConsecutiveDays: 5,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -239,7 +239,7 @@ describe('calculateSalaries', () => {
     const input = baseInput();
     input.shifts[0].endsAt = '12:00'; // Alice: 4h, active
     input.employees.push({
-      id: 'e2', name: 'Bob', levelId: 'lvl1', cognitoSub: null, active: false,
+      id: 'e2', name: 'Bob', levelId: 'lvl1', cognitoSub: null, active: false, maxConsecutiveDays: 5,
     });
     input.shifts.push({
       id: 's2', employeeId: 'e2', locationId: 'locA', workDate: '2026-08-02',
@@ -260,7 +260,7 @@ describe('calculateSalaries', () => {
     const level = { id: 'lvl1', name: 'Junior' };
     const locA = { id: 'locA', name: 'A', opensAt: '08:00', closesAt: '20:00' };
     const locB = { id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' };
-    const employee = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true };
+    const employee = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true, maxConsecutiveDays: 5 };
     const input: CalcInput = {
       levels: [level],
       locations: [locA, locB],
@@ -297,7 +297,7 @@ describe('calculateSalaries', () => {
     const level = { id: 'lvl1', name: 'Junior' };
     const locA = { id: 'locA', name: 'A', opensAt: '08:00', closesAt: '20:00' };
     const locB = { id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' };
-    const employee = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true };
+    const employee = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true, maxConsecutiveDays: 5 };
     const input: CalcInput = {
       levels: [level],
       locations: [locA, locB],
@@ -334,8 +334,8 @@ describe('calculateSalaries', () => {
   it('dedupes missingRates across shifts and employees sharing the cell', () => {
     const level = { id: 'lvl1', name: 'Junior' };
     const locB = { id: 'locB', name: 'B', opensAt: '08:00', closesAt: '20:00' };
-    const alice = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true };
-    const bob = { id: 'e2', name: 'Bob', levelId: level.id, cognitoSub: null, active: true };
+    const alice = { id: 'e1', name: 'Alice', levelId: level.id, cognitoSub: null, active: true, maxConsecutiveDays: 5 };
+    const bob = { id: 'e2', name: 'Bob', levelId: level.id, cognitoSub: null, active: true, maxConsecutiveDays: 5 };
     const input: CalcInput = {
       levels: [level],
       locations: [locB],

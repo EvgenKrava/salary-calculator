@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb } from '../src/db/testDb';
-import { levels, locations, employees, payRates } from '../src/schema';
+import {
+  levels,
+  locations,
+  employees,
+  payRates,
+  employeeLocations,
+  locationStaffing,
+  generationJobs,
+} from '../src/schema';
 
 describe('drizzle schema against the core migration', () => {
   it('inserts and reads back a level, location, employee, and pay-rate cell', async () => {
@@ -165,6 +173,89 @@ describe('pay_rates matrix', () => {
       db
         .insert(payRates)
         .values({ levelId: level.id, locationId: loc.id, ratePerDay: '20.00', revenuePercent: '1.5' }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('AI scheduling tables', () => {
+  it('accepts a generated shift source', async () => {
+    const { db } = await createTestDb();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '20:00' }).returning();
+    const [emp] = await db.insert(employees).values({ name: 'A', levelId: level.id }).returning();
+    const { shifts } = await import('../src/schema');
+
+    const [row] = await db
+      .insert(shifts)
+      .values({
+        employeeId: emp.id,
+        locationId: loc.id,
+        workDate: '2026-09-01',
+        startsAt: '08:00:00',
+        endsAt: '14:00:00',
+        status: 'draft',
+        source: 'generated',
+      })
+      .returning();
+    expect(row.source).toBe('generated');
+  });
+
+  it('defaults an employee to 5 max consecutive days and rejects out-of-range values', async () => {
+    const { db } = await createTestDb();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
+    const [emp] = await db.insert(employees).values({ name: 'A', levelId: level.id }).returning();
+    expect(emp.maxConsecutiveDays).toBe(5);
+
+    await expect(
+      db.insert(employees).values({ name: 'B', levelId: level.id, maxConsecutiveDays: 0 }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(employees).values({ name: 'C', levelId: level.id, maxConsecutiveDays: 15 }),
+    ).rejects.toThrow();
+  });
+
+  it('stores an employee home location and cascades on employee delete', async () => {
+    const { db } = await createTestDb();
+    const [level] = await db.insert(levels).values({ name: 'L' }).returning();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '20:00' }).returning();
+    const [emp] = await db.insert(employees).values({ name: 'A', levelId: level.id }).returning();
+
+    await db.insert(employeeLocations).values({ employeeId: emp.id, locationId: loc.id });
+    const rows = await db.select().from(employeeLocations).where(eq(employeeLocations.employeeId, emp.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('rejects a location_staffing weekday outside 0-6', async () => {
+    const { db } = await createTestDb();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '20:00' }).returning();
+    await expect(
+      db.insert(locationStaffing).values({ locationId: loc.id, weekday: 7, peopleNeeded: 1 }),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a negative people_needed', async () => {
+    const { db } = await createTestDb();
+    const [loc] = await db.insert(locations).values({ name: 'Loc', opensAt: '08:00', closesAt: '20:00' }).returning();
+    await expect(
+      db.insert(locationStaffing).values({ locationId: loc.id, weekday: 1, peopleNeeded: -1 }),
+    ).rejects.toThrow();
+  });
+
+  it('accepts a pending generation job and rejects an unknown status', async () => {
+    const { db } = await createTestDb();
+    const [job] = await db
+      .insert(generationJobs)
+      .values({ periodStart: '2026-09-01', periodEnd: '2026-09-15', requestedBy: 'sub-1' })
+      .returning();
+    expect(job.status).toBe('pending');
+
+    await expect(
+      db.insert(generationJobs).values({
+        periodStart: '2026-09-01',
+        periodEnd: '2026-09-15',
+        requestedBy: 'sub-1',
+        status: 'nonsense' as never,
+      }),
     ).rejects.toThrow();
   });
 });

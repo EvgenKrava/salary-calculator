@@ -55,6 +55,9 @@ export const PUBLICATION_OVERRIDES_SQL = read('0007_publication_overrides.sql');
 /** Day rate and revenue percent become a (level, location) matrix; a level is a pure label. */
 export const PAY_MATRIX_SQL = read('0008_pay_matrix.sql');
 
+/** Home locations, staffing needs, consecutive-day limits and generation jobs for AI drafting. */
+export const AI_SCHEDULING_SQL = read('0009_ai_scheduling.sql');
+
 /**
  * All migrations in apply order.
  *

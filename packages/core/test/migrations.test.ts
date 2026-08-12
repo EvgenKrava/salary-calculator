@@ -12,6 +12,7 @@ import {
   SCHEDULE_AUTHORING_SQL,
   PUBLICATION_OVERRIDES_SQL,
   PAY_MATRIX_SQL,
+  AI_SCHEDULING_SQL,
 } from '../src/migrations';
 import { MIGRATION_SQL, MIGRATION_NAMES } from '../src/migrations.generated';
 
@@ -58,6 +59,7 @@ describe('migrations', () => {
       SCHEDULE_AUTHORING_SQL,
       PUBLICATION_OVERRIDES_SQL,
       PAY_MATRIX_SQL,
+      AI_SCHEDULING_SQL,
     ]);
     expect(MIGRATIONS).toHaveLength(sqlFilesOnDisk().length);
   });

@@ -113,6 +113,7 @@ export function createSalaryRunRoutes(db: Db): Hono<AppEnv> {
         levelId: e.levelId,
         cognitoSub: e.cognitoSub,
         active: e.active,
+        maxConsecutiveDays: e.maxConsecutiveDays,
       })),
       levels: lvls.map((l) => ({ id: l.id, name: l.name })),
       payRates: rates.map((r) => ({
