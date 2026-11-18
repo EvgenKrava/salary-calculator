@@ -37,10 +37,19 @@ export function flattenCell(v: ExcelJS.CellValue): string | number | null {
 
 /** Read a worksheet into the row-major grid `parseScheduleGrid` expects. */
 export function gridFromWorksheet(ws: ExcelJS.Worksheet): (string | number | null)[][] {
+  // `rowCount`/`columnCount` are exceljs getters, not cached properties: `columnCount`
+  // walks every row (and `hasValues` on each walks every cell in it) on EVERY access. Using
+  // either as a loop bound re-runs that whole-sheet scan once per outer-loop iteration,
+  // turning an O(rows*cols) read into an O(rows^2*cols) one — for the real 1047x559 (through
+  // exceljs's stated bounds) schedule workbook that is the difference between an ~90ms read
+  // and a multi-minute hang that eats the Lambda's timeout and comes back as an opaque
+  // upstream 503. Read both bounds once, outside the loop.
+  const rowCount = ws.rowCount;
+  const columnCount = ws.columnCount;
   const grid: (string | number | null)[][] = [];
-  for (let r = 1; r <= ws.rowCount; r++) {
+  for (let r = 1; r <= rowCount; r++) {
     const row: (string | number | null)[] = [];
-    for (let c = 1; c <= ws.columnCount; c++) {
+    for (let c = 1; c <= columnCount; c++) {
       row.push(flattenCell(ws.getCell(r, c).value));
     }
     grid.push(row);
